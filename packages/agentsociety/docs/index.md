@@ -14,14 +14,18 @@
 通过该平台，我们可以快速创建和管理城市模拟环境中的智能体，高效地开展复杂城市场景的建模与模拟。
 借此，AgentSociety从社会学第一性原理出发，以助力推动社会科学研究范式变革，推动了社会学领域从行为模拟到心智建模、从静态推演到动态共生、从实验室工具到社会基础设施的发展。
 
-论文可在[arXiv](https://arxiv.org/abs/2502.08691)获取：
+论文可在 [arXiv:2502.08691](https://arxiv.org/abs/2502.08691) 获取：
 
 ```bibtex
-@article{piao2025agentsociety,
-  title={AgentSociety: Large-Scale Simulation of LLM-Driven Generative Agents Advances Understanding of Human Behaviors and Society},
-  author={Piao, Jinghua and Yan, Yuwei and Zhang, Jun and Li, Nian and Yan, Junbo and Lan, Xiaochong and Lu, Zhihong and Zheng, Zhiheng and Wang, Jing Yi and Zhou, Di and others},
-  journal={arXiv preprint arXiv:2502.08691},
-  year={2025}
+@misc{piao2025agentsociety,
+  title        = {{AgentSociety}: Large-Scale Simulation of {LLM}-Driven Generative Agents Advances Understanding of Human Behaviors and Society},
+  author       = {Jinghua Piao and Yuwei Yan and Jun Zhang and Nian Li and Junbo Yan and Xiaochong Lan and Zhihong Lu and Zhiheng Zheng and Jing Yi Wang and Di Zhou and Chen Gao and Fengli Xu and Fang Zhang and Ke Rong and Jun Su and Yong Li},
+  year         = {2025},
+  eprint       = {2502.08691},
+  archiveprefix= {arXiv},
+  primaryclass = {cs.SI},
+  doi          = {10.48550/arXiv.2502.08691},
+  url          = {https://arxiv.org/abs/2502.08691},
 }
 ```
 

@@ -34,9 +34,9 @@ msgstr ""
 "Through this platform, we can quickly create and manage agents in urban simulation environments, efficiently conducting modeling and simulation of complex urban scenarios. "
 "Thereby, AgentSociety, starting from the first principles of sociology, helps drive the transformation of social science research paradigms, promoting the development of sociology from behavior simulation to mental modeling, from static deduction to dynamic symbiosis, and from laboratory tools to social infrastructure."
 
-#: ../../index.md:7
-msgid "论文可在[arXiv](https://arxiv.org/abs/2502.08691)获取："
-msgstr "The paper is available on [arXiv](https://arxiv.org/abs/2502.08691):"
+#: ../../index.md:17
+msgid "论文可在 [arXiv:2502.08691](https://arxiv.org/abs/2502.08691) 获取："
+msgstr "The paper is available at [arXiv:2502.08691](https://arxiv.org/abs/2502.08691):"
 
 #: ../../index.md:18
 msgid "![AgentSociety的整体结构](_static/framework-overview.jpg)"
