@@ -14,7 +14,32 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ## [Unreleased]
 
-<!-- 暂无待发布变更 -->
+### Added
+
+- **agentsociety2**：LLM 推理（thinking）开关，仅面向 OpenAI 兼容 chat-completions 接口。新增
+  `AGENTSOCIETY_LLM_THINKING`（`on`/`off`，未设置时不发送任何新参数）、
+  `AGENTSOCIETY_LLM_REASONING_EFFORT`、`AGENTSOCIETY_LLM_EXTRA_BODY`（网关私有开关的 JSON 逃生口），
+  以及 `AGENTSOCIETY_CODER_LLM_*` 按角色覆盖。发送 `reasoning_effort` 时会显式附带
+  `allowed_openai_params` —— litellm 的 `openai/` 适配器会按模型名过滤参数，对不在其模型表中的
+  网关模型（即任何 OpenAI 兼容部署）会直接拒绝该参数。
+- **agentsociety2**：prompt 缓存命中率埋点。解析各网关形态的 `cached_tokens`，逐轮写入
+  `llm.completion` trace span，收尾写 `run_dir/LLM_STATS.json` 并在日志汇总（`AgentSociety.token_stats`
+  / `cache_hit_rate()`）。
+
+### Changed
+
+- **agentsociety2**：prompt 分节按变化频率重排——system 去掉 agent 名、ask 规则移入 user 消息，
+  `<recent_observations>` 从 user 消息开头移到末尾。同一 run 内所有 agent 共享同一段 system 前缀
+  （实测命中率 43.2% → 69.1%）。
+- **agentsociety2**：ReAct 循环改为**追加式对话历史**。一次 `run_react_loop` 只构建一个 thread，
+  之后每轮的 assistant 工具调用与结果追加到末尾（原生 `role: "tool"` 消息，文本兜底路径为
+  `<recent_observations>` user 块），不再每轮重渲染。每个请求因此成为上一个的严格前缀扩展，缓存
+  随轮次增长（实测真实循环聚合命中率 84.7%）。**破坏性内部变更**：删除私有方法
+  `AgentBase._call_react_llm`；`_call_react_llm_with_messages` 返回 `ReactTurn` 并原地扩展消息列表；
+  `ReactDecision` 新增 `call_id` 字段。`run_react_loop` / `build_react_messages` 的签名与契约不变。
+- **agentsociety2**：移除 litellm Router 上的 `cache_responses=True`——那是 litellm 自己的**响应**
+  缓存（未配置全局 `litellm.cache` 时是空操作），而非 provider 的 prompt 前缀缓存；一旦有人配置了
+  全局缓存，ReAct 循环会拿到陈旧回复。
 
 ## [2.8.7] - 2026-09-09
 

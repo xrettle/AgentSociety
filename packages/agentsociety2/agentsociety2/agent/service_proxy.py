@@ -57,6 +57,7 @@ class LLMClientLike(Protocol):
         model: str,
         messages: list[dict[str, Any]],
         stream: bool = False,
+        thinking: str = "inherit",
         **kwargs: Any,
     ) -> Any:
         ...
@@ -153,19 +154,14 @@ def _role_configured(role: str) -> bool:
 def _client_for_role(role: str) -> Any:
     """Build a serializable :class:`LLMClient` carrying one role's connection params.
 
-    The client crosses Ray task boundaries carrying only params; each consumer
-    builds its own Router + AIMD semaphore in its own event loop on first call.
+    Thin delegation to :func:`agentsociety2.config.llm_dispatcher.build_client_for_role`.
+    This used to duplicate that function's body, which meant every new client
+    field (e.g. the thinking settings) had to be added in two places or the
+    driver path would silently miss it.
     """
-    from agentsociety2.config import get_llm_connection
-    from agentsociety2.config.llm_dispatcher import LLMClient
+    from agentsociety2.config.llm_dispatcher import build_client_for_role
 
-    base_url, api_key, model_name = get_llm_connection(role)
-    return LLMClient(
-        model_name=model_name,
-        base_url=base_url,
-        api_key=api_key or "",
-        model_type=role,
-    )
+    return build_client_for_role(role)
 
 
 def build_service_proxy(

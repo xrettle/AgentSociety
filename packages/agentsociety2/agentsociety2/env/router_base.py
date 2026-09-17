@@ -109,11 +109,21 @@ class TokenUsageStats(BaseModel):
     :ivar call_count: Number of API calls made.
     :ivar input_tokens: Total number of input tokens consumed.
     :ivar output_tokens: Total number of output tokens consumed.
+    :ivar cached_input_tokens: Input tokens served from the provider's
+        prompt-prefix cache (a subset of ``input_tokens``).
     """
 
     call_count: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_input_tokens: int = 0
+
+    @property
+    def cache_hit_rate(self) -> float:
+        """:returns: ``cached_input_tokens / input_tokens``, clamped to [0, 1]."""
+        if self.input_tokens <= 0:
+            return 0.0
+        return max(0.0, min(1.0, self.cached_input_tokens / self.input_tokens))
 
 
 class FinalAnswerResponse(BaseModel):
@@ -796,6 +806,7 @@ Your corrected response:
                 call_count=int(s.get("calls", 0)),
                 input_tokens=int(s.get("input", 0)),
                 output_tokens=int(s.get("output", 0)),
+                cached_input_tokens=int(s.get("cached_input", 0)),
             )
             for model, s in snapshot.items()
         }
@@ -927,6 +938,9 @@ Generated world description:"""
                 "model": "summary",
                 "messages": dialog,
                 "stream": False,
+                # 每个 run 只生成一次并缓存（见本方法上方的 lazy 缓存），推理既无
+                # 收益又给 run 之间引入额外方差。
+                "thinking": "off",
             }
             if max_retries is not None:
                 completion_kwargs["max_retries"] = max_retries

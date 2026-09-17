@@ -758,12 +758,14 @@ class ExperimentRunner:
                     self._update_progress()
 
             # 关闭society
+            self._log_llm_stats()
             await self.society.close()
             logger.info("Experiment completed successfully")
             self._update_pid_file("completed")
 
         except Exception as e:
             logger.error(f"Experiment failed: {e}", exc_info=True)
+            self._log_llm_stats()
             self._update_pid_file("failed", error=str(e))
             # Ensure routing subprocesses are cleaned up on failure
             if self.society is not None:
@@ -772,6 +774,44 @@ class ExperimentRunner:
                 except Exception:
                     logger.debug("Error closing society during failure cleanup", exc_info=True)
             raise
+
+    def _log_llm_stats(self) -> None:
+        """收尾汇报 LLM token 用量与 prompt 缓存命中率。
+
+        在 ``close()`` **之前**调用：env router 的用量是快照，close 之后再取会丢。
+        写 ``run_dir/LLM_STATS.json`` 并打一行汇总。统计失败绝不能影响实验结论，
+        因此这里吞掉异常只记 debug。
+        """
+        if self.society is None:
+            return
+        try:
+            payload = self.society.write_llm_stats_json()
+        except Exception:
+            logger.debug("Failed to write LLM stats", exc_info=True)
+            return
+        if payload is None:
+            return
+        totals = payload["totals"]
+        logger.info(
+            "LLM usage: calls=%d, input=%d (cached=%d, hit rate=%.1f%%), output=%d",
+            totals["calls"],
+            totals["input"],
+            totals["cached_input"],
+            payload["cache_hit_rate"] * 100.0,
+            totals["output"],
+        )
+        for model, s in sorted(payload["models"].items()):
+            rate = (s["cached_input"] / s["input"] * 100.0) if s["input"] else 0.0
+            logger.info(
+                "LLM usage [%s]: calls=%d, input=%d, cached=%d (%.1f%%), output=%d",
+                model,
+                s["calls"],
+                s["input"],
+                s["cached_input"],
+                rate,
+                s["output"],
+            )
+        logger.info("LLM stats written to %s", self.run_dir / "LLM_STATS.json")
 
 
 def main():

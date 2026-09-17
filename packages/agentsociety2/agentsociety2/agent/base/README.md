@@ -28,6 +28,10 @@
 - **trace**：``trace_span`` 上下文管理器写 agent 级 trace span。
 - **AGENT.json 持久化**：``persist_agent_json`` 把 agent 自描述快照写入
   ``AGENT.json``；``build_agent_json`` 构造其内容（子类可扩展字段）。
+  面向提示词的投影是 ``build_prompt_agent_view``（剥掉 ``initialized_at`` /
+  ``current_time`` / ``tick`` / ``step_count`` / 绝对 ``workspace.root``，保留
+  子类扩展字段）与 ``build_prompt_turn_state``（每步状态，单独成块）——
+  两者都由同一份 ``build_agent_json`` 派生，避免漂移。
 - **构造模型**：``create`` / ``from_workspace`` / 无参 ``__init__``。
 
 子类只需实现 **person / 业务专属逻辑**（如 memory、game 状态、自定义
@@ -62,6 +66,8 @@ prompt），其余全部继承自基类。
 | ``restore(self, workspace_path, service_proxy)`` | 在 ``await super().restore(...)`` 之后追加业务专属状态恢复。基类有具体实现，**推荐覆盖**。 | 推荐覆盖 |
 | ``build_react_messages(self, *, tick, t, observations, question=None, readonly=False, skill_hooks=None)`` | 构造 ReAct 提示词（OpenAI 风格 chat messages）。基类实现 ``raise NotImplementedError`` —— **若复用基类的 ``run_react_loop`` 则必须覆盖**。 | 视情况必须 |
 | ``build_agent_json(self, *, tick, t)`` | 构造 ``AGENT.json`` 内容。基类已有默认实现；子类可覆盖以扩展字段（如 memory / 自定义 skill 集合），记得 ``data = super().build_agent_json(...)`` 再追加。 | 推荐覆盖 |
+| ``build_prompt_agent_view(self, *, tick, t)`` | 由 ``build_agent_json`` 派生面向提示词的 ``<agent>`` 视图：剥掉逐轮字段（``current_time`` / ``tick`` / ``step_count`` / ``initialized_at``）与绝对 ``workspace.root``，保留子类扩展字段。这些剥掉的字段不会丢——时间走单独的 ``<turn_state>`` 块。 | 一般不用覆盖 |
+| ``build_prompt_turn_state(self, *, tick, t)`` | 构造每步 ``<turn_state>`` 块（``current_time`` / ``tick`` / ``step_count``）。 | 一般不用覆盖 |
 | ``dispatch_react_tool(self, action, args, *, readonly=False)`` | 分发单个 ReAct 工具。基类已处理 ``read`` / ``write`` / ``append`` / ``list`` / ``grep`` / ``activate_skill`` / ``deactivate_skill`` / ``read_skill_file`` / ``execute_skill_script`` / ``ask_env``。子类可覆盖以增加前缀（如 ``memory_*`` / ``todo_*``），未命中的转发给 ``await super().dispatch_react_tool(...)``。 | 推荐覆盖 |
 
 > ``create`` 与 ``from_workspace`` 在基类已有 **具体实现**，子类一般直接
@@ -119,8 +125,9 @@ service 容器注入到 agent slot：
 - skill runtime 装配：``_setup_skill_runtime``、``_refresh_visible_skills``、
   ``_resolve_skill_id_from_args``。
 - ReAct 内部：``_execute_react_tool``（trace 包裹的工具执行）、
-  ``_call_react_llm``、``_call_react_llm_with_messages``、
-  ``_complete_react_once``、``_parse_react_responses``。
+  ``_call_react_llm_with_messages``（原地扩展 thread）、``_append_react_turn``、
+  ``_complete_react_once``、``_parse_react_turn``、``_parse_react_responses``
+  （``_parse_react_turn`` 的薄委托）、``_append_context_refresh``。
 - workspace 路径 helper：``_workspace``（property）、
   ``_is_core_owned_workspace_path``、``_normalize_workspace_read_path``、
   ``_build_env_tool_context``、``_build_env_skill_instruction``。

@@ -21,6 +21,7 @@ from agentsociety2.agent.base.agent import (
     AgentBase,
     _synthesize_step_fallback_episode,
 )
+from agentsociety2.agent.base.react import ReactDecision
 from agentsociety2.agent.memory import MemoryExtractionResult
 from agentsociety2.agent.person_prompt import build_preamble
 
@@ -152,6 +153,94 @@ def test_parse_ask_free_text_natural_language_returns_error():
     decisions, error = agent._parse_react_responses(response, readonly=True)
     assert decisions == []
     assert "finish" in error.lower()
+
+
+# --------------------------- parse turn (append payload) ---------------------
+
+
+def _native_response(*calls):
+    """A response with native tool calls: (id, name, arguments_json) triples."""
+    tool_calls = [
+        SimpleNamespace(
+            id=call_id,
+            function=SimpleNamespace(name=name, arguments=arguments),
+        )
+        for call_id, name, arguments in calls
+    ]
+    message = SimpleNamespace(tool_calls=tool_calls, content=None)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+def test_parse_react_responses_still_returns_a_pair():
+    """The pair-returning parser is the shape callers and tests depend on."""
+    agent = _agent()
+    result = agent._parse_react_responses(_native_response(("c1", "read", '{"path": "a"}')))
+    assert isinstance(result, tuple) and len(result) == 2
+    decisions, error = result
+    assert error == ""
+    assert decisions[0].action == "read"
+
+
+def test_parse_turn_surfaces_native_call_ids():
+    agent = _agent()
+    turn = agent._parse_react_turn(
+        _native_response(("c1", "read", '{"path": "a"}'), ("c2", "grep", '{"pattern": "p"}'))
+    )
+    assert [d.call_id for d in turn.decisions] == ["c1", "c2"]
+    assert turn.error == ""
+    assert [tc["id"] for tc in turn.assistant_message["tool_calls"]] == ["c1", "c2"]
+    assert turn.assistant_message["tool_calls"][0]["function"]["name"] == "read"
+
+
+def test_parse_turn_synthesizes_missing_ids():
+    """A gateway that omits ids must not produce an unanswerable turn."""
+    agent = _agent()
+    message = SimpleNamespace(
+        tool_calls=[SimpleNamespace(id=None, function=SimpleNamespace(
+            name="read", arguments='{"path": "a"}'))],
+        content=None,
+    )
+    turn = agent._parse_react_turn(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    assert turn.decisions[0].call_id == "call_0"
+
+
+def test_parse_turn_error_echoes_all_raw_calls():
+    """On a rejected finish the raw calls are echoed so every id can be answered."""
+    agent = _agent()
+    turn = agent._parse_react_turn(
+        _native_response(
+            ("c1", "read", '{"path": "a"}'),
+            ("c2", "finish", '{"memories": []}'),
+        )
+    )
+    assert turn.decisions == []
+    assert "memories" in turn.error
+    # Both raw ids survive, so the loop can reply to each one.
+    assert [tc["id"] for tc in turn.assistant_message["tool_calls"]] == ["c1", "c2"]
+
+
+def test_parse_turn_text_path_has_no_ids_and_carries_raw_text():
+    agent = _agent()
+    message = SimpleNamespace(tool_calls=None, content='read(path="a.txt")')
+    turn = agent._parse_react_turn(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    assert turn.decisions[0].action == "read"
+    assert turn.decisions[0].call_id == ""
+    assert "tool_calls" not in turn.assistant_message
+    assert turn.assistant_message["content"] == 'read(path="a.txt")'
+
+
+def test_parse_turn_empty_response_has_nothing_to_append():
+    agent = _agent()
+    message = SimpleNamespace(tool_calls=None, content="")
+    turn = agent._parse_react_turn(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    assert turn.decisions == []
+    assert turn.error == ""
+    assert turn.assistant_message is None
+
+
+def test_react_decision_call_id_defaults_to_empty():
+    decision = ReactDecision("", "read", {"path": "a"}, "")
+    assert decision.call_id == ""
 
 
 # --------------------------- fallback episode --------------------------------

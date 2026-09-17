@@ -40,6 +40,9 @@ __all__ = [
     "AdaptiveSemaphore",
     "LLMClient",
     "LLMDispatchError",
+    "ThinkingSettings",
+    "cache_hit_rate",
+    "extract_cached_tokens",
     "init_dispatchers",
     "is_rate_limit_like_error",
     "merge_token_stats",
@@ -315,7 +318,74 @@ def _build_router(base_url: str, api_key: str, model: str) -> Any:
             },
         }
     ]
-    return Router(model_list=model_list, cache_responses=True, num_retries=0)
+    # ``cache_responses=False`` is deliberate: that flag is litellm's own
+    # RESPONSE cache (it forwards ``caching=True`` to the completion), not the
+    # provider's prompt-prefix cache. It is inert unless a global
+    # ``litellm.cache`` is configured — and if one ever is, identical ReAct
+    # prompts would replay stale completions. Prompt-prefix cache hits are a
+    # provider-side property of the request bytes; we only measure them
+    # (:func:`extract_cached_tokens`).
+    return Router(model_list=model_list, cache_responses=False, num_retries=0)
+
+
+def _usage_field(obj: Any, key: str) -> Any:
+    """Read ``key`` off a usage object that may be a model or a plain mapping.
+
+    litellm returns pydantic-ish usage objects, but gateways that bypass its
+    normalization hand back dicts. Never raises — a missing/unreadable field
+    is ``None``.
+    """
+    if obj is None:
+        return None
+    try:
+        value = getattr(obj, key, None)
+        if value is not None:
+            return value
+    except Exception:  # pragma: no cover - defensive
+        pass
+    try:
+        if isinstance(obj, dict):
+            return obj.get(key)
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return None
+
+
+def extract_cached_tokens(response: Any) -> int:
+    """Prompt tokens served from the provider's prefix cache, or 0.
+
+    Prompt-prefix caching is provider-side, and gateways disagree on where the
+    hit count lands. Tolerate every shape we have seen, in priority order:
+
+    - ``usage.prompt_tokens_details.cached_tokens`` — canonical. litellm folds
+      DeepSeek's ``prompt_cache_hit_tokens`` and Anthropic's
+      ``cache_read_input_tokens`` into this, so it holds for those too.
+    - ``usage.cached_tokens`` / ``usage.prompt_cache_hit_tokens`` /
+      ``usage.cache_read_input_tokens`` — fallbacks for gateways that pass the
+      raw upstream usage through without litellm's normalization.
+
+    Called on the hot path for every completion, so it swallows any error and
+    returns 0 rather than risk failing a request.
+    """
+    usage = _usage_field(response, "usage")
+    if usage is None:
+        return 0
+    details = _usage_field(usage, "prompt_tokens_details")
+    for candidate in (
+        _usage_field(details, "cached_tokens"),
+        _usage_field(usage, "cached_tokens"),
+        _usage_field(usage, "prompt_cache_hit_tokens"),
+        _usage_field(usage, "cache_read_input_tokens"),
+    ):
+        if candidate is None:
+            continue
+        try:
+            value = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    return 0
 
 
 def merge_token_stats(*deltas: dict[str, dict[str, int]]) -> dict[str, dict[str, int]]:
@@ -325,15 +395,43 @@ def merge_token_stats(*deltas: dict[str, dict[str, int]]) -> dict[str, dict[str,
     the driver folds them together with this helper. Pass the running aggregate
     as the first arg to accumulate across ticks, e.g.
     ``self._token_stats = merge_token_stats(self._token_stats, delta)``.
+
+    Every key is read with ``.get(..., 0)`` so a delta produced by an older
+    build (``calls``/``input``/``output`` only) still merges cleanly across a
+    mixed-version Ray cluster.
     """
     merged: dict[str, dict[str, int]] = {}
     for delta in deltas:
         for model, s in delta.items():
-            agg = merged.setdefault(model, {"calls": 0, "input": 0, "output": 0})
+            agg = merged.setdefault(
+                model, {"calls": 0, "input": 0, "output": 0, "cached_input": 0}
+            )
             agg["calls"] += int(s.get("calls", 0))
             agg["input"] += int(s.get("input", 0))
             agg["output"] += int(s.get("output", 0))
+            agg["cached_input"] += int(s.get("cached_input", 0))
     return merged
+
+
+def cache_hit_rate(stats: dict[str, dict[str, int]]) -> float:
+    """Prompt-cache hit rate over token stats: ``cached_input / input``.
+
+    Clamped to ``[0, 1]``: Anthropic-shaped usage reports ``prompt_tokens``
+    *excluding* cache reads, so a naive ratio can exceed 1 for gateways that
+    pass that shape through. Raw counters are kept in the stats, so a caller
+    who knows their gateway's convention can recompute it themselves.
+
+    Note the denominator is *all* billed input tokens, including one-shot
+    utility calls (world description, memory consolidation) and ask-mode turns
+    that are structurally prefix-unique and always read 0%. An aggregate rate
+    therefore understates the ReAct loop's own hit rate — prefer the per-turn
+    trace spans when judging a prompt-layout change.
+    """
+    total_input = sum(int(s.get("input", 0)) for s in stats.values())
+    if total_input <= 0:
+        return 0.0
+    cached = sum(int(s.get("cached_input", 0)) for s in stats.values())
+    return max(0.0, min(1.0, cached / total_input))
 
 
 def build_client_for_role(role: str) -> "LLMClient":
@@ -343,8 +441,11 @@ def build_client_for_role(role: str) -> "LLMClient":
     role and returns a client that crosses Ray task boundaries carrying only
     params; each consumer builds its own Router + AIMD semaphore in its own
     event loop on first call.
+
+    Also resolves the role's reasoning (thinking) settings — see
+    :func:`agentsociety2.config.config.get_llm_thinking`.
     """
-    from agentsociety2.config.config import get_llm_connection
+    from agentsociety2.config.config import get_llm_connection, get_llm_thinking
 
     base_url, api_key, model_name = get_llm_connection(role)
     return LLMClient(
@@ -352,12 +453,49 @@ def build_client_for_role(role: str) -> "LLMClient":
         base_url=base_url,
         api_key=api_key or "",
         model_type=role,
+        thinking=ThinkingSettings(**get_llm_thinking(role)),
     )
 
 
 # ═══════════════════════════════════════════════════════════
 # LLMClient — serializable config; calls litellm in-process
 # ═══════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class ThinkingSettings:
+    """One role's reasoning (thinking) request parameters.
+
+    Resolved once per role from the environment by
+    :func:`agentsociety2.config.config.get_llm_thinking` and carried on the
+    :class:`LLMClient` so it survives the Ray task boundary.
+
+    Only OpenAI-compatible chat-completions parameters are produced — no
+    per-model-family probing. ``policy="inherit"`` (the default, and what an
+    unset environment yields) emits **nothing at all**, leaving the outgoing
+    request byte-identical to a build without this feature.
+    """
+
+    policy: str = "inherit"
+    reasoning_effort: str | None = None
+    extra_body: dict[str, Any] | None = None
+
+    def request_kwargs(self) -> dict[str, Any]:
+        """Return the completion kwargs this policy contributes.
+
+        ``inherit`` contributes nothing. Otherwise emit whichever of
+        ``reasoning_effort`` / ``extra_body`` were resolved (both may be set for
+        ``on``; ``get_llm_thinking`` deliberately leaves ``reasoning_effort``
+        unset for ``off`` when a gateway-specific ``extra_body`` is configured).
+        """
+        if self.policy == "inherit":
+            return {}
+        kwargs: dict[str, Any] = {}
+        if self.reasoning_effort:
+            kwargs["reasoning_effort"] = self.reasoning_effort
+        if self.extra_body:
+            kwargs["extra_body"] = dict(self.extra_body)
+        return kwargs
 
 
 @dataclass
@@ -380,6 +518,7 @@ class LLMClient:
     base_url: str
     api_key: str
     model_type: str = "default"
+    thinking: ThinkingSettings | None = None
 
     def __post_init__(self) -> None:
         self._router: Any = None
@@ -396,6 +535,7 @@ class LLMClient:
             "base_url": self.base_url,
             "api_key": self.api_key,
             "model_type": self.model_type,
+            "thinking": self.thinking,
         }
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -403,6 +543,10 @@ class LLMClient:
         self.base_url = state["base_url"]
         self.api_key = state["api_key"]
         self.model_type = state.get("model_type", "default")
+        # ``.get`` keeps state dicts written by older builds loadable; the
+        # ``or`` normalizes a missing/None value to the inert default so a
+        # deserialized client can never crash on a missing attribute.
+        self.thinking = state.get("thinking") or ThinkingSettings()
         self._router = None
         self._sem = None
         self._token_stats = {}
@@ -440,11 +584,52 @@ class LLMClient:
         if usage is None:
             return
         s = self._token_stats.setdefault(
-            model, {"calls": 0, "input": 0, "output": 0}
+            model, {"calls": 0, "input": 0, "output": 0, "cached_input": 0}
         )
         s["calls"] += 1
         s["input"] += int(getattr(usage, "prompt_tokens", 0) or 0)
         s["output"] += int(getattr(usage, "completion_tokens", 0) or 0)
+        s["cached_input"] += extract_cached_tokens(response)
+
+    def _resolve_thinking_kwargs(
+        self, thinking: str, kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Merge this client's thinking settings under the caller's kwargs.
+
+        Only ``"inherit"`` and ``"off"`` are meaningful: the client carries a
+        single already-resolved payload per role, so there is no separate "on"
+        payload to force. A call that wants reasoning enabled despite an
+        ``off`` role policy passes ``reasoning_effort`` / ``extra_body``
+        directly — those win here.
+
+        Args:
+            thinking: ``"inherit"`` or ``"off"``.
+            kwargs: Caller-supplied completion kwargs (win on conflict).
+
+        Returns:
+            The kwargs to forward to ``router.acompletion``.
+        """
+        if thinking == "off" or self.thinking is None:
+            effective: dict[str, Any] = {}
+        else:
+            effective = self.thinking.request_kwargs()
+        merged = {**effective, **kwargs}
+
+        # litellm's ``openai/`` adapter validates request params against its own
+        # model map. This deployment points at an OpenAI-compatible gateway
+        # serving a model litellm does not know, so ``reasoning_effort`` is
+        # rejected outright ("openai does not support parameters:
+        # ['reasoning_effort']"). Allow it explicitly whenever we send one.
+        #
+        # Deliberately NOT ``litellm.drop_params = True``: that would silently
+        # swallow the parameter and the switch would appear to work while doing
+        # nothing.
+        if "reasoning_effort" in merged:
+            allowed = list(merged.get("allowed_openai_params") or [])
+            if "reasoning_effort" not in allowed:
+                allowed.append("reasoning_effort")
+            merged["allowed_openai_params"] = allowed
+        return merged
 
     def take_token_stats(self) -> dict[str, dict[str, int]]:
         """Return and clear this client's token stats (a delta)."""
@@ -464,9 +649,21 @@ class LLMClient:
         max_retries: int = 3,
         base_delay: float = 1.0,
         max_delay: float = 60.0,
+        thinking: str = "inherit",
         **kwargs: Any,
     ) -> ModelResponse:
-        """Send a completion request with per-loop AIMD gating + retry."""
+        """Send a completion request with per-loop AIMD gating + retry.
+
+        ``thinking`` is consumed here and never forwarded: ``"inherit"`` (the
+        default) applies this client's role-level :class:`ThinkingSettings`,
+        ``"off"`` suppresses them for this call. Utility calls that gain
+        nothing from reasoning (memory consolidation, world-description
+        generation) pass ``thinking="off"``.
+
+        Any caller-supplied ``reasoning_effort`` / ``extra_body`` in ``kwargs``
+        **replaces** the role-level value wholesale — no deep merge, so what
+        gets sent is always predictable.
+        """
         if stream:
             raise NotImplementedError(
                 "streaming is not supported; callers must use stream=False"
@@ -475,6 +672,7 @@ class LLMClient:
             messages = []
         max_retries = max(max_retries, 1)
         effective_model = model or self.model_name
+        request_kwargs = self._resolve_thinking_kwargs(thinking, kwargs)
         self._ensure_runtime()
         router = self._router
         sem = self._sem
@@ -492,7 +690,7 @@ class LLMClient:
                     messages=messages,
                     stream=False,
                     timeout=_LLM_REQUEST_TIMEOUT,
-                    **kwargs,
+                    **request_kwargs,
                 )
                 latency_ms = (time.monotonic() - t0) * 1000
                 sem.record_latency(latency_ms, is_error=False)

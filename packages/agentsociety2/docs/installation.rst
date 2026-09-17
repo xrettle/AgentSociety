@@ -96,6 +96,32 @@ AgentSociety 2 需要 LLM API 凭证。设置以下环境变量：
    export AGENTSOCIETY_EMBEDDING_MODEL="text-embedding-3-large"   # Optional
    export AGENTSOCIETY_EMBEDDING_DIMS="1024"                      # Optional
 
+**推理（thinking）开关**
+
+仅适用于 OpenAI 兼容 chat-completions 接口。**全部留空时不发送任何新参数**，
+出站请求与不启用该功能时完全一致。
+
+.. code-block:: bash
+
+   # on / off (also accepts 1/0/true/false). Unset = send nothing.
+   export AGENTSOCIETY_LLM_THINKING="off"
+
+   # Explicit reasoning_effort. When thinking=off and this is unset, "minimal"
+   # is used. When thinking=on, it is only sent if explicitly set here.
+   export AGENTSOCIETY_LLM_REASONING_EFFORT=""
+
+   # Gateway-specific OpenAI-compatible switch, a JSON object merged into the
+   # request's extra_body, e.g. {"enable_thinking": false} or
+   # {"thinking": {"type": "disabled"}}. When set, thinking=off sends ONLY this
+   # (no reasoning_effort), so the gateway never sees two conflicting switches.
+   export AGENTSOCIETY_LLM_EXTRA_BODY=""
+
+   # Per-role overrides for the coder model (env-router code generation);
+   # each falls back to the corresponding AGENTSOCIETY_LLM_* value.
+   export AGENTSOCIETY_CODER_LLM_THINKING=""            # Optional
+   export AGENTSOCIETY_CODER_LLM_REASONING_EFFORT=""    # Optional
+   export AGENTSOCIETY_CODER_LLM_EXTRA_BODY=""          # Optional
+
 **数据目录**
 
 .. code-block:: bash

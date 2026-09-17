@@ -129,7 +129,16 @@ ReAct 工具循环
      - 结束当前仿真步（可附 summary）。
 
 模型每轮的输出被解析为一个结构化决策（工具名 + 参数 + 是否结束）。无效工具名会被纠正或返回可恢复错误，
-不会直接崩溃。工具结果写入 thread（内存窗口 + 磁盘 JSONL）。
+不会直接崩溃。
+
+一次 ``run_react_loop`` 只构建**一个** thread：首条消息由 ``build_react_messages`` 产出（system +
+含各上下文档的 user），之后每轮的 assistant 工具调用与其结果**追加**到末尾，不再重建。这样每个请求
+都是上一个的严格前缀扩展，provider 的 prompt 前缀缓存能随轮次增长而不是每轮归零（实测聚合命中率
+从约 52% 提升到约 85%）。因此**不要**在轮内重建或从头部截断 thread —— 两者都会摧毁缓存前缀。
+工具结果以 ``role: "tool"`` 消息返回（失败时带 ``ERROR:`` 前缀）；模型若以文本而非原生 tool call
+发起调用，结果则作为 ``<recent_observations>`` user 块追加。步内改动了
+``<todo_context>`` / 激活 skill 时，会追加一条刷新块而不是重渲染（见
+``AgentBase.build_context_refresh_message``）。工具结果同时写入磁盘 JSONL 供 replay 复盘。
 
 .. note::
 

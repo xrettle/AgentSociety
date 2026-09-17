@@ -156,6 +156,18 @@ AIMD（加性增、乘性减）调整，用于控制该进程内 LLM 请求 fan-
    * - ``AGENTSOCIETY_LLM_SLOW_LATENCY_MS``
      - 未设置
      - 可选的绝对延迟阈值（毫秒）。未设置时只使用相对因子。
+   * - ``AGENTSOCIETY_LLM_THINKING``
+     - 未设置
+     - 推理（thinking）总开关，``on`` / ``off``。**未设置时不发送任何新参数**。仅适用于 OpenAI 兼容 chat-completions 接口。
+   * - ``AGENTSOCIETY_LLM_REASONING_EFFORT``
+     - 未设置
+     - 显式 ``reasoning_effort``。``off`` 时缺省回退 ``minimal``；``on`` 时仅在显式设置后发送。
+   * - ``AGENTSOCIETY_LLM_EXTRA_BODY``
+     - 未设置
+     - JSON 对象字符串，合并进请求的 ``extra_body``，用于网关私有开关（如 ``{"enable_thinking": false}``）。配了它时 ``off`` 只发 ``extra_body``、不发 ``reasoning_effort``。
+   * - ``AGENTSOCIETY_CODER_LLM_THINKING`` / ``_REASONING_EFFORT`` / ``_EXTRA_BODY``
+     - 回退默认组
+     - 上述三项的 coder 角色（env router 代码生成）覆盖。
 
 ``init_dispatchers()`` 只负责初始化 Ray（用于 env router actor 和 agent Ray Tasks）。
 ``shutdown_dispatchers()`` 对 LLM 侧是 no-op；本地 Router 随所在进程退出释放。

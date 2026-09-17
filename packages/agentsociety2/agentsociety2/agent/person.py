@@ -19,7 +19,11 @@ from agentsociety2.agent.memory_runtime import (
     MemoryRuntimeConfig,
     PersonMemoryRuntime,
 )
-from agentsociety2.agent.person_prompt import build_react_messages
+from agentsociety2.agent.person_prompt import (
+    build_react_messages,
+    json_block,
+    xml_block,
+)
 from agentsociety2.logger import get_logger
 
 if TYPE_CHECKING:
@@ -318,14 +322,20 @@ Minimal config example:
         readonly: bool = False,
         skill_hooks: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, str]]:
-        """Build ReAct prompt messages (person-specific)."""
+        """Build ReAct prompt messages (person-specific).
+
+        Splits the AGENT.json content into the two prompt blocks the layout
+        wants: a run-stable ``<agent>`` identity view (volatile and host-path
+        fields stripped) and a per-step ``<turn_state>``. Both come from the
+        same source dict so they cannot drift apart.
+        """
         return build_react_messages(
-            name=self.name,
             world_description=self._world_description,
             skill_catalog=self.skill_runtime.skill_catalog(),
             activated_skill_content=self.skill_runtime.activated_skill_content_xml(),
             observations=observations,
-            agent_json=self.build_agent_json(tick=tick, t=t),
+            agent_json=self.build_prompt_agent_view(tick=tick, t=t),
+            turn_state=self.build_prompt_turn_state(tick=tick, t=t),
             memory_context=self._build_memory_context()
             if self._enable_memory
             else None,
@@ -334,14 +344,83 @@ Minimal config example:
             else None,
             question=question,
             readonly=readonly,
+            enable_memory=self._enable_memory,
+            enable_todo_list=self._enable_todo_list,
             disable_skills=self.skill_runtime.visible_skill_count() == 0,
             skill_hooks=skill_hooks,
         )
 
     # The generic ReAct loop, LLM call, and response parsing
-    # (run_react_loop, _call_react_llm, _call_react_llm_with_messages,
-    # _complete_react_once, _parse_react_responses) are inherited from
+    # (run_react_loop, _call_react_llm_with_messages, _complete_react_once,
+    # _parse_react_turn, _parse_react_responses) are inherited from
     # AgentBase; they call this ``build_react_messages`` hook polymorphically.
+
+    # ==================== Mid-step context refresh ====================
+
+    # TODO actions that change the task list. ``todo_list`` is a read and needs
+    # no refresh.
+    _TODO_MUTATING_ACTIONS = frozenset(
+        {
+            "todo_add",
+            "todo_update",
+            "todo_start",
+            "todo_complete",
+            "todo_defer",
+            "todo_clear_completed",
+        }
+    )
+    # Skill actions that change which skills are active. The system prompt's
+    # <skill_content> block is frozen for the step.
+    _SKILL_MUTATING_ACTIONS = frozenset({"activate_skill", "deactivate_skill"})
+
+    def build_context_refresh_message(
+        self,
+        *,
+        actions: list[str],
+        tick: int,
+        t: datetime,
+    ) -> dict[str, Any] | None:
+        """Append refreshed blocks for state a tool just changed mid-step.
+
+        The thread head is built once per step (that is what keeps the cached
+        prefix intact), so ``<todo_context>`` and the system ``<skill_content>``
+        block would otherwise stay stale for the rest of the step.
+
+        - TODO mutations re-send ``<todo_context>``: it aggregates state the
+          individual tool observations do not (``due_now``,
+          ``overdue_or_blocked``, ``counts``).
+        - Skill changes re-send only the **list** of active skills, not their
+          docs: ``activate_skill`` already returns the full SKILL.md as the tool
+          observation, so repeating it here would double a multi-KB block. The
+          list is what ``deactivate_skill`` genuinely needs — the observation
+          cannot retract content the model has already read.
+
+        Args:
+            actions: Names of the tool actions that succeeded this turn.
+            tick: Current simulation tick.
+            t: Current simulation time.
+
+        Returns:
+            A ``role: "user"`` refresh message, or ``None`` when nothing
+            relevant changed.
+        """
+        blocks: list[str] = []
+        if self._enable_todo_list and self._TODO_MUTATING_ACTIONS.intersection(actions):
+            todo_context = self._build_todo_context(t)
+            if todo_context:
+                blocks.append(json_block("todo_context", todo_context))
+        if self._SKILL_MUTATING_ACTIONS.intersection(actions):
+            activated = sorted(self.skill_runtime.activated_skill_ids())
+            blocks.append(
+                xml_block(
+                    "active_skills",
+                    "\n".join(activated) if activated else "(none active)",
+                )
+            )
+        if not blocks:
+            return None
+        # JSON dicts (not a fenced list) so the block stays valid JSON.
+        return {"role": "user", "content": "\n\n".join(blocks)}
 
     async def _load_world_description(self) -> str:
         """Load the current world description from the environment."""
