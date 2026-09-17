@@ -12,10 +12,18 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ---
 
-## [Unreleased]
+## [2.9.0] - 2026-09-17
+
+- **agentsociety2** `2.9.0` · **extension** `1.7.0` · 标签 `agentsociety2-v2.9.0`
 
 ### Added
 
+- **extension** `1.7.0`：配置页适配推理（thinking）开关——默认 LLM 卡片与「代码生成」tab 各新增一个
+  「跟随网关默认 / 开启 / 关闭」下拉，中英双语文案与 `.env` 模板注释同步。`AGENTSOCIETY_LLM_THINKING`
+  等变量此前插件完全无感知（手写在 `.env` 里的值只能靠后端 `load_dotenv()` 再加载一遍才生效），
+  现在由 `BackendManager` 显式透传。`AGENTSOCIETY_LLM_EXTRA_BODY` / `_REASONING_EFFORT` 不建表单，
+  但同样纳入读取与透传，且配置页**永不重写** `_EXTRA_BODY` 行——`readEnv` 不去引号、
+  `writeEnv` 的 `formatValue` 又会补引号转义，两者叠加会把 JSON 转义坏并导致后端静默忽略。
 - **agentsociety2**：LLM 推理（thinking）开关，仅面向 OpenAI 兼容 chat-completions 接口。新增
   `AGENTSOCIETY_LLM_THINKING`（`on`/`off`，未设置时不发送任何新参数）、
   `AGENTSOCIETY_LLM_REASONING_EFFORT`、`AGENTSOCIETY_LLM_EXTRA_BODY`（网关私有开关的 JSON 逃生口），
