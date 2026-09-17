@@ -105,6 +105,7 @@ npm run build            # 或 npm run dev（watch）
 | 变量                                                                                | 说明                                                        |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `AGENTSOCIETY_LLM_API_KEY` / `AGENTSOCIETY_LLM_API_BASE` / `AGENTSOCIETY_LLM_MODEL` | 仿真默认 LLM                                                |
+| `AGENTSOCIETY_LLM_THINKING`                                                         | 推理开关 `on` / `off`（可选；留空 = 不发送该参数，行为不变） |
 | `LITERATURE_SEARCH_API_KEY`                                                         | 文献 MCP（可选）                                            |
 | `PYTHON_PATH`                                                                       | Python 解释器（可自动检测；Coder 上建议显式设置以加快激活） |
 | `BACKEND_PORT`                                                                      | 本地后端端口                                                |

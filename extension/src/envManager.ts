@@ -11,6 +11,7 @@
  *
  * 相关环境变量（.env文件）：
  * - LLM配置: AGENTSOCIETY_LLM_API_KEY, AGENTSOCIETY_LLM_API_BASE, AGENTSOCIETY_LLM_MODEL
+ * - 推理开关: AGENTSOCIETY_LLM_THINKING, AGENTSOCIETY_LLM_REASONING_EFFORT, AGENTSOCIETY_LLM_EXTRA_BODY
  * - 后端配置: BACKEND_HOST, BACKEND_PORT, BACKEND_LOG_LEVEL
  * - Python路径: PYTHON_PATH
  */
@@ -26,10 +27,19 @@ export interface EnvConfig {
   llmApiBase?: string;
   llmModel?: string;
 
+  // LLM Reasoning (thinking) switch — 见 get_llm_thinking()（agentsociety2/config/config.py）
+  // 空串与「未设置」等价：不发送任何推理相关参数。
+  llmThinking?: string;
+  llmReasoningEffort?: string;
+  llmExtraBody?: string;
+
   // Coder LLM
   coderLlmApiKey?: string;
   coderLlmApiBase?: string;
   coderLlmModel?: string;
+  coderLlmThinking?: string;
+  coderLlmReasoningEffort?: string;
+  coderLlmExtraBody?: string;
 
   // Embedding
   embeddingApiKey?: string;
@@ -56,9 +66,15 @@ const ENV_KEY_MAP: Record<keyof EnvConfig, string> = {
   llmApiKey: 'AGENTSOCIETY_LLM_API_KEY',
   llmApiBase: 'AGENTSOCIETY_LLM_API_BASE',
   llmModel: 'AGENTSOCIETY_LLM_MODEL',
+  llmThinking: 'AGENTSOCIETY_LLM_THINKING',
+  llmReasoningEffort: 'AGENTSOCIETY_LLM_REASONING_EFFORT',
+  llmExtraBody: 'AGENTSOCIETY_LLM_EXTRA_BODY',
   coderLlmApiKey: 'AGENTSOCIETY_CODER_LLM_API_KEY',
   coderLlmApiBase: 'AGENTSOCIETY_CODER_LLM_API_BASE',
   coderLlmModel: 'AGENTSOCIETY_CODER_LLM_MODEL',
+  coderLlmThinking: 'AGENTSOCIETY_CODER_LLM_THINKING',
+  coderLlmReasoningEffort: 'AGENTSOCIETY_CODER_LLM_REASONING_EFFORT',
+  coderLlmExtraBody: 'AGENTSOCIETY_CODER_LLM_EXTRA_BODY',
   embeddingApiKey: 'AGENTSOCIETY_EMBEDDING_API_KEY',
   embeddingApiBase: 'AGENTSOCIETY_EMBEDDING_API_BASE',
   embeddingModel: 'AGENTSOCIETY_EMBEDDING_MODEL',
@@ -79,6 +95,19 @@ const OBSOLETE_ENV_KEYS = new Set([
   'AGENTSOCIETY_ANALYSIS_LLM_API_KEY',
   'AGENTSOCIETY_ANALYSIS_LLM_API_BASE',
   'AGENTSOCIETY_ANALYSIS_LLM_MODEL',
+]);
+
+/**
+ * 只读变量：readEnv 会读取（供后端透传），但 writeEnv 永不重写，原样保留。
+ *
+ * EXTRA_BODY 的值是 JSON 对象，可能自带引号（如 `'{"enable_thinking": false}'`）。
+ * readEnv 不做去引号，writeEnv 的 formatValue 又会给含空白的值补引号并转义，
+ * 两者叠加会把 JSON 转义坏 —— 而 Python 侧 `_env_json_obj` 只会 warning 后忽略，
+ * 属于静默失效。因此这两个变量交给用户手写、插件只读不改。
+ */
+const WRITE_SKIP_ENV_KEYS = new Set([
+  'AGENTSOCIETY_LLM_EXTRA_BODY',
+  'AGENTSOCIETY_CODER_LLM_EXTRA_BODY',
 ]);
 
 /**
@@ -217,6 +246,11 @@ export class EnvManager {
         if (OBSOLETE_ENV_KEYS.has(key)) {
           continue;
         }
+        if (WRITE_SKIP_ENV_KEYS.has(key)) {
+          // 原样保留，交给用户在 .env 里手写（见 WRITE_SKIP_ENV_KEYS 注释）
+          newLines.push(line);
+          continue;
+        }
         if (Object.values(ENV_KEY_MAP).includes(key)) {
           // Skip if this env key has already been written (handle duplicates)
           if (writtenEnvKeys.has(key)) {
@@ -244,6 +278,9 @@ export class EnvManager {
 
     // Add new values that weren't in the file
     for (const [configKey, envName] of Object.entries(ENV_KEY_MAP)) {
+      if (WRITE_SKIP_ENV_KEYS.has(envName)) {
+        continue;
+      }
       if (!writtenKeys.has(configKey) && config[configKey as keyof EnvConfig] !== undefined) {
         newLines.push(`${envName}=${this.formatValue(config[configKey as keyof EnvConfig])}`);
       }
@@ -307,6 +344,32 @@ AGENTSOCIETY_CODER_LLM_API_KEY=
 AGENTSOCIETY_CODER_LLM_API_BASE=
 # Leave empty to reuse AGENTSOCIETY_LLM_MODEL / 留空则沿用 AGENTSOCIETY_LLM_MODEL
 AGENTSOCIETY_CODER_LLM_MODEL=
+
+# ========== Reasoning / Thinking Switch / 推理（thinking）开关 ==========
+# Optional. Only applies to OpenAI-compatible chat-completions endpoints.
+# 可选。仅对 OpenAI 兼容的 chat-completions 接口生效。
+# Leave empty = send no extra parameters at all (unchanged behavior).
+# 留空 = 不发送任何新参数，行为与不启用该功能时完全一致。
+# Values / 取值: on | off
+AGENTSOCIETY_LLM_THINKING=
+
+# reasoning_effort sent when thinking is off (default: minimal).
+# thinking=off 时发送的 reasoning_effort，缺省 minimal。
+AGENTSOCIETY_LLM_REASONING_EFFORT=
+
+# Gateway-private switches, as a JSON object string. When set, "off" sends only
+# this and skips reasoning_effort.
+# 网关私有的兼容开关，JSON 对象字符串；配了它时 off 只发它、不发 reasoning_effort。
+# Hand-edit only — the config page never rewrites this line.
+# 仅手改生效，配置页不会重写这一行。
+# Example / 示例: {"enable_thinking": false}
+AGENTSOCIETY_LLM_EXTRA_BODY=
+
+# Coder-role overrides; fall back to the three above when unset.
+# coder 角色覆盖，未设时回退到上面三项。
+AGENTSOCIETY_CODER_LLM_THINKING=
+AGENTSOCIETY_CODER_LLM_REASONING_EFFORT=
+AGENTSOCIETY_CODER_LLM_EXTRA_BODY=
 
 # ========== Embedding Model / 嵌入模型 ==========
 # Embedding model for vector search / 用于向量搜索的嵌入模型

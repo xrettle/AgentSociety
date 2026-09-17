@@ -15,6 +15,7 @@ import type { ConfigValues, ValidationState, EasyPaperConfigValues } from './typ
 import { ValidationAction } from './ValidationAction';
 import { PythonEnvironmentPicker, type PythonEnvironmentOption } from './PythonEnvironmentPicker';
 import { EnvLlmModelField } from './EnvLlmModelField';
+import { ThinkingSelect } from './ThinkingSelect';
 import { EasyPaperConfigSection } from './EasyPaperConfigSection';
 import { tabBodyStyle } from './configPageStyles';
 import {
@@ -169,6 +170,14 @@ export const AdvancedConfigSection: React.FC<AdvancedConfigSectionProps> = ({
               placeholder={t('configPage.coder.modelPlaceholder', { model: defaultLlmModel })}
               {...slotFetchProps(ENV_LLM_SLOT.coder, coderBase, coderKey)}
             />
+          </Form.Item>
+          <Form.Item
+            name="coderLlmThinking"
+            label={t('configPage.coder.thinking')}
+            tooltip={t('configPage.coder.thinkingHint')}
+            style={{ marginBottom: 12 }}
+          >
+            <ThinkingSelect t={t} scope="coder" />
           </Form.Item>
           {renderValidationAction('coder')}
         </div>

@@ -365,10 +365,18 @@ export class BackendManager {
     if (envConfig.llmApiBase) { env.AGENTSOCIETY_LLM_API_BASE = envConfig.llmApiBase; }
     if (envConfig.llmModel) { env.AGENTSOCIETY_LLM_MODEL = envConfig.llmModel; }
 
+    // 推理（thinking）开关 - 空值即「未设置」，不注入，保持后端默认行为
+    if (envConfig.llmThinking) { env.AGENTSOCIETY_LLM_THINKING = envConfig.llmThinking; }
+    if (envConfig.llmReasoningEffort) { env.AGENTSOCIETY_LLM_REASONING_EFFORT = envConfig.llmReasoningEffort; }
+    if (envConfig.llmExtraBody) { env.AGENTSOCIETY_LLM_EXTRA_BODY = envConfig.llmExtraBody; }
+
     // Coder LLM 配置
     if (envConfig.coderLlmApiKey) { env.AGENTSOCIETY_CODER_LLM_API_KEY = envConfig.coderLlmApiKey; }
     if (envConfig.coderLlmApiBase) { env.AGENTSOCIETY_CODER_LLM_API_BASE = envConfig.coderLlmApiBase; }
     if (envConfig.coderLlmModel) { env.AGENTSOCIETY_CODER_LLM_MODEL = envConfig.coderLlmModel; }
+    if (envConfig.coderLlmThinking) { env.AGENTSOCIETY_CODER_LLM_THINKING = envConfig.coderLlmThinking; }
+    if (envConfig.coderLlmReasoningEffort) { env.AGENTSOCIETY_CODER_LLM_REASONING_EFFORT = envConfig.coderLlmReasoningEffort; }
+    if (envConfig.coderLlmExtraBody) { env.AGENTSOCIETY_CODER_LLM_EXTRA_BODY = envConfig.coderLlmExtraBody; }
 
     // Embedding 配置
     if (envConfig.embeddingApiKey) { env.AGENTSOCIETY_EMBEDDING_API_KEY = envConfig.embeddingApiKey; }
