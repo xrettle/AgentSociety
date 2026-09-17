@@ -257,7 +257,15 @@
 			"apiBase": "LLM API Base URL",
 			"apiBasePlaceholder": "Default: https://api.openai.com/v1",
 			"modelName": "LLM Model Name",
-			"modelPlaceholder": "Default: gpt-5.5"
+			"modelPlaceholder": "Default: gpt-5.5",
+			"thinking": "Reasoning (thinking) switch",
+			"thinkingHint": "Leave unset to send no reasoning parameters at all — identical to not using this feature. Turning reasoning off cuts token usage and improves the prompt cache hit rate. If your gateway uses a private switch (e.g. enable_thinking), set AGENTSOCIETY_LLM_EXTRA_BODY in .env instead."
+		},
+		"thinking": {
+			"inheritDefault": "Gateway default (send no parameter)",
+			"inheritCoder": "Reuse default LLM",
+			"on": "On",
+			"off": "Off"
 		},
 		"advancedValidation": {
 			"passedShort": "{{done}}/{{total}} passed",
@@ -610,7 +618,9 @@
 			"apiBase": "Code Generation LLM API Base URL",
 			"apiBasePlaceholder": "Leave blank to reuse the default LLM API base URL above",
 			"model": "Code Generation LLM Model",
-			"modelPlaceholder": "Leave blank to reuse the default LLM model above (current: {{model}})"
+			"modelPlaceholder": "Leave blank to reuse the default LLM model above (current: {{model}})",
+			"thinking": "Code generation LLM reasoning (thinking) switch",
+			"thinkingHint": "Code generation is the biggest token consumer, so turning reasoning off pays off most here. Leave blank to reuse the default LLM setting above."
 		},
 		"advanced": {
 			"embedding": {

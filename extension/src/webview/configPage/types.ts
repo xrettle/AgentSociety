@@ -18,11 +18,15 @@ export interface ConfigValues {
   // LLM 默认配置
   llmApiBase: string;
   llmModel: string;
+  /** 推理（thinking）开关：'' = 跟随网关默认（不发送该参数）/ 'on' / 'off' */
+  llmThinking: string;
   // 可选
   backendLogLevel: string;
   coderLlmApiKey: string;
   coderLlmApiBase: string;
   coderLlmModel: string;
+  /** coder 角色的 thinking 开关：'' = 沿用默认 LLM 的取值 / 'on' / 'off' */
+  coderLlmThinking: string;
   // Embedding
   embeddingApiKey: string;
   embeddingApiBase: string;

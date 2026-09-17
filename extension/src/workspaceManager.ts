@@ -1274,6 +1274,10 @@ Required environment variables:
 - \`AGENTSOCIETY_LLM_API_BASE\`
 - \`AGENTSOCIETY_LLM_MODEL\`
 
+Optional: \`AGENTSOCIETY_LLM_THINKING\` (\`on\`/\`off\`) toggles reasoning for OpenAI-compatible
+endpoints; leave it unset to send no reasoning parameters at all. \`AGENTSOCIETY_CODER_LLM_*\`
+overrides the coder role. See the extension config page for details.
+
 Why this matters:
 
 - Dependencies are managed via \`uv\`, not system Python.

@@ -9,6 +9,7 @@ import type { ConfigValues, ValidationState } from './types';
 import { glassCardStyle } from './configPageStyles';
 import { ValidationAction } from './ValidationAction';
 import { EnvLlmModelField } from './EnvLlmModelField';
+import { ThinkingSelect } from './ThinkingSelect';
 import { SIM_LLM_PRESETS, matchSimLlmPreset } from './simLlmPresets';
 
 type Props = {
@@ -144,6 +145,13 @@ export function DefaultLlmConfigCard({
           }}
           placeholder={t('configPage.llm.modelPlaceholder')}
         />
+      </Form.Item>
+      <Form.Item
+        name="llmThinking"
+        label={t('configPage.llm.thinking')}
+        tooltip={t('configPage.llm.thinkingHint')}
+      >
+        <ThinkingSelect t={t} scope="default" />
       </Form.Item>
       <ValidationAction
         t={t}

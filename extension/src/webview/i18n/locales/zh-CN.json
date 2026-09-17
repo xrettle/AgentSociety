@@ -257,7 +257,15 @@
 			"apiBase": "LLM API 基础URL",
 			"apiBasePlaceholder": "默认值：https://api.openai.com/v1",
 			"modelName": "LLM 模型名称",
-			"modelPlaceholder": "默认值：gpt-5.5"
+			"modelPlaceholder": "默认值：gpt-5.5",
+			"thinking": "推理（thinking）开关",
+			"thinkingHint": "留空时不发送任何推理相关参数，行为与不启用该功能时完全一致。关闭推理可降低 token 消耗并提升 prompt 缓存命中率。若网关用的是私有开关（如 enable_thinking），需改为在 .env 里手写 AGENTSOCIETY_LLM_EXTRA_BODY。"
+		},
+		"thinking": {
+			"inheritDefault": "跟随网关默认（不发送该参数）",
+			"inheritCoder": "沿用默认 LLM",
+			"on": "开启",
+			"off": "关闭"
 		},
 		"advancedValidation": {
 			"passedShort": "{{done}}/{{total}} 已通过",
@@ -610,7 +618,9 @@
 			"apiBase": "代码生成 LLM API 基础 URL",
 			"apiBasePlaceholder": "可留空，使用上方默认 LLM API 地址",
 			"model": "代码生成 LLM 模型",
-			"modelPlaceholder": "留空则沿用上方 LLM 模型（当前：{{model}}）"
+			"modelPlaceholder": "留空则沿用上方 LLM 模型（当前：{{model}}）",
+			"thinking": "代码生成 LLM 推理（thinking）开关",
+			"thinkingHint": "代码生成是 token 消耗的大头，关闭推理通常在这里收益最明显。留空则沿用上方默认 LLM 的取值。"
 		},
 		"advanced": {
 			"embedding": {
