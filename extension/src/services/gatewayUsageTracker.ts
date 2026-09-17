@@ -1,5 +1,5 @@
 export type TokenUsageRecord = {
-  app?: 'claude' | 'codex';
+  app: 'claude' | 'codex';
   source?: 'proxy' | 'session';
   model: string;
   inputTokens: number;
@@ -15,6 +15,28 @@ export type TokenUsageRecord = {
   streaming?: boolean;
   ts: string;
 };
+
+export type UsageApp = TokenUsageRecord['app'];
+
+export function isUsageApp(value: unknown): value is UsageApp {
+  return value === 'claude' || value === 'codex';
+}
+
+/** Keep only records that already carry an explicit Claude/Codex app tag. */
+export function sanitizeUsageRecords(records: readonly unknown[]): TokenUsageRecord[] {
+  const kept: TokenUsageRecord[] = [];
+  for (const raw of records) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const record = raw as TokenUsageRecord;
+    if (!isUsageApp(record.app)) {
+      continue;
+    }
+    kept.push(record);
+  }
+  return kept;
+}
 
 export type UsageRecordContext = {
   status?: number;
@@ -378,11 +400,6 @@ function addRecordToStats(stats: UsageModelStats, r: TokenUsageRecord): void {
   stats.requests += 1;
 }
 
-function inferLegacyApp(model: string): 'claude' | 'codex' {
-  const id = model.toLowerCase();
-  return id.includes('codex') || id.startsWith('gpt-') || /^o\d/.test(id) ? 'codex' : 'claude';
-}
-
 export function computeCacheHitRate(
   inputTokens: number,
   cacheReadTokens: number
@@ -442,12 +459,13 @@ export function buildUsageTimeSeries(
 }
 
 export function aggregateUsage(records: TokenUsageRecord[]): UsageAggregation {
+  const usable = sanitizeUsageRecords(records);
   const agg: UsageAggregation = {
     totalInputTokens: 0,
     totalOutputTokens: 0,
     totalCacheReadTokens: 0,
     totalCacheCreationTokens: 0,
-    totalRequests: records.length,
+    totalRequests: usable.length,
     totalTokens: 0,
     cacheHitRate: 0,
     byModel: {},
@@ -458,7 +476,7 @@ export function aggregateUsage(records: TokenUsageRecord[]): UsageAggregation {
     },
     timeSeries: [],
   };
-  for (const r of records) {
+  for (const r of usable) {
     agg.totalInputTokens += r.inputTokens;
     agg.totalOutputTokens += r.outputTokens;
     agg.totalCacheReadTokens += r.cacheReadTokens;
@@ -471,8 +489,7 @@ export function aggregateUsage(records: TokenUsageRecord[]): UsageAggregation {
     const d = agg.byDay[day] ?? emptyModelStats();
     addRecordToStats(d, r);
     agg.byDay[day] = d;
-    const app = r.app ?? inferLegacyApp(r.model);
-    addRecordToStats(agg.byApp[app], r);
+    addRecordToStats(agg.byApp[r.app], r);
   }
   agg.totalTokens =
     agg.totalInputTokens +
@@ -480,6 +497,6 @@ export function aggregateUsage(records: TokenUsageRecord[]): UsageAggregation {
     agg.totalCacheReadTokens +
     agg.totalCacheCreationTokens;
   agg.cacheHitRate = computeCacheHitRate(agg.totalInputTokens, agg.totalCacheReadTokens);
-  agg.timeSeries = buildUsageTimeSeries(records);
+  agg.timeSeries = buildUsageTimeSeries(usable);
   return agg;
 }

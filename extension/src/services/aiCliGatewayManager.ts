@@ -28,6 +28,7 @@ import {
 import { inferOpenAiApiFormat } from './codexApiFormat';
 import { resolveCodexChatModel } from './codexModelMapping';
 import {
+  sanitizeUsageRecords,
   type TokenUsageRecord,
 } from './gatewayUsageTracker';
 import {
@@ -72,12 +73,15 @@ import type { OutboundProxyConfig } from './gatewayOutboundProxy';
 import { buildOutboundProxyUrl } from './gatewayOutboundProxy';
 import { resolveManualConfigSyncMode } from './manualConfigSync';
 import {
+  clampProviderRoleFlags,
   inferProviderAuthMode,
   isOfficialSubscriptionProvider,
+  providerEligibleForRoleUpstream,
   providerHasApiUpstream as providerHasApiKeyUpstream,
   providerHasConfiguredCredentials,
   type AiCliAuthMode,
 } from '../aiCli/providerAuth';
+import type { AiCliAuthHeaderMode } from '../aiCli/upstreamAuthHeaders';
 import {
   appendSharedOutputLine,
   getSharedOutputChannel,
@@ -101,9 +105,7 @@ const FAILOVER_ENABLED_STATE_KEY = 'aiCliGateway.failoverEnabled';
 const ROUTE_CLAUDE_STATE_KEY = 'aiCliGateway.routeClaude';
 const ROUTE_CODEX_STATE_KEY = 'aiCliGateway.routeCodex';
 /** Pre-takeover ~/.codex/config.toml snapshot (cc-switch live backup). */
-const CODEX_LIVE_BACKUP_STATE_KEY = 'aiCliGateway.codexLiveBackup';
 const CODEX_LIVE_BACKUP_SECRET_KEY = 'aiCliGateway.codexLiveBackup.secret';
-const OUTBOUND_PROXY_STATE_KEY = 'aiCliGateway.outboundProxy';
 const OUTBOUND_PROXY_SECRET_KEY = 'aiCliGateway.outboundProxy.secret';
 const RECTIFIER_STATE_KEY = 'aiCliGateway.rectifier';
 const OPTIMIZER_STATE_KEY = 'aiCliGateway.optimizer';
@@ -130,6 +132,7 @@ export type AiCliProviderConfig = {
   apiKey: string;
   apiKind?: AiCliApiKind;
   authMode?: AiCliAuthMode;
+  authHeaderMode?: AiCliAuthHeaderMode;
   activeClaude: boolean;
   activeCodex: boolean;
   failoverClaude: boolean;
@@ -196,7 +199,7 @@ export class AiCliGatewayManager {
       void this.applyFailoverUpstream(upstream, role);
     });
     this.providersCache = this.readStoredProviderMetadata();
-    this.outboundProxyCache = this.readLegacyOutboundProxy();
+    this.outboundProxyCache = null;
     this.secretsReady = this.initializeSecretStorage();
   }
 
@@ -261,7 +264,6 @@ export class AiCliGatewayManager {
         JSON.stringify(this.outboundProxyCache)
       );
     }
-    await this.context.globalState.update(OUTBOUND_PROXY_STATE_KEY, undefined);
     this.syncGatewayEnhancements();
     return this.getPublicStatus();
   }
@@ -355,13 +357,11 @@ export class AiCliGatewayManager {
   private async storeCodexLiveBackup(text: string): Promise<void> {
     this.codexLiveBackupCache = text;
     await this.context.secrets.store(CODEX_LIVE_BACKUP_SECRET_KEY, text);
-    await this.context.globalState.update(CODEX_LIVE_BACKUP_STATE_KEY, undefined);
   }
 
   private async clearCodexLiveBackup(): Promise<void> {
     this.codexLiveBackupCache = undefined;
     await this.context.secrets.delete(CODEX_LIVE_BACKUP_SECRET_KEY);
-    await this.context.globalState.update(CODEX_LIVE_BACKUP_STATE_KEY, undefined);
   }
 
   /**
@@ -527,24 +527,13 @@ export class AiCliGatewayManager {
   private normalizeProvider(provider: AiCliProviderConfig): AiCliProviderConfig {
     const apiKind = provider.apiKind ?? inferApiKindFromBaseUrl(provider.baseUrl);
     const authMode = inferProviderAuthMode({ ...provider, apiKind });
-    return { ...provider, apiKind, authMode };
+    const authHeaderMode = provider.authHeaderMode ?? 'auto';
+    return clampProviderRoleFlags({ ...provider, apiKind, authMode, authHeaderMode });
   }
 
   private readStoredProviderMetadata(): AiCliProviderConfig[] {
     const raw = this.context.globalState.get<AiCliProviderConfig[]>(PROVIDERS_STATE_KEY) ?? [];
     return raw.map((provider) => this.normalizeProvider(provider));
-  }
-
-  private readLegacyOutboundProxy(): OutboundProxyConfig | null {
-    const stored = this.context.globalState.get<OutboundProxyConfig>(OUTBOUND_PROXY_STATE_KEY);
-    if (!stored?.url?.trim()) {
-      return null;
-    }
-    return {
-      url: stored.url.trim(),
-      username: stored.username?.trim() || undefined,
-      password: stored.password?.trim() || undefined,
-    };
   }
 
   private providerSecretKey(id: string): string {
@@ -574,27 +563,13 @@ export class AiCliGatewayManager {
         this.storedUpstreamCache = JSON.parse(secretUpstream) as AiCliGatewayUpstream;
       }
 
-      const legacyBackup = this.context.globalState.get<string>(CODEX_LIVE_BACKUP_STATE_KEY);
       const secretBackup = await this.context.secrets.get(CODEX_LIVE_BACKUP_SECRET_KEY);
-      this.codexLiveBackupCache = secretBackup ?? legacyBackup;
-      if (this.codexLiveBackupCache && !secretBackup) {
-        await this.context.secrets.store(
-          CODEX_LIVE_BACKUP_SECRET_KEY,
-          this.codexLiveBackupCache
-        );
-      }
-      await this.context.globalState.update(CODEX_LIVE_BACKUP_STATE_KEY, undefined);
+      this.codexLiveBackupCache = secretBackup;
 
       const secretProxy = await this.context.secrets.get(OUTBOUND_PROXY_SECRET_KEY);
       if (secretProxy) {
         this.outboundProxyCache = JSON.parse(secretProxy) as OutboundProxyConfig;
-      } else if (this.outboundProxyCache) {
-        await this.context.secrets.store(
-          OUTBOUND_PROXY_SECRET_KEY,
-          JSON.stringify(this.outboundProxyCache)
-        );
       }
-      await this.context.globalState.update(OUTBOUND_PROXY_STATE_KEY, undefined);
     } catch (error) {
       this.log(`Secret storage initialization failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -632,21 +607,19 @@ export class AiCliGatewayManager {
     const active = providers.find(
       (p) =>
         p.activeClaude &&
-        this.providerHasApiUpstream(p)
+        providerEligibleForRoleUpstream(p, 'claude')
     );
     if (active) {
       return active;
     }
-    return providers.find(
-      (p) => this.providerHasApiUpstream(p)
-    );
+    return providers.find((p) => providerEligibleForRoleUpstream(p, 'claude'));
   }
 
   getOpenAiProviderForGateway(): AiCliProviderConfig | undefined {
     return this.getProviders().find(
       (p) =>
         p.activeCodex &&
-        this.providerHasApiUpstream(p) &&
+        providerEligibleForRoleUpstream(p, 'codex') &&
         Boolean(this.resolveCodexProviderModel(p))
     );
   }
@@ -673,6 +646,7 @@ export class AiCliGatewayManager {
       apiKey: upstream.apiKey,
       providerName: normalized.name.trim() || undefined,
       apiKind: upstream.apiKind,
+      authHeaderMode: normalized.authHeaderMode,
       model: normalized.model,
       sonnetModel: normalized.sonnetModel,
       opusModel: normalized.opusModel,
@@ -884,8 +858,7 @@ export class AiCliGatewayManager {
       } else if (anthropicProvider && this.isAnthropicProvider(anthropicProvider)) {
         const direct = this.providerToClaudeConfig(anthropicProvider);
         writeClaudeConfig(direct);
-        const upstream = providerUpstream(anthropicProvider);
-        await this.persistUpstream({ baseUrl: upstream.baseUrl, apiKey: upstream.apiKey });
+        await this.persistUpstream(this.providerToGatewayUpstream(anthropicProvider));
       } else {
         applyClaudeOfficialSubscription();
       }
@@ -965,6 +938,14 @@ export class AiCliGatewayManager {
       if (getCodexRoutingSnapshot().routedViaGateway || this.codexLiveBackupCache !== undefined) {
         await this.releaseCodexProxyTakeover();
       }
+      // Start failed: never leave Claude pointed at a dead local gateway URL.
+      if (isLocalGatewayBaseUrl(readClaudeConfig().baseUrl)) {
+        await this.applyGatewayRoutes();
+      }
+      // Keep UI/state aligned with direct configs after a failed restart.
+      await this.context.globalState.update(ROUTE_CLAUDE_STATE_KEY, false);
+      await this.context.globalState.update(ROUTE_CODEX_STATE_KEY, undefined);
+      await this.persistEnabled(false);
       throw error;
     }
   }
@@ -1056,7 +1037,7 @@ export class AiCliGatewayManager {
     await this.initialize();
     let providers = this.getProviders().filter((p) => p.id !== id);
     const claudeProviders = providers.filter((p) => this.providerHasCredentials(p));
-    const codexProviders = providers.filter((p) => this.providerHasApiUpstream(p));
+    const codexProviders = providers.filter((p) => providerEligibleForRoleUpstream(p, 'codex'));
     if (claudeProviders.length > 0 && !claudeProviders.some((p) => p.activeClaude)) {
       providers = providers.map((p) =>
         p.id === claudeProviders[0].id ? { ...p, activeClaude: true } : p
@@ -1107,6 +1088,7 @@ export class AiCliGatewayManager {
     declareOpus1m?: boolean;
     declareFable1m?: boolean;
     codexEnable1m?: boolean;
+    permissionMode?: string;
   }): Promise<AiCliProviderConfig> {
     await this.initialize();
     const providers = this.getProviders();
@@ -1136,6 +1118,7 @@ export class AiCliGatewayManager {
       declareOpus1m: draft.declareOpus1m,
       declareFable1m: draft.declareFable1m,
       codexEnable1m: draft.codexEnable1m,
+      permissionMode: draft.permissionMode?.trim() || 'bypassPermissions',
       activeClaude: true,
       activeCodex: true,
     };
@@ -1224,7 +1207,7 @@ export class AiCliGatewayManager {
         fileLogin.storeHint === 'api_key_only' ||
         this.codexLoginSnapshot.present,
       hasEligibleProvider:
-        this.providerHasApiUpstream(provider) &&
+        providerEligibleForRoleUpstream(provider, 'codex') &&
         Boolean(this.resolveCodexProviderModel(provider)),
     });
     if (!shouldEnable) {
@@ -1304,6 +1287,10 @@ export class AiCliGatewayManager {
     if (!target) {
       throw new Error('provider_not_found');
     }
+    const normalized = this.normalizeProvider(target);
+    if (!providerEligibleForRoleUpstream(normalized, role)) {
+      throw new Error(role === 'codex' ? 'provider_not_eligible_for_codex' : 'provider_not_eligible_for_claude');
+    }
     const field = role === 'claude' ? 'failoverClaude' : 'failoverCodex';
     const providersToUpdate = providers.map((p) =>
       p.id === id ? { ...p, [field]: !p[field] } : p
@@ -1318,6 +1305,19 @@ export class AiCliGatewayManager {
     const target = providers.find((p) => p.id === id);
     if (!target) {
       throw new Error('provider_not_found');
+    }
+    const normalized = this.normalizeProvider(target);
+    if (role === 'codex') {
+      const subscriptionOk =
+        isOfficialSubscriptionProvider(normalized) && normalized.apiKind === 'openai';
+      if (!subscriptionOk && !providerEligibleForRoleUpstream(normalized, 'codex')) {
+        throw new Error('provider_not_eligible_for_codex');
+      }
+    } else if (
+      !isOfficialSubscriptionProvider(normalized) &&
+      !providerEligibleForRoleUpstream(normalized, 'claude')
+    ) {
+      throw new Error('provider_not_eligible_for_claude');
     }
     for (const p of providers) {
       if (role === 'claude') {
@@ -1365,9 +1365,8 @@ export class AiCliGatewayManager {
         return this.getPublicStatus();
       }
       writeClaudeConfig(this.providerToClaudeConfig(active));
-      const upstream = providerUpstream(active);
-      if (upstream.baseUrl && upstream.apiKey) {
-        await this.persistUpstream({ baseUrl: upstream.baseUrl, apiKey: upstream.apiKey });
+      if (active.baseUrl.trim() && active.apiKey.trim()) {
+        await this.persistUpstream(this.providerToGatewayUpstream(active));
       }
     }
 
@@ -1486,7 +1485,12 @@ export class AiCliGatewayManager {
   }
 
   async getPersistedUsage(): Promise<TokenUsageRecord[]> {
-    return this.context.globalState.get<TokenUsageRecord[]>(USAGE_STATE_KEY) ?? [];
+    const raw = this.context.globalState.get<unknown[]>(USAGE_STATE_KEY) ?? [];
+    const cleaned = sanitizeUsageRecords(raw);
+    if (cleaned.length !== raw.length) {
+      await this.context.globalState.update(USAGE_STATE_KEY, cleaned);
+    }
+    return cleaned;
   }
 
   async persistUsage(): Promise<void> {
@@ -1566,7 +1570,9 @@ export class AiCliGatewayManager {
         ids.add(record.model.trim());
       }
     }
-    const persisted = this.context.globalState.get<TokenUsageRecord[]>(USAGE_STATE_KEY) ?? [];
+    const persisted = sanitizeUsageRecords(
+      this.context.globalState.get<unknown[]>(USAGE_STATE_KEY) ?? []
+    );
     for (const record of persisted) {
       if (record.model?.trim()) {
         ids.add(record.model.trim());
@@ -1649,15 +1655,17 @@ export class AiCliGatewayManager {
   private buildClaudeFailoverUpstreams(): AiCliGatewayUpstream[] {
     const providers = this.getProviders().map((p) => this.normalizeProvider(p));
     const active = providers.find(
-      (p) => p.activeClaude && this.providerHasApiUpstream(p)
+      (p) => p.activeClaude && providerEligibleForRoleUpstream(p, 'claude')
     );
     const list: AiCliGatewayUpstream[] = [];
     if (active) {
       list.push(this.providerToGatewayUpstream(active));
     }
-    // Only include providers explicitly marked for failover
     const failoverCandidates = providers.filter(
-      (p) => p.failoverClaude && p.id !== active?.id && this.providerHasApiUpstream(p)
+      (p) =>
+        p.failoverClaude &&
+        p.id !== active?.id &&
+        providerEligibleForRoleUpstream(p, 'claude')
     );
     for (const p of failoverCandidates) {
       list.push(this.providerToGatewayUpstream(p));
@@ -1672,15 +1680,17 @@ export class AiCliGatewayManager {
   private buildCodexFailoverUpstreams(): AiCliGatewayUpstream[] {
     const providers = this.getProviders().map((p) => this.normalizeProvider(p));
     const active = providers.find(
-      (p) => p.activeCodex && this.providerHasApiUpstream(p)
+      (p) => p.activeCodex && providerEligibleForRoleUpstream(p, 'codex')
     );
     const list: AiCliGatewayUpstream[] = [];
     if (active) {
       list.push(this.providerToGatewayUpstream(active));
     }
-    // Only include providers explicitly marked for failover
     const failoverCandidates = providers.filter(
-      (p) => p.failoverCodex && p.id !== active?.id && this.providerHasApiUpstream(p)
+      (p) =>
+        p.failoverCodex &&
+        p.id !== active?.id &&
+        providerEligibleForRoleUpstream(p, 'codex')
     );
     for (const p of failoverCandidates) {
       list.push(this.providerToGatewayUpstream(p));

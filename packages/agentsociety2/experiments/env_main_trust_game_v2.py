@@ -19,7 +19,6 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
 from agentsociety2.contrib.env.trust_game import TrustGameEnv
-from agentsociety2.contrib.agent.trust_game_agent import TrustGameAgent
 
 # Ensure results directory exists
 os.makedirs("result_trust_game", exist_ok=True)
@@ -199,44 +198,47 @@ async def main():
         # Create environment router
         env_router = CodeGenRouter(env_modules=[env_module])
 
-        # Create agents
-        agents = []
+        # Create agent specs (workspace-bound; role/partner live in config)
         agent_names = []
         partner_mapping = {}
+        agent_specs = []
 
-        # Create Trustors
         for i in range(NUM_PAIRS):
             trustor_name = f"Trustor_{i + 1}_G{game_num}"
             trustee_name = f"Trustee_{i + 1}_G{game_num}"
+            trustor_id = i * 2 + 1
+            trustee_id = i * 2 + 2
 
-            trustor = TrustGameAgent(
-                id=i * 2 + 1,
-                name=trustor_name,
-                role="Trustor",
-                num_rounds=NUM_ROUNDS,
-                initial_funds=INITIAL_FUNDS,
-                multiplication_factor=MULTIPLICATION_FACTOR,
-                partner_name=trustee_name,
+            agent_specs.append(
+                {
+                    "id": trustor_id,
+                    "profile": {"id": trustor_id, "name": trustor_name},
+                    "config": {
+                        "role": "Trustor",
+                        "num_rounds": NUM_ROUNDS,
+                        "initial_funds": INITIAL_FUNDS,
+                        "multiplication_factor": MULTIPLICATION_FACTOR,
+                        "partner_name": trustee_name,
+                    },
+                }
             )
-            trustor.set_partner_name(trustee_name)
-            agents.append(trustor)
             agent_names.append(trustor_name)
 
-            # Create corresponding Trustee
-            trustee = TrustGameAgent(
-                id=i * 2 + 2,
-                name=trustee_name,
-                role="Trustee",
-                num_rounds=NUM_ROUNDS,
-                initial_funds=INITIAL_FUNDS,
-                multiplication_factor=MULTIPLICATION_FACTOR,
-                partner_name=trustor_name,
+            agent_specs.append(
+                {
+                    "id": trustee_id,
+                    "profile": {"id": trustee_id, "name": trustee_name},
+                    "config": {
+                        "role": "Trustee",
+                        "num_rounds": NUM_ROUNDS,
+                        "initial_funds": INITIAL_FUNDS,
+                        "multiplication_factor": MULTIPLICATION_FACTOR,
+                        "partner_name": trustor_name,
+                    },
+                }
             )
-            trustee.set_partner_name(trustor_name)
-            agents.append(trustee)
             agent_names.append(trustee_name)
 
-            # Set partner mapping
             partner_mapping[trustor_name] = trustee_name
             partner_mapping[trustee_name] = trustor_name
 
@@ -248,7 +250,7 @@ async def main():
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=agent_specs,
                 agent_class_name="TrustGameAgent",
                 env_router=env_router,
                 start_t=start_time

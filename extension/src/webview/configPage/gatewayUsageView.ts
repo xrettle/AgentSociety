@@ -1,6 +1,10 @@
 import type { TFunction } from 'i18next';
 import type { VscodeThemePalette } from '../theme';
-import { selectAccountingUsageRecords } from '../../services/gatewayUsageTracker';
+import {
+  isUsageApp,
+  selectAccountingUsageRecords,
+  sanitizeUsageRecords,
+} from '../../services/gatewayUsageTracker';
 import { formatCost } from './modelPricing';
 import type { TokenUsageRecord, UsageAggregation, UsageModelStats, UsageProviderStats } from './gatewayUsageTypes';
 
@@ -61,12 +65,12 @@ export function addToStats(stats: UsageModelStats, record: TokenUsageRecord): vo
   stats.requests += 1;
 }
 
-export function inferRecordApp(record: TokenUsageRecord): 'claude' | 'codex' {
-  if (record.app === 'claude' || record.app === 'codex') {
-    return record.app;
+/** Explicit app only; records without app must be dropped via sanitizeUsageRecords first. */
+export function recordApp(record: TokenUsageRecord): 'claude' | 'codex' {
+  if (!isUsageApp(record.app)) {
+    throw new Error('usage_record_missing_app');
   }
-  const id = record.model.toLowerCase();
-  return id.includes('codex') || id.startsWith('gpt-') || /^o\d/.test(id) ? 'codex' : 'claude';
+  return record.app;
 }
 
 export function isProbeUsageRecord(record: TokenUsageRecord): boolean {
@@ -113,11 +117,12 @@ export function filterRecordsByApp(
   if (app === 'all') {
     return records;
   }
-  return records.filter((record) => inferRecordApp(record) === app);
+  return records.filter((record) => recordApp(record) === app);
 }
 
 export function aggregateGatewayUsage(records: TokenUsageRecord[]): UsageAggregation | null {
-  if (records.length === 0) {
+  const usable = sanitizeUsageRecords(records);
+  if (usable.length === 0) {
     return null;
   }
   const aggregation: UsageAggregation = {
@@ -125,7 +130,7 @@ export function aggregateGatewayUsage(records: TokenUsageRecord[]): UsageAggrega
     totalOutputTokens: 0,
     totalCacheReadTokens: 0,
     totalCacheCreationTokens: 0,
-    totalRequests: records.length,
+    totalRequests: usable.length,
     totalTokens: 0,
     cacheHitRate: 0,
     byModel: {},
@@ -134,7 +139,7 @@ export function aggregateGatewayUsage(records: TokenUsageRecord[]): UsageAggrega
     timeSeries: [],
   };
   const bucketMap = new Map<string, UsageAggregation['timeSeries'][number]>();
-  for (const record of records) {
+  for (const record of usable) {
     aggregation.totalInputTokens += record.inputTokens;
     aggregation.totalOutputTokens += record.outputTokens;
     aggregation.totalCacheReadTokens += record.cacheReadTokens;
@@ -150,7 +155,7 @@ export function aggregateGatewayUsage(records: TokenUsageRecord[]): UsageAggrega
     addToStats(dayStats, record);
     aggregation.byDay[day] = dayStats;
 
-    addToStats(aggregation.byApp[inferRecordApp(record)], record);
+    addToStats(aggregation.byApp[recordApp(record)], record);
 
     const bucket = bucketMap.get(day) ?? {
       key: day,
@@ -205,7 +210,8 @@ export function resolveGatewayUsageView(
 ): UsageAggregation | null {
   const range = options?.range ?? 'all';
   const app = options?.app ?? 'all';
-  const ranged = filterRecordsByRange(records, range);
+  const clean = sanitizeUsageRecords(records);
+  const ranged = filterRecordsByRange(clean, range);
   const filtered = filterRecordsByApp(ranged, app);
   return aggregateGatewayUsage(filtered);
 }

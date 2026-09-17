@@ -692,18 +692,67 @@ export class ProjectDragAndDropController implements vscode.TreeDragAndDropContr
     }
   }
 
-  /**
-   * 解析上传的PDF文件
-   * 文件上传后不再自动解析
-   * 用户应使用 Claude Code 官方的 PDF skill (pdfplumber) 来处理 PDF 文件
-   */
   private async parseUploadedFiles(
     files: FileToProcess[],
     targetType: 'papers' | 'userdata'
   ): Promise<void> {
-    // 不再自动解析文件
-    // 用户应使用 Claude Code 官方的 skills (.claude/skills/pdf/) 来处理文档
-    return;
+    if (targetType !== 'papers' || files.length === 0) {
+      return;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return;
+    }
+
+    const { ingestLocalFile } = await import('./services/literatureIngest');
+    let added = 0;
+    let duplicates = 0;
+    const errors: string[] = [];
+    const isZh = vscode.env.language.startsWith('zh');
+
+    for (const file of files) {
+      const ext = path.extname(file.fileName).toLowerCase();
+      if (!['.pdf', '.md', '.markdown', '.txt'].includes(ext)) {
+        continue;
+      }
+      try {
+        const payload = await ingestLocalFile(
+          workspaceFolder.uri.fsPath,
+          file.targetUri.fsPath
+        );
+        if (!payload.ok) {
+          errors.push(payload.error || file.fileName);
+          continue;
+        }
+        if (payload.duplicate) {
+          duplicates += 1;
+        } else if (payload.added) {
+          added += 1;
+        }
+      } catch (error: any) {
+        errors.push(`${file.fileName}: ${error.message || error}`);
+        this.log('Failed to index uploaded literature file', error);
+      }
+    }
+
+    if (added > 0 || duplicates > 0) {
+      this.provider.refresh();
+    }
+
+    if (errors.length > 0) {
+      vscode.window.showWarningMessage(
+        isZh
+          ? `部分文件未写入文献索引（${errors.length}）：${errors[0]}`
+          : `Some files were not indexed (${errors.length}): ${errors[0]}`
+      );
+    } else if (added > 0) {
+      vscode.window.showInformationMessage(
+        isZh
+          ? `已写入文献索引 ${added} 篇${duplicates ? `，跳过重复 ${duplicates} 篇` : ''}`
+          : `Indexed ${added} item(s)${duplicates ? `, skipped ${duplicates} duplicate(s)` : ''}`
+      );
+    }
   }
 
   /**

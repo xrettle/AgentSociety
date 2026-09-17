@@ -1,15 +1,19 @@
 import * as React from 'react';
 import {
-  Alert, Button, Card, Checkbox, Col, Divider, Empty, Input, Modal, Row, Select, Space, Switch, Tag, Tooltip, Typography, message,
+  Button, Checkbox, Empty, Input, Modal, Select, Space, Switch, Tag, Typography, message,
 } from 'antd';
 import {
-  CloudServerOutlined, ImportOutlined, PlusOutlined, QuestionCircleOutlined, ReloadOutlined, SyncOutlined, ThunderboltOutlined,
+  CloudServerOutlined, ImportOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { VSCodeAPI, McpServerRecord, McpProbeResult, McpPresetCatalogItem } from '../types';
-import type { VscodeThemePalette } from '../theme';
+import type { VscodeThemePalette } from '../../theme';
+import { PageSection } from './PageSection';
+import { ListCard } from './ListCard';
+import { TabToolbar } from './TabToolbar';
+import { SKILL_UI } from '../uiTokens';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 type Props = {
   vscode: VSCodeAPI;
@@ -110,26 +114,18 @@ export function McpIntegrationsPanel({
   };
 
   const renderServerCard = (row: McpServerRecord) => (
-    <Card
+    <ListCard
       key={row.id}
-      size="small"
-      style={{
-        borderRadius: 10,
-        border: `1px solid ${palette.panelBorder}`,
-        background: row.builtin === 'literature' ? palette.surfaceMuted : palette.codeBlockBackground,
-        marginBottom: 10,
-      }}
-      styles={{ body: { padding: '14px 16px' } }}
+      palette={palette}
+      accent={row.builtin === 'literature' ? palette.linkForeground : undefined}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <Text strong style={{ fontSize: 13 }}>{row.name}</Text>
           {row.builtin === 'literature' ? (
-            <div>
-              <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.45 }}>
-                {t('skillManagement.mcpBuiltinLiteratureDesc')}
-              </Text>
-            </div>
+            <Text type="secondary" style={{ display: 'block', fontSize: 11, lineHeight: 1.45, marginTop: 4 }}>
+              {t('skillManagement.mcpBuiltinLiteratureDesc')}
+            </Text>
           ) : null}
         </div>
         <Space size={4} wrap>
@@ -145,8 +141,8 @@ export function McpIntegrationsPanel({
           gap: 8,
           marginBottom: 12,
           padding: '8px 10px',
-          borderRadius: 8,
-          background: palette.surfaceMuted,
+          borderRadius: SKILL_UI.radius.sm,
+          background: palette.surfaceBackground,
           border: `1px solid ${palette.panelBorder}`,
         }}
       >
@@ -216,70 +212,100 @@ export function McpIntegrationsPanel({
           </Button>
         )}
       </Space>
-    </Card>
+    </ListCard>
   );
 
   return (
     <div>
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 14, borderRadius: 10 }}
-        message={t('skillManagement.mcpIntroTitle')}
-        description={t('skillManagement.mcpIntroBody')}
+      <TabToolbar
+        left={(
+          <div>
+            <Text strong style={{ fontSize: 14 }}>{t('skillManagement.mcpIntroTitle')}</Text>
+            <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 4, lineHeight: 1.55 }}>
+              {t('skillManagement.mcpIntroBody')}
+            </Text>
+          </div>
+        )}
+        right={(
+          <>
+            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {t('skillManagement.mcpAdd')}
+            </Button>
+            <Button
+              size="small"
+              icon={<ImportOutlined />}
+              onClick={() => {
+                onRefresh?.();
+                vscode.postMessage({ type: 'importMcpFromClaude' });
+              }}
+            >
+              {t('skillManagement.mcpImportClaude')}
+            </Button>
+            <Button
+              size="small"
+              icon={<SyncOutlined />}
+              onClick={() => {
+                onRefresh?.();
+                vscode.postMessage({ type: 'syncMcpServers' });
+              }}
+            >
+              {t('skillManagement.mcpSync')}
+            </Button>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => {
+                onRefresh?.();
+                vscode.postMessage({ type: 'listMcpServers' });
+              }}
+            >
+              {t('skillManagement.refresh')}
+            </Button>
+          </>
+        )}
       />
 
       {presets.length > 0 ? (
-        <div style={{ marginBottom: 16 }}>
-          <Title level={5} style={{ margin: '0 0 8px', fontSize: 13 }}>
-            {t('skillManagement.mcpRecommended')}
-          </Title>
-          <Row gutter={[10, 10]}>
+        <PageSection
+          palette={palette}
+          icon={<CloudServerOutlined />}
+          title={t('skillManagement.mcpRecommended')}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: SKILL_UI.space.md }}>
             {presets.map((preset) => (
-              <Col key={preset.presetId} xs={24} sm={12}>
-                <Card
-                  size="small"
-                  hoverable
-                  style={{
-                    borderRadius: 10,
-                    border: `1px solid ${palette.panelBorder}`,
-                    background: palette.surfaceBackground,
-                  }}
-                  styles={{ body: { padding: '12px 14px' } }}
-                  onClick={() => {
-                    onRefresh?.();
-                    vscode.postMessage({ type: 'addMcpPreset', payload: { presetId: preset.presetId } });
-                  }}
-                >
-                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                    <Space size={8}>
-                      <CloudServerOutlined style={{ color: palette.linkForeground }} />
-                      <Text strong style={{ fontSize: 13 }}>{preset.name}</Text>
-                      <Tag style={{ margin: 0 }}>{preset.transport}</Tag>
-                    </Space>
-                    <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.45 }}>
-                      {t(preset.descriptionKey)}
-                    </Text>
+              <ListCard
+                key={preset.presetId}
+                palette={palette}
+                hoverable
+                style={{ marginBottom: 0 }}
+                onClick={() => {
+                  onRefresh?.();
+                  vscode.postMessage({ type: 'addMcpPreset', payload: { presetId: preset.presetId } });
+                }}
+              >
+                <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                  <Space size={8}>
+                    <CloudServerOutlined style={{ color: palette.linkForeground }} />
+                    <Text strong style={{ fontSize: 13 }}>{preset.name}</Text>
+                    <Tag style={{ margin: 0 }}>{preset.transport}</Tag>
                   </Space>
-                </Card>
-              </Col>
+                  <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.45 }}>
+                    {t(preset.descriptionKey)}
+                  </Text>
+                </Space>
+              </ListCard>
             ))}
-          </Row>
-        </div>
+          </div>
+        </PageSection>
       ) : null}
 
-      <Divider style={{ margin: '16px 0' }} />
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <Title level={5} style={{ margin: 0, fontSize: 13 }}>
-          {t('skillManagement.mcpBuiltinSection')}
-        </Title>
-        <Tooltip title={t('skillManagement.mcpBuiltinSectionHint')}>
-          <QuestionCircleOutlined style={{ fontSize: 12, color: palette.descriptionForeground }} />
-        </Tooltip>
-      </div>
-      {builtinServers.length === 0 ? (
-        <Card size="small" style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${palette.panelBorder}` }}>
+      <PageSection
+        palette={palette}
+        title={t('skillManagement.mcpBuiltinSection')}
+        help={t('skillManagement.mcpBuiltinSectionHint')}
+      >
+        {builtinServers.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={t('skillManagement.mcpBuiltinEmpty')}
@@ -289,69 +315,30 @@ export function McpIntegrationsPanel({
               {t('skillManagement.mcpEditInConfig')}
             </Button>
           </Empty>
-        </Card>
-      ) : (
-        <div style={{ marginBottom: 16 }}>{builtinServers.map(renderServerCard)}</div>
-      )}
+        ) : (
+          builtinServers.map(renderServerCard)
+        )}
+      </PageSection>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Title level={5} style={{ margin: 0, fontSize: 13 }}>
-            {t('skillManagement.mcpCustomSection')}
-          </Title>
-          <Tooltip title={t('skillManagement.mcpCustomSectionHint')}>
-            <QuestionCircleOutlined style={{ fontSize: 12, color: palette.descriptionForeground }} />
-          </Tooltip>
-        </div>
-        <Space wrap size={6}>
-          <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            {t('skillManagement.mcpAdd')}
-          </Button>
-          <Button
-            size="small"
-            icon={<ImportOutlined />}
-            onClick={() => {
-              onRefresh?.();
-              vscode.postMessage({ type: 'importMcpFromClaude' });
-            }}
-          >
-            {t('skillManagement.mcpImportClaude')}
-          </Button>
-          <Button
-            size="small"
-            icon={<SyncOutlined />}
-            onClick={() => {
-              onRefresh?.();
-              vscode.postMessage({ type: 'syncMcpServers' });
-            }}
-          >
-            {t('skillManagement.mcpSync')}
-          </Button>
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            loading={loading}
-            onClick={() => {
-              onRefresh?.();
-              vscode.postMessage({ type: 'listMcpServers' });
-            }}
-          >
-            {t('skillManagement.refresh')}
-          </Button>
-        </Space>
-      </div>
-
-      {loading && customServers.length === 0 ? (
-        <Card style={{ borderRadius: 10, border: `1px solid ${palette.panelBorder}` }}>
+      <PageSection
+        palette={palette}
+        title={t('skillManagement.mcpCustomSection')}
+        help={t('skillManagement.mcpCustomSectionHint')}
+      >
+        {loading && customServers.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center' }}>
             <Text type="secondary">{t('skillManagement.loading')}</Text>
           </div>
-        </Card>
-      ) : customServers.length === 0 ? (
-        <Empty description={t('skillManagement.mcpEmpty')} style={{ padding: '24px 0' }} />
-      ) : (
-        customServers.map(renderServerCard)
-      )}
+        ) : customServers.length === 0 ? (
+          <Empty description={t('skillManagement.mcpEmpty')} style={{ padding: '24px 0' }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {t('skillManagement.mcpAdd')}
+            </Button>
+          </Empty>
+        ) : (
+          customServers.map(renderServerCard)
+        )}
+      </PageSection>
 
       <Modal
         title={t('skillManagement.mcpAdd')}

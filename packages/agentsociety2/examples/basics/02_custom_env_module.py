@@ -1,30 +1,30 @@
-"""
-Custom Environment Module Example
+"""Custom Environment Module Example.
 
-This example shows how to create a custom environment module
-and run it using AgentSociety.
+Shows how to define an EnvBase module with @tool methods and drive it through
+AgentSociety using agent_specs (no direct PersonAgent construction).
 """
+
+from __future__ import annotations
 
 import os
 
-# Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import Dict
-from agentsociety2 import PersonAgent
-from agentsociety2.env import EnvBase, tool, CodeGenRouter
+
+from agentsociety2.env import CodeGenRouter, EnvBase, tool
 from agentsociety2.society import AgentSociety
 
 
 class WeatherEnvironment(EnvBase):
     """A simple weather environment module."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        # Internal state
         self._weather = "sunny"
         self._temperature = 25
         self._agent_locations: Dict[int, str] = {}
@@ -33,7 +33,10 @@ class WeatherEnvironment(EnvBase):
     def get_weather(self, agent_id: int) -> str:
         """Get the current weather for an agent's location."""
         location = self._agent_locations.get(agent_id, "unknown location")
-        return f"The weather in {location} is {self._weather} with {self._temperature}°C."
+        return (
+            f"The weather in {location} is {self._weather} "
+            f"with {self._temperature}°C."
+        )
 
     @tool(readonly=False)
     def change_weather(self, weather: str, temperature: int) -> str:
@@ -54,46 +57,43 @@ class WeatherEnvironment(EnvBase):
         return f"The current temperature is {self._temperature}°C."
 
 
-async def main():
-    # Create environment module
-    weather_module = WeatherEnvironment()
-
-    # Create environment router
-    env_router = CodeGenRouter(env_modules=[weather_module])
-
-    # Create agents
-    agents = [
-        PersonAgent(id=i, profile={"name": f"Agent{i}", "personality": "curious"})
+async def main() -> None:
+    run_dir = Path("run_custom_env")
+    agent_specs = [
+        {
+            "id": i,
+            "profile": {"id": i, "name": f"Agent{i}", "personality": "curious"},
+            "config": {},
+        }
         for i in range(1, 3)
     ]
 
-    # Create the society
+    env_router = CodeGenRouter(env_modules=[WeatherEnvironment()])
     society = AgentSociety(
-        agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+        agent_specs=agent_specs,
         agent_class_name="PersonAgent",
         env_router=env_router,
         start_t=datetime.now(),
+        run_dir=run_dir,
     )
     await society.init()
 
     print("=== Custom Environment Module ===\n")
 
-    # Query: Get current state
     print("1. What's the current environment state?")
-    response = await society.ask("What's the current weather and temperature?")
-    print(f"Answer: {response}\n")
+    print(f"Answer: {await society.ask('What is the current weather and temperature?')}\n")
 
-    # Intervene: Change state
     print("2. Change the weather to rainy, 18°C")
-    response = await society.intervene(
-        "Change the weather to rainy and set temperature to 18 degrees Celsius"
+    print(
+        "Result:",
+        await society.intervene(
+            "Change the weather to rainy and set temperature to 18 degrees Celsius"
+        ),
+        "\n",
     )
-    print(f"Result: {response}\n")
 
-    # Query: Verify change
     print("3. What's the weather now?")
-    response = await society.ask("What's the current temperature?")
-    print(f"Answer: {response}\n")
+    print(f"Answer: {await society.ask('What is the current temperature?')}\n")
 
     await society.close()
 

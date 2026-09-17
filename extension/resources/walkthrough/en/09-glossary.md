@@ -80,6 +80,7 @@ Quick index: [A](#a) · [B-C](#b-c) · [D-E](#d-e) · [F-I](#f-i) · [L-M](#l-m)
 | **Silicon Participant** | A simulated participant that generates behavioral responses, receives interventions, and is measured in a configurable social environment; also called a Silicon Subject. |
 | **Skill** | An installable capability module that tells an agent or coding assistant when to use a capability, what files to read, and what outputs to produce. |
 | **Skill Marketplace** | The extension page for browsing, installing, enabling, archiving, or deleting skills. |
+| **Share package** | An archive created with Export Workspace so you can send a research project to someone else. Secrets are omitted; the recipient opens it with Import Workspace. |
 | **Steps Config** | A configuration file that describes what an experiment should do, such as ask, intervene, run simulation steps, and save artifacts. |
 | **Theoretical paradigm** | Developing concepts, hypotheses, mechanisms, and explanatory frames. |
 | **Token** | The unit of text processed by a model, often used for pricing and context limits. |

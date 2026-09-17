@@ -139,7 +139,7 @@ This agent participates in a 10-round Tragedy of the Commons game where multiple
 
         try:
             # Step 1: Get current pool resources from environment
-            pool_result, pool_response = await self.ask_env(
+            _, pool_response = await self.ask_env(
                 {},
                 "Please call get_pool_resources() to get the current pool resources.",
                 readonly=True,
@@ -155,7 +155,7 @@ This agent participates in a 10-round Tragedy of the Commons game where multiple
             # Step 2: Get round history from environment
             history_result, history_response = await self.ask_env(
                 {},
-                "Please call get_round_history() to get the round history.",
+                "Please call get_round_history() and store the returned list in results['round_history'].",
                 readonly=True,
                 template_mode=True,
             )
@@ -188,7 +188,9 @@ This agent participates in a 10-round Tragedy of the Commons game where multiple
                 readonly=False,
                 template_mode=True,
             )
-            _ = pool_result, submit_result, submit_response
+            self._ensure_env_ask_ok(
+                submit_result, submit_response, op="submit_extraction"
+            )
             self._logger.info(
                 f"[{self.name}] Round {current_round}: Submitted extraction={extraction}, "
                 f"explanation={explanation[:50]}..."

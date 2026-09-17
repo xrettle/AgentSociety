@@ -36,12 +36,13 @@ DEVELOPMENT.md
 TODO.md
 DEBUG_STEPS.md
 
-# 开发/调试脚本与单元测试
-test-extension.js
-test-http-client.js
-test-gateway-enhancements.js
+# 开发/调试脚本与单元测试（勿打进 VSIX）
+test/**
 test-*.js
 __vscode_mock.js
+scripts/**
+docs/**
+.nvmrc
 
 # 构建产物中的测试与 source map
 out/test/**

@@ -125,67 +125,91 @@ msgstr "Generating replay catalog and environment replay dataset"
 msgid "结合 agent workspace 文件检查本地 thread / 工具日志"
 msgstr "Inspecting local threads and tool logs alongside agent workspace files"
 
-#: ../../examples.rst:73
+#: ../../examples.rst:82
 msgid "博弈论示例"
 msgstr "Game Theory Examples"
 
-#: ../../examples.rst:75
+#: ../../examples.rst:85
+msgid "这些示例使用 contrib 下的博弈 agent / env，并通过 ``society.step()`` 推进回合。"
+msgstr ""
+"These examples use contrib game agents/envs and advance rounds via "
+"``society.step()``."
+
+#: ../../examples.rst:86
+msgid "需要配置 LLM 凭证（参见 :doc:`installation`）。"
+msgstr "LLM credentials are required (see :doc:`installation`)."
+
+#: ../../examples.rst:88
 msgid "**囚徒困境** (``games/01_prisoners_dilemma.py``)"
 msgstr "**Prisoner's Dilemma** (``games/01_prisoners_dilemma.py``)"
 
-#: ../../examples.rst:77
-msgid "一个经典的博弈论场景："
-msgstr "A classic game theory scenario:"
+#: ../../examples.rst:90
+msgid "``PrisonersDilemmaAgent`` + ``PrisonersDilemmaEnv``"
+msgstr "``PrisonersDilemmaAgent`` + ``PrisonersDilemmaEnv``"
 
-#: ../../examples.rst:79
-msgid "两个具有不同个性的智能体"
-msgstr "Two agents with different personalities"
+#: ../../examples.rst:91
+msgid "多轮同时决策（Cooperate / Defect）"
+msgstr "Multi-round simultaneous decisions (Cooperate / Defect)"
 
-#: ../../examples.rst:80
-msgid "具有收益的顺序决策"
-msgstr "Sequential decision-making with payoffs"
+#: ../../examples.rst:92
+msgid "结果写入 ``run_dir``（含 env state 与 replay）"
+msgstr "Results written under ``run_dir`` (env state and replay)"
 
-#: ../../examples.rst:81
-msgid "对结果的反思"
-msgstr "Reflection on outcomes"
-
-#: ../../examples.rst:83
+#: ../../examples.rst:94
 msgid "**公共物品博弈** (``games/02_public_goods.py``)"
 msgstr "**Public Goods Game** (``games/02_public_goods.py``)"
 
-#: ../../examples.rst:85
-msgid "多轮集体行动实验："
-msgstr "Multi-round collective action experiment:"
+#: ../../examples.rst:96
+msgid "``PublicGoodsAgent`` + ``PublicGoodsEnv``"
+msgstr "``PublicGoodsAgent`` + ``PublicGoodsEnv``"
 
-#: ../../examples.rst:87
-msgid "四个具有不同个性特征的智能体"
-msgstr "Four agents with different personality traits"
+#: ../../examples.rst:97
+msgid "多名智能体多轮贡献决策"
+msgstr "Multi-agent multi-round contribution decisions"
 
-#: ../../examples.rst:88
-msgid "多轮贡献决策"
-msgstr "Multi-round contribution decisions"
+#: ../../examples.rst:99
+msgid "**声誉博弈** (``games/reputation_game.py``)"
+msgstr "**Reputation Game** (``games/reputation_game.py``)"
 
-#: ../../examples.rst:89
-msgid "小组结果计算"
-msgstr "Group outcome calculation"
+#: ../../examples.rst:101
+msgid "``LLMDonorAgent`` + ``ReputationGameEnv``"
+msgstr "``LLMDonorAgent`` + ``ReputationGameEnv``"
 
-#: ../../examples.rst:92
+#: ../../examples.rst:102
+msgid "基于声誉的捐赠决策短跑示例"
+msgstr "Short reputation-based donation example"
+
+#: ../../examples.rst:104
+msgid "完整批量实验脚本见 ``packages/agentsociety2/experiments/env_main_*_v2.py``。"
+msgstr ""
+"Full batch experiment scripts live under "
+"``packages/agentsociety2/experiments/env_main_*_v2.py``."
+
+#: ../../examples.rst:107
 msgid "高级示例"
 msgstr "Advanced Examples"
 
-#: ../../examples.rst:94
+#: ../../examples.rst:109
 msgid "**自定义智能体** (``advanced/01_custom_agent.py``)"
 msgstr "**Custom Agent** (``advanced/01_custom_agent.py``)"
 
-#: ../../examples.rst:96
+#: ../../examples.rst:111
 msgid "使用自定义智能体类型扩展 AgentSociety 2："
 msgstr "Extend AgentSociety 2 with custom agent types:"
 
-#: ../../examples.rst:98
-msgid "实现必需的抽象方法（ask、step、dump、load）"
-msgstr "Implement required abstract methods (ask, step, dump, load)"
+#: ../../examples.rst:113
+msgid "实现 workspace 契约（``create`` / ``from_workspace`` / ``to_workspace``）"
+msgstr ""
+"Implement the workspace contract (``create`` / ``from_workspace`` / "
+"``to_workspace``)"
 
-#: ../../examples.rst:99
+#: ../../examples.rst:114
+msgid "通过 ``get_registry().register_agent_module(...)`` 注册后交给 ``AgentSociety``"
+msgstr ""
+"Register via ``get_registry().register_agent_module(...)`` then pass to "
+"``AgentSociety``"
+
+#: ../../examples.rst:115
 msgid "为研究需求创建专门的智能体"
 msgstr "Create specialized agents for research needs"
 

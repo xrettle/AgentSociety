@@ -83,9 +83,10 @@ export class HelpPageViewProvider {
 ## 快速入口
 
 - [打开配置页面](command:aiSocialScientist.openConfigPage)
-- [打开技能市场](command:aiSocialScientist.openSkillMarketplace)
-- [后端状态菜单](command:aiSocialScientist.backendStatusMenu)
-- [打开 Walkthrough](command:aiSocialScientist.openWalkthrough)
+- [打开技能管理](command:aiSocialScientist.openSkillMarketplace)
+- [导出工作区](command:aiSocialScientist.exportWorkspaceZip)
+- [导入工作区](command:aiSocialScientist.importWorkspaceZip)
+- [打开快速入门](command:aiSocialScientist.openWalkthrough)
 `;
     }
     return `# AI Social Scientist User Guide
@@ -94,10 +95,11 @@ Online documentation is unavailable. See the full guide on [ReadTheDocs](${rtdUr
 
 ## Quick Links
 
-- [Open Configuration Page](command:aiSocialScientist.openConfigPage)
-- [Open Skill Marketplace](command:aiSocialScientist.openSkillMarketplace)
-- [Backend Status Menu](command:aiSocialScientist.backendStatusMenu)
-- [Open Walkthrough](command:aiSocialScientist.openWalkthrough)
+- [Open configuration](command:aiSocialScientist.openConfigPage)
+- [Open skill management](command:aiSocialScientist.openSkillMarketplace)
+- [Export workspace](command:aiSocialScientist.exportWorkspaceZip)
+- [Import workspace](command:aiSocialScientist.importWorkspaceZip)
+- [Open getting started](command:aiSocialScientist.openWalkthrough)
 `;
   }
 

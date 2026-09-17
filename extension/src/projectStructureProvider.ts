@@ -58,11 +58,30 @@ const CUSTOM_SKILLS_PACKAGE_FILES = new Set([
   'py.typed',
 ]);
 
+/** Boilerplate / scaffolding files users should not manage in the tree. */
+const CUSTOM_CODE_BOILERPLATE_FILES = new Set([
+  '__init__.py',
+  'py.typed',
+  '.gitkeep',
+  'conftest.py',
+]);
+
+/** Scaffolding / cache dirs under custom/agents|envs. */
+const CUSTOM_CODE_HIDDEN_DIRS = new Set([
+  'examples',
+  'tests',
+  'test',
+  '_tests',
+  'fixtures',
+  '.cache',
+]);
+
 const CUSTOM_SKILL_CHILD_DIRS = new Set(['scripts', 'references']);
 
 const IGNORED_FILE_NAMES = new Set([
   '.DS_Store',
   'Thumbs.db',
+  '.gitkeep',
 ]);
 
 const IGNORED_FILE_EXTS = new Set([
@@ -92,12 +111,20 @@ function shouldHideFsEntry(entryName: string): boolean {
   return false;
 }
 
+function customRelativePosix(workspacePath: string, dirPath: string): string {
+  return path.relative(workspacePath, dirPath).replace(/\\/g, '/');
+}
+
 function customSkillsPackageRoot(workspacePath: string, dirPath: string): boolean {
-  return path.relative(workspacePath, dirPath).replace(/\\/g, '/') === 'custom/skills';
+  return customRelativePosix(workspacePath, dirPath) === 'custom/skills';
 }
 
 function customSkillRoot(workspacePath: string, dirPath: string): boolean {
-  return /^custom\/skills\/[^/]+$/.test(path.relative(workspacePath, dirPath).replace(/\\/g, '/'));
+  return /^custom\/skills\/[^/]+$/.test(customRelativePosix(workspacePath, dirPath));
+}
+
+function underCustomAgentsOrEnvs(workspacePath: string, dirPath: string): boolean {
+  return /^custom\/(agents|envs)(\/|$)/.test(customRelativePosix(workspacePath, dirPath));
 }
 
 function isAgentSkillDirectory(dirPath: string): boolean {
@@ -115,6 +142,11 @@ function shouldShowDirectoryInTree(parentDir: string, entryName: string, workspa
   }
   if (customSkillRoot(workspacePath, parentDir)) {
     return CUSTOM_SKILL_CHILD_DIRS.has(entryName.toLowerCase());
+  }
+  if (underCustomAgentsOrEnvs(workspacePath, parentDir)) {
+    if (CUSTOM_CODE_HIDDEN_DIRS.has(entryName.toLowerCase())) {
+      return false;
+    }
   }
   return true;
 }
@@ -190,6 +222,18 @@ function shouldShowFileInTreeListing(parentDir: string, fileName: string, worksp
   if (!shouldShowFileByExt(fileName)) {
     return false;
   }
+  const isCustomCodeBoilerplate =
+    CUSTOM_CODE_BOILERPLATE_FILES.has(fileName) ||
+    (fileName.startsWith('__') && fileName.endsWith('.py'));
+  if (
+    isCustomCodeBoilerplate &&
+    workspacePath &&
+    (underCustomAgentsOrEnvs(workspacePath, parentDir) ||
+      customSkillsPackageRoot(workspacePath, parentDir) ||
+      customSkillRoot(workspacePath, parentDir))
+  ) {
+    return false;
+  }
   if (workspacePath && customSkillsPackageRoot(workspacePath, parentDir)) {
     return false;
   }
@@ -206,6 +250,10 @@ function shouldShowFileInTreeListing(parentDir: string, fileName: string, worksp
   if (iCustom >= 0 && iCustom + 1 < segs.length) {
     const sub = segs[iCustom + 1].toLowerCase();
     if (CUSTOM_CODE_SUBDIR.has(sub)) {
+      // Fallback when workspacePath is unavailable: still hide package scaffolding.
+      if (isCustomCodeBoilerplate) {
+        return false;
+      }
       const ext = path.extname(fileName).toLowerCase();
       if (
         [
@@ -839,11 +887,15 @@ export class ProjectItem extends vscode.TreeItem {
     const underPapers =
       !!filePath && filePath.replace(/\\/g, '/').toLowerCase().includes('/papers/');
 
-    if (type === 'paper' && filePath && underPapers) {
+    if (type === 'papers') {
+      this.contextValue = 'papers literatureRoot';
+    } else if (type === 'paper' && filePath && underPapers) {
       if (isDirectoryPath) {
         this.contextValue = 'paperFolder';
       } else if (path.basename(filePath).toLowerCase() === 'literature_index.json') {
         this.contextValue = 'literatureFile literatureIndex json';
+      } else if (path.basename(filePath).toLowerCase() === 'library.bib') {
+        this.contextValue = 'literatureFile literatureBib';
       } else if (isMarkdown) {
         this.contextValue = 'literatureFile markdown';
       } else if (isJson) {
@@ -1083,11 +1135,19 @@ export class ProjectItem extends vscode.TreeItem {
         'webp',
         'svg'
       ].includes(ext)) {
-        this.command = {
-          command: 'vscode.open',
-          title: localize('extension.openAsset.commandTitle'),
-          arguments: [vscode.Uri.file(filePath)]
-        };
+        if (ext === 'pdf') {
+          this.command = {
+            command: 'aiSocialScientist.openPdfPreview',
+            title: localize('extension.openAsset.commandTitle'),
+            arguments: [filePath]
+          };
+        } else {
+          this.command = {
+            command: 'vscode.open',
+            title: localize('extension.openAsset.commandTitle'),
+            arguments: [vscode.Uri.file(filePath)]
+          };
+        }
       } else if (ext && TREE_OPEN_AS_DOCUMENT_EXTS.has(ext)) {
         this.command = {
           command: 'vscode.open',
@@ -1938,8 +1998,9 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
           localize('projectStructure.literature'),  // 显示为"文献库"
           vscode.TreeItemCollapsibleState.Collapsed,  // 可展开
           'papers',  // 节点类型为papers
-          undefined  // 文献库节点本身不关联文件
+          papersDir
         ));
+        items[items.length - 1].contextValue = 'papers literatureRoot';
         items[items.length - 1].tooltip = localize('projectStructure.literature.tooltip');
       }
 

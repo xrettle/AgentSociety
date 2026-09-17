@@ -37,6 +37,8 @@ COPY ./extension/plugins/ ./plugins/
 COPY ./extension/runtime/ ./runtime/
 COPY ./extension/.vscodeignore ./
 COPY ./extension/NOTICE ./NOTICE
+COPY ./extension/README.md ./README.md
+COPY ./extension/CHANGELOG.md ./CHANGELOG.md
 COPY LICENSE /LICENSE
 
 RUN npm run vscode:prepublish \

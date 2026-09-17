@@ -35,7 +35,8 @@ AI Social Scientist 将社会科学研究组织成七个可检查、可回退的
 
 ## 功能概览
 
-- **研究工作区**：项目树、文献索引、假设与实验目录、技能市场
+- **研究工作区**：项目树、文献索引、假设与实验目录、技能管理
+- **分享工作区**：选择研究问题、实验、数据、报告和技能生成分享包；导入时新建项目目录且不覆盖已有内容（不含密钥）
 - **配置向导**：仿真 LLM、工作区 `.env`、后端、文献 MCP、CLI 网关
 - **本地 AI Gateway**：Anthropic Messages / OpenAI Chat / Responses 协议转换、用量统计、故障转移、请求整流
 - **Claude Code / Codex**：共享供应商池；官方订阅保持 CLI 登录直连；Codex 模型目录自动写入 `~/.codex/agentsociety-model-catalog.json`
@@ -89,7 +90,8 @@ npm run build            # 或 npm run dev（watch）
 1. **打开工作区文件夹**（不要只打开单个文件；Coder 上请打开项目根目录，而不是整个 `$HOME`）
 2. 命令面板运行 **「AI Social Scientist: 打开配置」**
 3. 按向导完成：仿真 LLM → 保存 `.env` → 启动后端 →（可选）文献 / CLI 网关
-4. 也可运行 **「AI Social Scientist: 打开快速入门」** 查看 Walkthrough（标题与正文随 VS Code 语言切换）
+4. 也可运行 **「AI Social Scientist: 打开快速入门」** 查看入门指南（标题与正文随界面语言切换）
+5. 需要把项目交给同事时，用侧边栏 **导出工作区** 选择关键研究内容；对方用 **导入工作区** 选择上级目录并新建项目，打开后再填写自己的密钥
 
 ### 前置要求
 

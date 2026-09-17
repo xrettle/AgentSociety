@@ -2,7 +2,7 @@
 
 AgentSociety² packages reusable methods, tools, and behavioral procedures as skills. The AI Social Scientist progressively loads research skills for the current task, while Silicon Participants activate behavioral skills during simulation. This avoids one oversized prompt and makes the capabilities used at each step easier to audit.
 
-Open skill management from the sidebar **Skills** button or the Command Palette. The page has three tabs; details live behind **?** icons and the page help.
+Open skill management from the sidebar **Skills** button or the Command Palette. The page has four tabs (Runtime / Claude / Market / MCP); details live behind **?** icons and the page help. Market sources and the GitHub token are configured under page **Settings**.
 
 ### PersonAgent as a Silicon Participant
 
@@ -18,7 +18,7 @@ The **Agent runtime** tab manages workspace skills used by simulation agents (`c
 
 ![Agent runtime skills](../images/agent-skills.png)
 
-Examples include `daily-guidance`, economic reasoning, events, mobility, and social media. These skills change **how simulated participants behave**.
+PersonAgent's primary built-in behavioral skill is currently `daily-guidance`; workspace custom skills and environment-module `env` skills can also appear. These skills change **how simulated participants behave**.
 
 ### Claude catalog
 
@@ -34,6 +34,10 @@ Bundled templates can be toggled or re-synced; you can also import external Clau
 |------|----------|---------|
 | **Agent runtime** | `custom/skills/` | Behavioral capabilities of Silicon Participants |
 | **Claude / Codex catalog** | `.claude/skills/` | Research and engineering capabilities of the AI Social Scientist |
+
+### Marketplace
+
+The **Market** tab browses remote repositories and can install into the runtime (`custom/skills/`) or the Claude directory (`.claude/skills/`).
 
 ### MCP
 

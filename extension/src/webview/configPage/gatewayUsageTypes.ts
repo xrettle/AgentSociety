@@ -1,5 +1,5 @@
 export type TokenUsageRecord = {
-  app?: 'claude' | 'codex';
+  app: 'claude' | 'codex';
   source?: 'proxy' | 'session';
   model: string;
   inputTokens: number;

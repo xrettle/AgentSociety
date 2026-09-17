@@ -142,7 +142,7 @@ This agent participates in a 10-round Prisoner's Dilemma game where two players 
             # Step 1: Get round history from environment
             history_result, history_response = await self.ask_env(
                 {},
-                "Please call get_round_history() to get the round history.",
+                "Please call get_round_history() and store the returned list in results['round_history'].",
                 readonly=True,
                 template_mode=True,
             )
@@ -175,7 +175,9 @@ This agent participates in a 10-round Prisoner's Dilemma game where two players 
                 readonly=False,
                 template_mode=True,
             )
-            _ = submit_result, submit_response
+            self._ensure_env_ask_ok(
+                submit_result, submit_response, op="submit_action"
+            )
             self._logger.info(
                 f"[{self.name}] Round {current_round}: Submitted action={action}, "
                 f"explanation={explanation[:50]}..."

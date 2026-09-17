@@ -16,6 +16,7 @@ export type WebImportGatewayProviderDraft = {
   fableModel?: string;
   haikuModel?: string;
   codexEnable1m?: boolean;
+  permissionMode?: string;
 };
 
 export function isFiblabLlmBase(url: string): boolean {
@@ -46,8 +47,13 @@ function pickImportedModel(options: string[], preferred?: string): string {
   return preferred?.trim() || options[0] || '';
 }
 
-function pickFableModel(options: string[], preferred?: string): string {
-  return preferred?.trim() || options.find((model) => /fable/i.test(model)) || '';
+function pickFableModel(options: string[], preferred?: string, fallback?: string): string {
+  return (
+    preferred?.trim() ||
+    options.find((model) => /fable/i.test(model)) ||
+    fallback?.trim() ||
+    ''
+  );
 }
 
 function pickCodexModel(
@@ -77,17 +83,17 @@ export function resolveWebImportClaudeConfig(
     options,
     defaults.claudeCode || defaults.simulation
   );
+  const opusModel = pickImportedModel(options, defaults.claudeCodeOpus || model);
   return {
     model,
     sonnetModel: pickImportedModel(
       options,
       defaults.claudeCodeSonnet || model
     ),
-    opusModel: pickImportedModel(
-      options,
-      defaults.claudeCodeOpus || model
-    ),
-    fableModel: pickFableModel(options, defaults.claudeCodeFable),
+    opusModel,
+    // Fable is a Claude Code role alias; when upstream has no fable-named model,
+    // map it to opus/default so role switches still hit a concrete upstream id.
+    fableModel: pickFableModel(options, defaults.claudeCodeFable, opusModel || model),
     haikuModel: pickImportedModel(
       options,
       defaults.claudeCodeHaiku || model
@@ -128,5 +134,6 @@ export function buildGatewayProviderFromWebImport(
     fableModel: claudeConfig.fableModel?.trim() || undefined,
     haikuModel: claudeConfig.haikuModel?.trim() || undefined,
     codexEnable1m: options?.enableCodex1m,
+    permissionMode: 'bypassPermissions',
   };
 }

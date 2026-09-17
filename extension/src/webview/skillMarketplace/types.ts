@@ -18,7 +18,9 @@ export interface AgentSkill {
   skill_id: string;
   name: string;
   description: string;
-  source: 'builtin' | 'custom' | string; // builtin | custom | env:xxx
+  /** Registry source: `built-in` | `custom` | `env` (backend skill_registry). */
+  source: string;
+  source_label?: string;
   path: string;
   has_skill_md: boolean;
   script: string;
@@ -390,35 +392,6 @@ export const DEFAULT_CLAUDE_SOURCES: SkillSourceConfig[] = [
 
 /** 默认 Agent 技能源（无内置） */
 export const DEFAULT_AGENT_SOURCES: SkillSourceConfig[] = [];
-
-export type SkillSourcePreset = {
-  id: string;
-  titleKey: string;
-  descriptionKey: string;
-  source: SkillSourceConfig;
-};
-
-/** Claude 技能市场推荐源（可一键添加） */
-export const CLAUDE_SKILL_SOURCE_PRESETS: SkillSourcePreset[] = [
-  {
-    id: 'anthropics-skills',
-    titleKey: 'skillManagement.sourcePresetAnthropicsTitle',
-    descriptionKey: 'skillManagement.sourcePresetAnthropicsDesc',
-    source: DEFAULT_CLAUDE_SOURCES[0],
-  },
-  {
-    id: 'obra-superpowers',
-    titleKey: 'skillManagement.sourcePresetSuperpowersTitle',
-    descriptionKey: 'skillManagement.sourcePresetSuperpowersDesc',
-    source: DEFAULT_CLAUDE_SOURCES[1],
-  },
-  {
-    id: 'everything-claude-code',
-    titleKey: 'skillManagement.sourcePresetEverythingTitle',
-    descriptionKey: 'skillManagement.sourcePresetEverythingDesc',
-    source: DEFAULT_CLAUDE_SOURCES[2],
-  },
-];
 
 // ============ MCP Integrations（Claude Code + Codex） ============
 

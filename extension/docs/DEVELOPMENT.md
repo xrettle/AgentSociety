@@ -49,7 +49,7 @@ npm run clean:dry-run # 仅预览，不删除
 
 ```bash
 npm run lint              # ESLint 检查
-npm run test:gateway      # 网关 / Codex 配置与格式转换单测
+npm run test:gateway      # extension/test 冒烟单测（鉴权 / 分享 / 技能源）
 npm run check             # lint + test:gateway + build
 ```
 
@@ -90,7 +90,8 @@ extension/
 │   ├── workspaceManager.ts           # 工作区管理
 │   ├── aiCli/                        # CLI 供应商共享逻辑（extension 与 webview 共用）
 │   │   ├── officialEndpoints.ts      # 官方端点常量与 apiKind 推断（唯一实现）
-│   │   ├── providerAuth.ts           # 供应商鉴权模式推断
+│   │   ├── providerAuth.ts           # 供应商鉴权模式 / 角色上游计数
+│   │   ├── upstreamAuthHeaders.ts    # 上游鉴权请求头（auto / bearer / x-api-key / both）
 │   │   └── providerPresets.ts        # 供应商预设与模型合并
 │   ├── services/                     # 服务模块
 │   │   ├── aiCliGateway.ts           # HTTP 代理核心（路由、格式转换、上游转发）
@@ -110,14 +111,15 @@ extension/
 │   │   ├── gatewayModelPricing.ts    # 模型定价与成本计算
 │   │   ├── gatewayProviderUsage.ts   # 供应商配额查询
 │   │   ├── gatewayRemotePricing.ts   # 远程定价数据拉取与缓存
-│   │   ├── gatewayUsageTracker.ts    # Token 用量提取与聚合
+│   │   ├── gatewayUsageTracker.ts    # Token 用量提取与聚合（要求显式 app，无历史猜测）
 │   │   ├── httpClient.ts             # HTTP 请求客户端
 │   │   ├── index.ts                  # 服务模块导出
 │   │   ├── llmValidator.ts           # LLM 配置验证
 │   │   ├── officialBuiltinModels.ts  # 内置模型列表（API 不可用时的兜底）
 │   │   ├── responsesAnthropicBridge.ts # Codex Responses ↔ Anthropic Messages 格式转换
 │   │   ├── validateTimeouts.ts       # 超时配置校验
-│   │   └── workspaceExportManager.ts # 工作区导出
+│   │   ├── workspaceExportManager.ts # 工作区导出
+│   │   └── workspaceImportManager.ts # 工作区导入
 │   ├── webview/                      # React Webview 组件
 │   │   ├── components/               # 共享组件
 │   │   ├── configPage/               # 配置页面
@@ -161,8 +163,10 @@ extension/
 │   └── xlsx/                         # Excel 文档处理
 ├── docs/                             # 开发文档
 │   └── DEVELOPMENT.md                # 开发指南
-├── test/                             # 单测（node:test）
-│   └── gateway-enhancements.test.js  # 网关 / Codex 配置单测
+├── test/                             # 单测（node:test，仅保留必要冒烟）
+│   ├── gateway.test.js               # 网关鉴权 / 角色 / 用量
+│   ├── parseSkillSourceInput.test.js # 技能源 URL 解析
+│   └── workspaceShare.test.js        # 工作区分享包导入安全
 ├── CHANGELOG.md                      # 变更入口（指向仓库根 CHANGELOG）
 ├── README.md                         # 项目说明
 ├── package.json                      # 插件配置
@@ -264,11 +268,11 @@ webview/configPage/
 
 管理 Agent 技能和 Claude 技能：
 
-- **Agent 运行时** - 安装到 `custom/skills`
-- **Claude 目录** - 安装到 `.claude/skills`
+- **Agent 运行时** - 后端注册表（`built-in` / `env` / `custom`），工作区自定义装到 `custom/skills`；安装后会扫描注册
+- **Claude 目录** - 安装到 `.claude/skills`；可用开关控制是否加载（关闭不删文件）
 - 支持从 GitHub/GitLab/Gitee 仓库安装
-- 技能启用/禁用/更新/归档
-- 内置模板同步到工作区
+- Agent 运行时技能按需被模型选择，无手动启停；内置行为技能以 `daily-guidance` 为主
+- 内置 Claude 模板可同步到工作区
 
 ### 6. 可视化查看器
 

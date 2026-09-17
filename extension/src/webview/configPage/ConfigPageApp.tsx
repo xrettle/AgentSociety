@@ -89,7 +89,7 @@ const DEFAULT_CLAUDE_VALUES: ClaudeCodeConfigValues = {
   opusModel: '',
   fableModel: '',
   haikuModel: '',
-  permissionMode: '',
+  permissionMode: 'bypassPermissions',
 };
 
 const DEFAULT_EASYPAPER_VALUES: EasyPaperConfigValues = {
@@ -216,6 +216,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
   const pythonValidateDisabledReason = null;
   const literatureValidateDisabledReason = getValidationDisabledReason('literature', effectiveConfigValues);
   const [loading, setLoading] = React.useState(false);
+  const [savingEasyPaper, setSavingEasyPaper] = React.useState(false);
   const [startingBackend, setStartingBackend] = React.useState(false);
   const [workspaceInfo, setWorkspaceInfo] = React.useState<WorkspaceInfo>({ hasWorkspace: false });
 
@@ -607,12 +608,14 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
   );
 
   const saveEasyPaperConfig = React.useCallback(() => {
+    setSavingEasyPaper(true);
     easyPaperForm
       .validateFields()
       .then((values) => {
         vscode.postMessage({ command: 'saveEasyPaperConfig', config: values });
       })
       .catch(() => {
+        setSavingEasyPaper(false);
         notification.warning({
           message: t('easyPaperConfig.validationFailed'),
           placement: 'top',
@@ -1347,11 +1350,16 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
         });
       } else if (message.command === 'easyPaperSaveResult') {
         const msg = message as { success?: boolean; error?: string };
+        setSavingEasyPaper(false);
         if (msg.success) {
-          notification.success({
-            message: t('easyPaperConfig.saveSuccess'),
-            placement: 'top',
-          });
+          if (wizardMode && WIZARD_STEPS[wizardStep]?.key === 'easypaper') {
+            handleWizardStepChange(wizardStep + 1);
+          } else {
+            notification.success({
+              message: t('easyPaperConfig.saveSuccess'),
+              placement: 'top',
+            });
+          }
         } else {
           notification.error({
             message: t('easyPaperConfig.saveFailed'),
@@ -1457,7 +1465,11 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
         if (msg.success) {
           setSavedEnvConfig({ ...effectiveConfigRef.current });
           setEnvDraftOverrides({});
-          if (wizardMode && WIZARD_STEPS[wizardStep]?.key === 'save') {
+          if (
+            wizardMode &&
+            (WIZARD_STEPS[wizardStep]?.key === 'save' ||
+              WIZARD_STEPS[wizardStep]?.key === 'literature')
+          ) {
             handleWizardStepChange(wizardStep + 1);
           }
           if (!wizardMode && isReadyForDashboard) {
@@ -1806,100 +1818,105 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           )}
 
           {wizardMode ? (
-            <ConfigSetupWizard
-              t={t}
-              palette={palette}
-              step={wizardStep}
-              hasWorkspace={workspaceInfo.hasWorkspace}
-              hasLlmKey={hasDefaultLlmKey}
-              defaultValidation={validationState.default}
-              backendStatus={backendStatus}
-              canSave={canSave}
-              canSaveAndStart={canSaveAndStart}
-              saving={loading}
-              startingBackend={startingBackend}
-              onStepChange={handleWizardStepChange}
-              onExitWizard={handleExitWizard}
-              onCompleteWizard={handleCompleteWizard}
-              onSave={() => void handleSave()}
-              onSaveAndStart={() => void handleSaveAndStart()}
-              onValidateDefault={handleValidateDefault}
-            />
-          ) : null}
-
+            <Form form={form} style={{ marginBottom: 20 }}>
+              <ConfigSetupWizard
+                t={t}
+                palette={palette}
+                step={wizardStep}
+                hasWorkspace={workspaceInfo.hasWorkspace}
+                hasLlmKey={hasDefaultLlmKey}
+                defaultValidation={validationState.default}
+                backendStatus={backendStatus}
+                canSave={canSave}
+                canSaveAndStart={canSaveAndStart}
+                saving={loading}
+                savingEasyPaper={savingEasyPaper}
+                startingBackend={startingBackend}
+                onStepChange={handleWizardStepChange}
+                onExitWizard={handleExitWizard}
+                onCompleteWizard={handleCompleteWizard}
+                onSave={() => void handleSave()}
+                onSaveAndStart={() => void handleSaveAndStart()}
+                onSaveEasyPaper={saveEasyPaperConfig}
+                onValidateDefault={handleValidateDefault}
+              >
+                <div ref={pageSectionRef}>
+                  <ConfigWizardStepPanel
+                    stepKey={WIZARD_STEPS[wizardStep]?.key ?? 'simulation'}
+                    t={t}
+                    palette={palette}
+                    isDark={isDark}
+                    form={form}
+                    effectiveConfigValues={effectiveConfigValues}
+                    hasDefaultLlmKey={hasDefaultLlmKey}
+                    backendStatus={backendStatus}
+                    backendStarting={startingBackend}
+                    validationState={validationState}
+                    defaultValidateDisabledReason={defaultValidateDisabledReason}
+                    literatureValidateDisabledReason={literatureValidateDisabledReason}
+                    pythonValidateDisabledReason={pythonValidateDisabledReason}
+                    onValidate={handleValidate}
+                    onFetchDefaultLlmModels={handleFetchDefaultLlmModels}
+                    modelsByProvider={modelsByProvider}
+                    modelsLoadingByProvider={modelsLoadingByProvider}
+                    modelsErrorByProvider={modelsErrorByProvider}
+                    webImportPanel={webImportPanel('wizard')}
+                    pythonEnvironmentOptions={pythonEnvironmentOptions}
+                    pythonEnvironmentScanning={pythonEnvironmentScanning}
+                    onScanPythonEnvironments={handleScanPythonEnvironments}
+                    literatureSectionRef={literatureSectionRef}
+                    claudeSectionRef={claudeSectionRef}
+                    claudeCliStatus={claudeCliStatus}
+                    claudeSettingsPath={claudeSettingsPath}
+                    onResetClaude={handleResetClaudeDefaults}
+                    gatewayStatus={aiCliGatewayStatus}
+                    gatewayToggling={gatewayToggling}
+                    onRouteClaudeToggle={(enabled) => handleGatewayRouteToggle('claude', enabled)}
+                    onRouteCodexToggle={(enabled) => handleGatewayRouteToggle('codex', enabled)}
+                    claudeProviders={claudeProviders}
+                    claudeProvidersLoading={claudeProvidersLoading}
+                    providerAvailabilityResults={providerAvailabilityResults}
+                    onSaveProvider={handleSaveClaudeProvider}
+                    onAddProvider={handleAddClaudeProvider}
+                    onRemoveProvider={handleRemoveClaudeProvider}
+                    onActivateProvider={handleActivateClaudeProvider}
+                    onToggleFailoverProvider={handleToggleFailoverProvider}
+                    onSpeedtestProvider={handleCheckClaudeProvider}
+                    isProviderChecking={isProviderChecking}
+                    onShowGatewayLog={handleShowClaudeGatewayLog}
+                    onFetchProviderModels={handleFetchProviderModels}
+                    gatewayUsageRecords={gatewayUsageRecords}
+                    gatewayUsageLoading={gatewayUsageLoading}
+                    onRefreshUsage={handleRefreshUsage}
+                    onClearUsage={handleClearUsage}
+                    codexRouting={codexRouting}
+                    failoverEnabled={failoverEnabled}
+                    onFailoverToggle={handleFailoverToggle}
+                    customPricing={customPricing}
+                    onGetPricing={handleGetPricing}
+                    onRefreshPricing={handleRefreshPricing}
+                    onSavePricing={handleSavePricing}
+                    onClearPricing={handleClearPricing}
+                    providerUsage={providerUsage}
+                    onQueryProviderUsage={handleQueryProviderUsage}
+                    onRestartCodex={handleRestartCodex}
+                    onRestartClaude={handleRestartClaude}
+                    onSyncClaudeConfig={handleSyncClaudeConfig}
+                    onSyncCodexConfig={handleSyncCodexConfig}
+                    onSaveOutboundProxy={handleSaveOutboundProxy}
+                    onRectifierChange={handleRectifierChange}
+                    onOptimizerChange={handleOptimizerChange}
+                    onRefreshCodexOfficialLogin={handleRefreshCodexOfficialLogin}
+                    easyPaperForm={easyPaperForm}
+                    onSaveEasyPaper={saveEasyPaperConfig}
+                  />
+                </div>
+              </ConfigSetupWizard>
+            </Form>
+          ) : (
           <Form form={form} style={{ marginBottom: 20 }}>
             <div ref={pageSectionRef}>
-              {wizardMode ? (
-                <ConfigWizardStepPanel
-                  stepKey={WIZARD_STEPS[wizardStep]?.key ?? 'simulation'}
-                  t={t}
-                  palette={palette}
-                  isDark={isDark}
-                  form={form}
-                  effectiveConfigValues={effectiveConfigValues}
-                  hasDefaultLlmKey={hasDefaultLlmKey}
-                  backendStatus={backendStatus}
-                  backendStarting={startingBackend}
-                  validationState={validationState}
-                  defaultValidateDisabledReason={defaultValidateDisabledReason}
-                  literatureValidateDisabledReason={literatureValidateDisabledReason}
-                  pythonValidateDisabledReason={pythonValidateDisabledReason}
-                  onValidate={handleValidate}
-                  onFetchDefaultLlmModels={handleFetchDefaultLlmModels}
-                  modelsByProvider={modelsByProvider}
-                  modelsLoadingByProvider={modelsLoadingByProvider}
-                  modelsErrorByProvider={modelsErrorByProvider}
-                  webImportPanel={webImportPanel('wizard')}
-                  pythonEnvironmentOptions={pythonEnvironmentOptions}
-                  pythonEnvironmentScanning={pythonEnvironmentScanning}
-                  onScanPythonEnvironments={handleScanPythonEnvironments}
-                  literatureSectionRef={literatureSectionRef}
-                  claudeSectionRef={claudeSectionRef}
-                  claudeCliStatus={claudeCliStatus}
-                  claudeSettingsPath={claudeSettingsPath}
-                  onResetClaude={handleResetClaudeDefaults}
-                  gatewayStatus={aiCliGatewayStatus}
-                  gatewayToggling={gatewayToggling}
-                  onRouteClaudeToggle={(enabled) => handleGatewayRouteToggle('claude', enabled)}
-                  onRouteCodexToggle={(enabled) => handleGatewayRouteToggle('codex', enabled)}
-                  claudeProviders={claudeProviders}
-                  claudeProvidersLoading={claudeProvidersLoading}
-                  providerAvailabilityResults={providerAvailabilityResults}
-                  onSaveProvider={handleSaveClaudeProvider}
-                  onAddProvider={handleAddClaudeProvider}
-                  onRemoveProvider={handleRemoveClaudeProvider}
-                  onActivateProvider={handleActivateClaudeProvider}
-                  onToggleFailoverProvider={handleToggleFailoverProvider}
-                  onSpeedtestProvider={handleCheckClaudeProvider}
-                  isProviderChecking={isProviderChecking}
-                  onShowGatewayLog={handleShowClaudeGatewayLog}
-                  onFetchProviderModels={handleFetchProviderModels}
-                  gatewayUsageRecords={gatewayUsageRecords}
-                  gatewayUsageLoading={gatewayUsageLoading}
-                  onRefreshUsage={handleRefreshUsage}
-                  onClearUsage={handleClearUsage}
-                  codexRouting={codexRouting}
-                  failoverEnabled={failoverEnabled}
-                  onFailoverToggle={handleFailoverToggle}
-                  customPricing={customPricing}
-                  onGetPricing={handleGetPricing}
-                  onRefreshPricing={handleRefreshPricing}
-                  onSavePricing={handleSavePricing}
-                  onClearPricing={handleClearPricing}
-                  providerUsage={providerUsage}
-                  onQueryProviderUsage={handleQueryProviderUsage}
-                  onRestartCodex={handleRestartCodex}
-                  onRestartClaude={handleRestartClaude}
-                  onSyncClaudeConfig={handleSyncClaudeConfig}
-                  onSyncCodexConfig={handleSyncCodexConfig}
-                  onSaveOutboundProxy={handleSaveOutboundProxy}
-                  onRectifierChange={handleRectifierChange}
-                  onOptimizerChange={handleOptimizerChange}
-                  onRefreshCodexOfficialLogin={handleRefreshCodexOfficialLogin}
-                  easyPaperForm={easyPaperForm}
-                  onSaveEasyPaper={saveEasyPaperConfig}
-                />
-              ) : isDashboardMode ? (
+              {isDashboardMode ? (
                 <Collapse
                   bordered={false}
                   activeKey={configCollapseKeys}
@@ -2219,6 +2236,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
               )}
             </div>
           </Form>
+          )}
         </Content>
       </Layout>
     </ConfigProvider>

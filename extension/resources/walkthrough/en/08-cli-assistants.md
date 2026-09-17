@@ -50,7 +50,7 @@ In a trusted workspace, Claude Code can use **bypassPermissions** to reduce repe
 | Feature | Entry |
 |---------|-------|
 | Simulation replay | Right-click an experiment folder |
-| Paper / analysis workspace | `paper/`, `analysis/` |
+| Paper / analysis outputs | `paper/`, `presentation/`, `synthesis/` |
 | User guide | Sidebar 📖 |
 | Glossary | Last step in this walkthrough |
 

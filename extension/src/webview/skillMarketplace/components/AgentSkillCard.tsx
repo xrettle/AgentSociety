@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Button, Card, Dropdown, Space, Tag, Typography } from 'antd';
+import { Button, Dropdown, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import {
+  ApiOutlined,
   BookOutlined,
   FolderOpenOutlined,
   MoreOutlined,
@@ -12,14 +13,16 @@ import {
 import type { TFunction } from 'i18next';
 import type { VscodeThemePalette } from '../../theme';
 import type { AgentSkill, AgentSkillDetailPayload } from '../types';
-import { MarkdownRenderer } from '../../components/MarkdownRenderer';
+import type { AgentSkillSourceKind } from '../../../agentSkillSource';
 import { SkillDetailCollapse } from './SkillDetailCollapse';
+import { SkillEntryCard } from './SkillEntryCard';
+import { SkillMarkdownPreview } from './SkillMarkdownPreview';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 type Props = {
   skill: AgentSkill;
-  isBuiltin: boolean;
+  sourceKind: AgentSkillSourceKind;
   palette: VscodeThemePalette;
   isDark: boolean;
   detail?: AgentSkillDetailPayload;
@@ -30,9 +33,19 @@ type Props = {
   onExpandDetail: (skill: AgentSkill) => void;
 };
 
+function sourceAccent(kind: AgentSkillSourceKind, palette: VscodeThemePalette): string {
+  if (kind === 'built-in') {
+    return palette.linkForeground;
+  }
+  if (kind === 'env') {
+    return palette.warningForeground ?? palette.linkForeground;
+  }
+  return palette.successForeground;
+}
+
 export function AgentSkillCard({
   skill,
-  isBuiltin,
+  sourceKind,
   palette,
   isDark,
   detail,
@@ -44,7 +57,8 @@ export function AgentSkillCard({
 }: Props) {
   const scriptText = (detail?.script ?? skill.script ?? '').trim();
   const mdBody = (detail?.skill_md ?? '').trim();
-  const accent = isBuiltin ? palette.linkForeground : palette.successForeground;
+  const accent = sourceAccent(sourceKind, palette);
+  const isBuiltin = sourceKind === 'built-in';
 
   const menuItems: MenuProps['items'] = [
     {
@@ -62,73 +76,58 @@ export function AgentSkillCard({
     },
   ];
 
-  return (
-    <Card
-      hoverable
-      style={{
-        height: '100%',
-        background: palette.surfaceMuted,
-        border: `1px solid ${palette.panelBorder}`,
-        borderRadius: 12,
-        boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-      }}
-      styles={{ body: { padding: '16px 18px' } }}
-    >
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            flexShrink: 0,
-            background: `linear-gradient(135deg, ${accent}22 0%, ${accent}10 100%)`,
-            color: accent,
-          }}
-        >
-          {isBuiltin ? <ThunderboltOutlined style={{ fontSize: 18 }} /> : <RobotOutlined style={{ fontSize: 18 }} />}
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ minWidth: 0 }}>
-              <Title level={5} style={{ margin: 0, fontSize: 15, lineHeight: 1.3, wordBreak: 'break-word' }}>
-                {skill.name}
-              </Title>
-              <Space size={[4, 4]} wrap style={{ marginTop: 6 }}>
-                <Tag color={isBuiltin ? 'blue' : 'green'} style={{ margin: 0 }}>
-                  {isBuiltin ? t('skillManagement.tagAgentBackend') : t('skillManagement.tagAgentRegistered')}
-                </Tag>
-                {skill.has_skill_md ? (
-                  <Tag icon={<BookOutlined />} style={{ margin: 0 }}>
-                    SKILL.md
-                  </Tag>
-                ) : null}
-                {scriptText ? (
-                  <Tag icon={<ToolOutlined />} style={{ margin: 0 }}>
-                    {scriptText}
-                  </Tag>
-                ) : null}
-              </Space>
-            </div>
-            <Space size={4} style={{ flexShrink: 0 }}>
-              {isBuiltin ? (
-                <Tag color="blue" style={{ margin: 0 }}>
-                  {t('skillManagement.builtinAgentSkillTag')}
-                </Tag>
-              ) : null}
-              <Dropdown trigger={['click']} menu={{ items: menuItems }}>
-                <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('skillManagement.moreActions')} />
-              </Dropdown>
-            </Space>
-          </div>
-          <Text type="secondary" style={{ display: 'block', marginTop: 10, fontSize: 13, lineHeight: 1.5 }}>
-            {skill.description || t('skillManagement.noDescription')}
-          </Text>
-        </div>
-      </div>
+  const kindTag =
+    sourceKind === 'built-in'
+      ? { color: 'blue' as const, label: t('skillManagement.tagAgentBackend') }
+      : sourceKind === 'env'
+        ? { color: 'gold' as const, label: t('skillManagement.tagAgentEnv') }
+        : { color: 'green' as const, label: t('skillManagement.tagAgentRegistered') };
 
+  const icon =
+    sourceKind === 'built-in' ? (
+      <ThunderboltOutlined style={{ fontSize: 18 }} />
+    ) : sourceKind === 'env' ? (
+      <ApiOutlined style={{ fontSize: 18 }} />
+    ) : (
+      <RobotOutlined style={{ fontSize: 18 }} />
+    );
+
+  return (
+    <SkillEntryCard
+      palette={palette}
+      accent={accent}
+      icon={icon}
+      title={skill.name}
+      tags={
+        <>
+          <Tag color={kindTag.color} style={{ margin: 0 }}>
+            {kindTag.label}
+          </Tag>
+          {isBuiltin ? (
+            <Tag color="blue" style={{ margin: 0 }}>
+              {t('skillManagement.builtinAgentSkillTag')}
+            </Tag>
+          ) : null}
+          {skill.has_skill_md ? (
+            <Tag icon={<BookOutlined />} style={{ margin: 0 }}>
+              SKILL.md
+            </Tag>
+          ) : null}
+          {scriptText ? (
+            <Tag icon={<ToolOutlined />} style={{ margin: 0 }}>
+              {scriptText}
+            </Tag>
+          ) : null}
+        </>
+      }
+      description={skill.description || t('skillManagement.noDescription')}
+      actions={
+        <Dropdown trigger={['click']} menu={{ items: menuItems }}>
+          <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('skillManagement.moreActions')} />
+        </Dropdown>
+      }
+      style={{ boxShadow: isBuiltin ? `0 4px 14px ${accent}12` : undefined }}
+    >
       <SkillDetailCollapse
         panelLabel={t('skillManagement.skillDetails')}
         onPanelOpen={() => onExpandDetail(skill)}
@@ -136,32 +135,23 @@ export function AgentSkillCard({
         borderColor={palette.panelBorder}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
-              {t('skillManagement.detailPath')}
-            </Text>
-            <Text style={{ fontSize: 12, wordBreak: 'break-all' }}>{detail?.path ?? skill.path}</Text>
-          </div>
-          {mdBody ? (
-            <div
-              style={{
-                borderRadius: 8,
-                border: `1px solid ${palette.panelBorder}`,
-                background: palette.codeBlockBackground,
-                padding: '10px 12px',
-                maxHeight: 280,
-                overflow: 'auto',
-              }}
-            >
-              <MarkdownRenderer content={mdBody} isDark={isDark} style={{ fontSize: 12 }} />
-            </div>
-          ) : (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {t('skillManagement.detailNoMarkdownBody')}
-            </Text>
-          )}
+          <SkillMarkdownPreview
+            content={mdBody}
+            palette={palette}
+            isDark={isDark}
+            extraFacts={[
+              {
+                label: t('skillManagement.detailPath'),
+                value: (
+                  <Text style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                    {detail?.path ?? skill.path}
+                  </Text>
+                ),
+              },
+            ]}
+          />
         </div>
       </SkillDetailCollapse>
-    </Card>
+    </SkillEntryCard>
   );
 }

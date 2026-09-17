@@ -1,287 +1,603 @@
 import * as React from 'react';
-import { ConfigProvider, Input, Card, Typography, Spin, Alert, Empty, Space, Badge, Tabs, Tag, Button, Tooltip } from 'antd';
 import {
-  SearchOutlined, ReloadOutlined, PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined,
-  FileTextOutlined, AppstoreOutlined, DatabaseOutlined, SettingOutlined,
+  Alert,
+  Button,
+  ConfigProvider,
+  Empty,
+  Input,
+  Segmented,
+  Space,
+  Spin,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from 'antd';
+import {
+  ApiOutlined,
+  AppstoreOutlined,
+  CheckCircleOutlined,
+  ClearOutlined,
+  CloseCircleOutlined,
+  CodeOutlined,
+  CopyOutlined,
+  DatabaseOutlined,
+  FileTextOutlined,
+  FolderOpenOutlined,
+  LoadingOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import type { VSCodeAPI, ClassInfo, AvailableClasses, PrefillParams } from './types';
+import type {
+  AvailableClasses,
+  ClassItem,
+  ClassKind,
+  ListFilter,
+  PrefillParams,
+  TestStatus,
+  VSCodeAPI,
+} from './types';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
-import { JsonViewer } from '../components/JsonViewer';
 import { useVscodeTheme } from '../theme';
+import { PageSection, TabToolbar } from '../skillMarketplace/components';
+import {
+  SKILL_UI,
+  heroShellStyle,
+  iconBadgeStyle,
+  sectionShellStyle,
+  surfaceCardStyle,
+} from '../skillMarketplace/uiTokens';
+import 'antd/dist/reset.css';
 import '../i18n';
 
-const { Title, Text, Paragraph } = Typography;
-const { Search } = Input;
+const { Text, Title } = Typography;
+const { TextArea } = Input;
 
 interface PrefillParamsAppProps {
   vscode: VSCodeAPI;
 }
 
-interface ClassItem {
-  type: string;
-  kind: 'env_module' | 'agent';
-  info: ClassInfo;
-  params: Record<string, any>;
+function moduleKey(item: Pick<ClassItem, 'kind' | 'type'>): string {
+  return `${item.kind}-${item.type}`;
 }
 
-type TestStatus = 'idle' | 'testing' | 'success' | 'error';
+function shortDescription(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length <= 80) {
+    return flat;
+  }
+  return `${flat.slice(0, 80)}…`;
+}
+
+function buildInitSnippet(item: ClassItem, params: Record<string, unknown>): string {
+  if (item.kind === 'env_module') {
+    return JSON.stringify({ module_type: item.type, kwargs: params }, null, 2);
+  }
+  return JSON.stringify(
+    {
+      agent_id: 0,
+      agent_type: item.type,
+      kwargs: { id: 0, ...params },
+    },
+    null,
+    2
+  );
+}
+
+function parseParamsJson(
+  raw: string
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { ok: true, value: {} };
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, error: 'object' };
+    }
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false, error: 'json' };
+  }
+}
+
+function isBackendOfflineError(text: string): boolean {
+  return /未连接|not connected|ECONNREFUSED|Failed to fetch|fetch failed|NetworkError|后端服务/i.test(
+    text
+  );
+}
+
+function statPill(
+  label: string,
+  value: number,
+  palette: ReturnType<typeof useVscodeTheme>['palette'],
+  accent?: string
+): React.ReactNode {
+  return (
+    <div
+      style={{
+        ...surfaceCardStyle(palette),
+        padding: '10px 12px',
+        borderRadius: SKILL_UI.radius.sm,
+        minWidth: 96,
+      }}
+    >
+      <Text type="secondary" style={{ display: 'block', fontSize: 11, marginBottom: 2 }}>
+        {label}
+      </Text>
+      <Text strong style={{ fontSize: 18, color: accent ?? palette.editorForeground, lineHeight: 1 }}>
+        {value}
+      </Text>
+    </div>
+  );
+}
 
 export const PrefillParamsApp: React.FC<PrefillParamsAppProps> = ({ vscode }) => {
   const { t } = useTranslation();
   const { isDark, palette, themeConfig } = useVscodeTheme();
-  const [loading, setLoading] = React.useState<boolean>(true);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [backendOffline, setBackendOffline] = React.useState(false);
+  const [startingBackend, setStartingBackend] = React.useState(false);
   const [classes, setClasses] = React.useState<ClassItem[]>([]);
-  const [filteredClasses, setFilteredClasses] = React.useState<ClassItem[]>([]);
-  const [selectedClass, setSelectedClass] = React.useState<ClassItem | null>(null);
-  const [searchText, setSearchText] = React.useState<string>('');
-  const [activeTab, setActiveTab] = React.useState<'env_module' | 'agent'>('env_module');
-
-  // 为每个模块维护测试状态，key 为 `${kind}-${type}`
+  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  const [searchText, setSearchText] = React.useState('');
+  const [activeTab, setActiveTab] = React.useState<ClassKind>('env_module');
+  const [listFilter, setListFilter] = React.useState<ListFilter>('all');
   const [testStatuses, setTestStatuses] = React.useState<Record<string, TestStatus>>({});
   const [testResults, setTestResults] = React.useState<Record<string, string>>({});
+  const [editorText, setEditorText] = React.useState('{}');
+  const [editorDirty, setEditorDirty] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [narrow, setNarrow] = React.useState(false);
 
-  // 组件挂载时请求数据
   React.useEffect(() => {
-    vscode.postMessage({
-      command: 'requestData',
-    });
+    const mq = window.matchMedia('(max-width: 860px)');
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  React.useEffect(() => {
+    vscode.postMessage({ command: 'requestData' });
   }, [vscode]);
 
-  // 监听来自扩展的消息
   React.useEffect(() => {
-    const handleMessage = (event: MessageEvent<any>) => {
-      const message = event.data;
+    const handleMessage = (event: MessageEvent) => {
+      const messageData = event.data as Record<string, unknown>;
+      const command = messageData.command;
 
-      if (message.command === 'initialData') {
+      if (command === 'initialData') {
         try {
-          const classesData: AvailableClasses = message.classes;
-          const prefillParams: PrefillParams = message.prefillParams;
-
+          const classesData = messageData.classes as AvailableClasses;
+          const prefillParams = messageData.prefillParams as PrefillParams;
           const classItems: ClassItem[] = [];
 
-          Object.entries(classesData.env_modules).forEach(([type, info]) => {
+          Object.entries(classesData.env_modules || {}).forEach(([type, info]) => {
             classItems.push({
               type,
               kind: 'env_module',
               info,
-              params: prefillParams.env_modules[type] || {},
+              params: (prefillParams.env_modules?.[type] || {}) as Record<string, unknown>,
             });
           });
-
-          Object.entries(classesData.agents).forEach(([type, info]) => {
+          Object.entries(classesData.agents || {}).forEach(([type, info]) => {
             classItems.push({
               type,
               kind: 'agent',
               info,
-              params: prefillParams.agents[type] || {},
+              params: (prefillParams.agents?.[type] || {}) as Record<string, unknown>,
             });
           });
 
           setClasses(classItems);
           setLoading(false);
           setError(null);
-        } catch (e) {
-          console.error('Error processing initial data:', e);
+          setBackendOffline(false);
+          setEditorDirty(false);
+        } catch (err) {
+          console.error(err);
           setError(t('prefillParams.errorMessages.loadFailed'));
+          setBackendOffline(false);
           setLoading(false);
           setClasses([]);
-          setFilteredClasses([]);
-          setSelectedClass(null);
+          setSelectedKey(null);
         }
-      } else if (message.command === 'error') {
-        setError(message.error || t('prefillParams.errorMessages.loadFailed'));
+        return;
+      }
+
+      if (command === 'error') {
+        const errText = (messageData.error as string) || t('prefillParams.errorMessages.loadFailed');
+        setError(errText);
+        setBackendOffline(
+          Boolean(messageData.backendOffline) || isBackendOfflineError(errText)
+        );
         setLoading(false);
         setClasses([]);
-        setFilteredClasses([]);
-        setSelectedClass(null);
-      } else if (message.command === 'testResult') {
-        const moduleKey = message.moduleKey;
-        if (moduleKey) {
-          setTestStatuses(prev => ({
-            ...prev,
-            [moduleKey]: message.success ? 'success' : 'error',
-          }));
-          setTestResults(prev => ({
-            ...prev,
-            [moduleKey]: message.output || message.error || '',
-          }));
+        setSelectedKey(null);
+        return;
+      }
+
+      if (command === 'startBackendResult') {
+        setStartingBackend(false);
+        if (messageData.success) {
+          message.success(t('prefillParams.backend.started'));
+          setLoading(true);
+          setError(null);
+          vscode.postMessage({ command: 'refresh' });
+        } else {
+          message.error(
+            (messageData.error as string) || t('prefillParams.backend.startFailed')
+          );
+        }
+        return;
+      }
+
+      if (command === 'testResult') {
+        const key = messageData.moduleKey as string;
+        if (!key) {
+          return;
+        }
+        setTestStatuses((prev) => ({
+          ...prev,
+          [key]: messageData.success ? 'success' : 'error',
+        }));
+        setTestResults((prev) => ({
+          ...prev,
+          [key]:
+            (messageData.output as string) ||
+            (messageData.error as string) ||
+            '',
+        }));
+        return;
+      }
+
+      if (command === 'saveResult') {
+        setSaving(false);
+        if (messageData.success) {
+          message.success(t('prefillParams.save.success'));
+          setEditorDirty(false);
+          const kind = messageData.kind as ClassKind;
+          const type = messageData.type as string;
+          const params = (messageData.params || {}) as Record<string, unknown>;
+          setClasses((prev) =>
+            prev.map((item) => {
+              if (item.kind !== kind || item.type !== type) {
+                return item;
+              }
+              return {
+                ...item,
+                params,
+                info: {
+                  ...item.info,
+                  has_prefill: Object.keys(params).length > 0,
+                },
+              };
+            })
+          );
+        } else {
+          message.error((messageData.error as string) || t('prefillParams.save.failed'));
         }
       }
     };
 
     window.addEventListener('message', handleMessage);
-    return () => {
-      window.removeEventListener('message', handleMessage);
-    };
+    return () => window.removeEventListener('message', handleMessage);
   }, [vscode, t]);
 
-  // 搜索过滤和Tab切换
+  const filteredClasses = React.useMemo(() => {
+    const lower = searchText.trim().toLowerCase();
+    return classes.filter((item) => {
+      if (item.kind !== activeTab) {
+        return false;
+      }
+      if (listFilter === 'prefill' && !item.info.has_prefill && Object.keys(item.params).length === 0) {
+        return false;
+      }
+      if (listFilter === 'custom' && !item.info.is_custom) {
+        return false;
+      }
+      if (!lower) {
+        return true;
+      }
+      return (
+        item.type.toLowerCase().includes(lower) ||
+        item.info.class_name.toLowerCase().includes(lower) ||
+        item.info.description.toLowerCase().includes(lower)
+      );
+    });
+  }, [classes, activeTab, listFilter, searchText]);
+
   React.useEffect(() => {
-    let filtered = classes;
-
-    filtered = filtered.filter(item => item.kind === activeTab);
-
-    if (searchText.trim()) {
-      const lowerSearch = searchText.toLowerCase();
-      filtered = filtered.filter((item) => {
-        return (
-          item.type.toLowerCase().includes(lowerSearch) ||
-          item.info.class_name.toLowerCase().includes(lowerSearch) ||
-          item.info.description.toLowerCase().includes(lowerSearch)
-        );
-      });
+    if (filteredClasses.length === 0) {
+      setSelectedKey(null);
+      return;
     }
-
-    setFilteredClasses(filtered);
-
-    if (selectedClass && selectedClass.kind !== activeTab) {
-      setSelectedClass(null);
+    if (!selectedKey || !filteredClasses.some((item) => moduleKey(item) === selectedKey)) {
+      setSelectedKey(moduleKey(filteredClasses[0]));
     }
-  }, [searchText, classes, activeTab, selectedClass]);
+  }, [filteredClasses, selectedKey]);
+
+  const selectedClass = React.useMemo(
+    () => filteredClasses.find((item) => moduleKey(item) === selectedKey) ?? null,
+    [filteredClasses, selectedKey]
+  );
+
+  React.useEffect(() => {
+    if (!selectedClass) {
+      setEditorText('{}');
+      setEditorDirty(false);
+      return;
+    }
+    setEditorText(JSON.stringify(selectedClass.params ?? {}, null, 2));
+    setEditorDirty(false);
+  }, [selectedClass?.kind, selectedClass?.type]);
 
   const handleRefresh = () => {
     setLoading(true);
     setError(null);
+    setBackendOffline(false);
     setClasses([]);
-    setFilteredClasses([]);
-    setSelectedClass(null);
+    setSelectedKey(null);
+    vscode.postMessage({ command: 'refresh' });
+  };
+
+  const handleStartBackend = () => {
+    setStartingBackend(true);
+    vscode.postMessage({ command: 'startBackend' });
+  };
+
+  const handleOpenConfigPage = () => {
+    vscode.postMessage({ command: 'openConfigPage' });
+  };
+
+  const handleSelect = (item: ClassItem) => {
+    if (editorDirty && !window.confirm(t('prefillParams.unsavedConfirm'))) {
+      return;
+    }
+    setSelectedKey(moduleKey(item));
+  };
+
+  const handleSave = () => {
+    if (!selectedClass) {
+      return;
+    }
+    const parsed = parseParamsJson(editorText);
+    if (!parsed.ok) {
+      message.error(t('prefillParams.save.invalidJson'));
+      return;
+    }
+    setSaving(true);
     vscode.postMessage({
-      command: 'refresh',
+      command: 'saveClassPrefill',
+      kind: selectedClass.kind,
+      type: selectedClass.type,
+      params: parsed.value,
     });
   };
 
-  const handleOpenPrefillJson = () => {
-    vscode.postMessage({ command: 'openPrefillParamsJson' });
-  };
-
-  const handleClassSelect = (item: ClassItem) => {
-    setSelectedClass(item);
-  };
-
-  const handleTestModule = (item: ClassItem) => {
-    const key = `${item.kind}-${item.type}`;
-    setTestStatuses(prev => ({ ...prev, [key]: 'testing' }));
-    setTestResults(prev => ({ ...prev, [key]: '' }));
-
+  const handleClear = () => {
+    if (!selectedClass) {
+      return;
+    }
+    setEditorText('{}');
+    setEditorDirty(true);
+    setSaving(true);
     vscode.postMessage({
-      command: 'testCustomModule',
-      moduleKey: key,
-      moduleType: item.kind,
-      moduleTypeValue: item.type,
-      moduleClassName: item.info.class_name,
+      command: 'saveClassPrefill',
+      kind: selectedClass.kind,
+      type: selectedClass.type,
+      params: {},
     });
   };
 
-  const getTestIcon = (status: TestStatus) => {
-    switch (status) {
-      case 'testing':
-        return <LoadingOutlined style={{ color: palette.buttonBackground }} />;
-      case 'success':
-        return <CheckCircleOutlined style={{ color: palette.successForeground }} />;
-      case 'error':
-        return <CloseCircleOutlined style={{ color: palette.errorForeground }} />;
-      default:
-        return null;
+  const handleCopySnippet = async () => {
+    if (!selectedClass) {
+      return;
+    }
+    const parsed = parseParamsJson(editorText);
+    if (!parsed.ok) {
+      message.error(t('prefillParams.save.invalidJson'));
+      return;
+    }
+    const snippet = buildInitSnippet(selectedClass, parsed.value);
+    try {
+      await navigator.clipboard.writeText(snippet);
+      message.success(t('prefillParams.copy.success'));
+    } catch {
+      vscode.postMessage({ command: 'copyText', text: snippet });
+      message.success(t('prefillParams.copy.success'));
     }
   };
 
-  // 统计卡片
-  const statPill = (label: string, value: string | number, accent?: string) => (
-    <div
-      style={{
-        flex: '1 1 80px',
-        minWidth: 70,
-        padding: '8px 12px',
-        borderRadius: 6,
-        border: `1px solid ${palette.panelBorder}`,
-        background: `linear-gradient(135deg, ${palette.surfaceBackground} 0%, ${palette.editorBackground} 100%)`,
-      }}
-    >
-      <div style={{ fontSize: 10, color: palette.descriptionForeground, marginBottom: 2, fontWeight: 500 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: accent ?? palette.editorForeground, lineHeight: 1 }}>{value}</div>
-    </div>
-  );
+  const handleTest = () => {
+    if (!selectedClass?.info.is_custom) {
+      return;
+    }
+    const key = moduleKey(selectedClass);
+    setTestStatuses((prev) => ({ ...prev, [key]: 'testing' }));
+    setTestResults((prev) => ({ ...prev, [key]: '' }));
+    vscode.postMessage({
+      command: 'testCustomModule',
+      moduleKey: key,
+      moduleType: selectedClass.kind,
+      moduleTypeValue: selectedClass.type,
+      moduleClassName: selectedClass.info.class_name,
+    });
+  };
 
-  if (loading) {
+  const handleOpenSource = () => {
+    if (!selectedClass?.info.is_custom) {
+      return;
+    }
+    vscode.postMessage({
+      command: 'openCustomModuleSource',
+      kind: selectedClass.kind,
+      className: selectedClass.info.class_name,
+    });
+  };
+
+  const envCount = classes.filter((c) => c.kind === 'env_module').length;
+  const agentCount = classes.filter((c) => c.kind === 'agent').length;
+  const prefillCount = classes.filter(
+    (c) => c.info.has_prefill || Object.keys(c.params).length > 0
+  ).length;
+  const customCount = classes.filter((c) => c.info.is_custom).length;
+  const prefillInTab = classes.filter(
+    (c) =>
+      c.kind === activeTab &&
+      (c.info.has_prefill || Object.keys(c.params).length > 0)
+  ).length;
+  const customInTab = classes.filter((c) => c.kind === activeTab && c.info.is_custom).length;
+
+  const selectedTestKey = selectedClass ? moduleKey(selectedClass) : '';
+  const selectedTestStatus = selectedTestKey ? testStatuses[selectedTestKey] || 'idle' : 'idle';
+  const selectedTestResult = selectedTestKey ? testResults[selectedTestKey] || '' : '';
+
+  const shell = (
+    children: React.ReactNode,
+    opts?: { mode?: 'page' | 'split' }
+  ) => {
+    const mode = opts?.mode ?? 'page';
     return (
       <ConfigProvider theme={themeConfig}>
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: 16, backgroundColor: palette.editorBackground }}>
-          <Spin size="large" />
-          <Text>{t('prefillParams.loading')}</Text>
+        <div
+          style={{
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            background: palette.editorBackground,
+          }}
+        >
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: mode === 'page' ? 'auto' : 'hidden',
+              overflowX: 'hidden',
+              padding: `${SKILL_UI.space.lg}px ${SKILL_UI.space.md}px ${SKILL_UI.space.xl}px`,
+              display: mode === 'split' ? 'flex' : undefined,
+              flexDirection: mode === 'split' ? 'column' : undefined,
+            }}
+          >
+            <div
+              style={{
+                maxWidth: SKILL_UI.maxWidth,
+                margin: '0 auto',
+                width: '100%',
+                ...(mode === 'split'
+                  ? {
+                      flex: 1,
+                      minHeight: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }
+                  : null),
+              }}
+            >
+              {children}
+            </div>
+          </div>
         </div>
       </ConfigProvider>
+    );
+  };
+
+  if (loading) {
+    return shell(
+      <div style={{ ...heroShellStyle(palette), textAlign: 'center', padding: '48px 24px' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 12 }}>
+          <Text type="secondary">{t('prefillParams.loading')}</Text>
+        </div>
+      </div>
     );
   }
 
   if (error) {
-    return (
-      <ConfigProvider theme={themeConfig}>
-        <div style={{ padding: 20, height: '100vh', backgroundColor: palette.editorBackground }}>
-          <Alert
-            message={t('prefillParams.error')}
-            description={error}
-            type="error"
-            showIcon
-            action={
-              <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-                {t('prefillParams.refresh')}
-              </Button>
-            }
-          />
+    return shell(
+      <div style={heroShellStyle(palette)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: SKILL_UI.space.lg }}>
+          <span style={iconBadgeStyle(backendOffline ? palette.warningForeground : palette.errorForeground)}>
+            <ApiOutlined style={{ fontSize: 18 }} />
+          </span>
+          <div>
+            <Title level={4} style={{ margin: 0 }}>
+              {backendOffline
+                ? t('prefillParams.backend.offlineTitle')
+                : t('prefillParams.error')}
+            </Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {backendOffline ? t('prefillParams.backend.offlineBody') : error}
+            </Text>
+          </div>
         </div>
-      </ConfigProvider>
+        {!backendOffline ? (
+          <Alert type="error" showIcon message={error} style={{ marginBottom: SKILL_UI.space.md }} />
+        ) : null}
+        <Space wrap>
+          {backendOffline ? (
+            <>
+              <Button
+                type="primary"
+                icon={<PlayCircleOutlined />}
+                loading={startingBackend}
+                onClick={handleStartBackend}
+              >
+                {t('prefillParams.backend.start')}
+              </Button>
+              <Button icon={<SettingOutlined />} onClick={handleOpenConfigPage}>
+                {t('prefillParams.backend.openConfig')}
+              </Button>
+            </>
+          ) : null}
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} disabled={startingBackend}>
+            {t('prefillParams.refresh')}
+          </Button>
+        </Space>
+      </div>
     );
   }
 
-  const customCount = classes.filter(c => c.info.is_custom).length;
-  const builtinCount = classes.length - customCount;
-  const envModuleCount = classes.filter(c => c.kind === 'env_module').length;
-  const agentCount = classes.filter(c => c.kind === 'agent').length;
-
-  return (
-    <ConfigProvider theme={themeConfig}>
-      <div
-        style={{
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: palette.editorBackground,
-          color: palette.editorForeground,
-          overflow: 'hidden',
-        }}
-      >
-        {/* 头部区域 - 固定高度 */}
-        <div
-          style={{
-            padding: '12px 16px',
-            borderBottom: `1px solid ${palette.panelBorder}`,
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  background: `linear-gradient(135deg, ${palette.linkForeground}20 0%, ${palette.linkForeground}10 100%)`,
-                  color: palette.linkForeground,
-                }}
-              >
-                <DatabaseOutlined style={{ fontSize: 14 }} />
+  return shell(
+    <>
+      <div style={{ flexShrink: 0 }}>
+        <div style={heroShellStyle(palette)}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              marginBottom: SKILL_UI.space.lg,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <span style={iconBadgeStyle(palette.linkForeground)}>
+                <DatabaseOutlined style={{ fontSize: 18 }} />
               </span>
-              <div>
-                <Title level={5} style={{ margin: 0 }}>{t('prefillParams.groupTitle')}</Title>
+              <div style={{ minWidth: 0 }}>
+                <Title level={4} style={{ margin: 0 }}>{t('prefillParams.groupTitle')}</Title>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('prefillParams.introHintBody')}
+                </Text>
               </div>
             </div>
-            <Space size="small">
-              <Button size="small" icon={<FileTextOutlined />} onClick={handleOpenPrefillJson}>
+            <Space wrap size={8}>
+              <Button
+                size="small"
+                icon={<FileTextOutlined />}
+                onClick={() => vscode.postMessage({ command: 'openPrefillParamsJson' })}
+              >
                 {t('prefillParams.openConfigFile')}
               </Button>
               <Button size="small" icon={<ReloadOutlined />} onClick={handleRefresh}>
@@ -290,247 +606,339 @@ export const PrefillParamsApp: React.FC<PrefillParamsAppProps> = ({ vscode }) =>
             </Space>
           </div>
 
-          {/* 统计卡片 */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {statPill(t('prefillParams.classInfo.envModule'), envModuleCount, palette.linkForeground)}
-            {statPill(t('prefillParams.classInfo.agent'), agentCount, palette.successForeground)}
-            {statPill(t('prefillParams.classInfo.builtin'), builtinCount)}
-            {statPill(t('prefillParams.classInfo.custom'), customCount)}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SKILL_UI.space.md }}>
+            {statPill(t('prefillParams.classInfo.envModule'), envCount, palette, palette.linkForeground)}
+            {statPill(t('prefillParams.classInfo.agent'), agentCount, palette, palette.successForeground)}
+            {statPill(t('prefillParams.filter.prefill'), prefillCount, palette)}
+            {statPill(t('prefillParams.classInfo.custom'), customCount, palette)}
           </div>
         </div>
 
-        {/* Tabs 区域 - 固定高度 */}
-        <div style={{ flexShrink: 0, padding: '0 16px', background: palette.editorBackground }}>
-          <Tabs
-            activeKey={activeTab}
-            onChange={(key) => {
-              setActiveTab(key as 'env_module' | 'agent');
-              setSelectedClass(null);
-            }}
-            style={{ marginBottom: 0 }}
-            items={[
-              {
-                key: 'env_module',
-                label: (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <AppstoreOutlined />
-                    {t('prefillParams.classInfo.envModule')}
-                    <Tag style={{ margin: 0, fontSize: 11 }}>{envModuleCount}</Tag>
-                  </span>
-                ),
-              },
-              {
-                key: 'agent',
-                label: (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <SettingOutlined />
-                    {t('prefillParams.classInfo.agent')}
-                    <Tag style={{ margin: 0, fontSize: 11 }}>{agentCount}</Tag>
-                  </span>
-                ),
-              },
-            ]}
-          />
-        </div>
-
-        {/* 主内容区 - 自适应剩余高度 */}
-        <div style={{ flex: 1, overflow: 'hidden', padding: '8px 16px 12px' }}>
-          <div style={{ height: '100%', display: 'flex', gap: 12 }}>
-            {/* 左侧列表 */}
-            <div
-              style={{
-                width: 280,
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-              }}
-            >
-              <Search
-                placeholder={t('prefillParams.searchPlaceholder')}
-                allowClear
-                prefix={<SearchOutlined />}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                style={{ marginBottom: 8, flexShrink: 0 }}
+        <TabToolbar
+          left={
+            <Space wrap size={SKILL_UI.space.sm}>
+              <Segmented
+                value={activeTab}
+                onChange={(value) => {
+                  if (editorDirty && !window.confirm(t('prefillParams.unsavedConfirm'))) {
+                    return;
+                  }
+                  setActiveTab(value as ClassKind);
+                  setSelectedKey(null);
+                }}
+                options={[
+                  {
+                    value: 'env_module',
+                    label: (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <AppstoreOutlined />
+                        {t('prefillParams.classInfo.envModule')}
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'agent',
+                    label: (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <TeamOutlined />
+                        {t('prefillParams.classInfo.agent')}
+                      </span>
+                    ),
+                  },
+                ]}
               />
-              <div
-                style={{
-                  flex: 1,
-                  overflowY: 'auto',
-                  padding: '2px',
-                }}
-              >
-                {filteredClasses.length === 0 ? (
-                  <Empty description={t('prefillParams.noClasses')} style={{ marginTop: 20, padding: 10 }} />
-                ) : (
-                  filteredClasses.map((item) => {
-                    const key = `${item.kind}-${item.type}`;
-                    const testStatus = testStatuses[key] || 'idle';
-                    const testResult = testResults[key];
-                    const isCustom = item.info.is_custom;
-                    const isSelected = selectedClass?.type === item.type && selectedClass?.kind === item.kind;
+              <Segmented
+                value={listFilter}
+                onChange={(value) => setListFilter(value as ListFilter)}
+                options={[
+                  { value: 'all', label: t('prefillParams.filter.all') },
+                  { value: 'prefill', label: `${t('prefillParams.filter.prefill')} (${prefillInTab})` },
+                  { value: 'custom', label: `${t('prefillParams.filter.custom')} (${customInTab})` },
+                ]}
+              />
+            </Space>
+          }
+          right={
+            <Input
+              allowClear
+              prefix={<SearchOutlined style={{ color: palette.descriptionForeground }} />}
+              placeholder={t('prefillParams.searchPlaceholder')}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: narrow ? '100%' : 240 }}
+            />
+          }
+        />
+      </div>
 
-                    return (
-                      <Card
-                        key={key}
-                        size="small"
-                        style={{
-                          marginBottom: 6,
-                          cursor: 'pointer',
-                          borderRadius: 8,
-                          border: isSelected ? `2px solid ${palette.linkForeground}` : `1px solid ${palette.panelBorder}`,
-                          backgroundColor: isSelected ? palette.surfaceBackground : palette.surfaceMuted,
-                          boxShadow: isSelected ? `0 2px 6px ${palette.linkForeground}20` : 'none',
-                          transition: 'all 0.15s ease',
-                        }}
-                        styles={{ body: { padding: '8px 10px' } }}
-                        onClick={() => handleClassSelect(item)}
-                        hoverable
-                      >
-                        <Space direction="vertical" size={3} style={{ width: '100%' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Space size={4}>
-                              <Badge status={item.info.has_prefill ? 'success' : 'default'} />
-                              <Text strong style={{ fontSize: 12 }}>{item.type}</Text>
-                            </Space>
-                            <Tag color={isCustom ? 'blue' : 'default'} style={{ fontSize: 10, margin: 0, lineHeight: '14px' }}>
-                              {isCustom ? t('prefillParams.classInfo.custom') : t('prefillParams.classInfo.builtin')}
-                            </Tag>
-                          </div>
-                          <Text
-                            type="secondary"
-                            style={{ fontSize: 10, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                            title={item.info.class_name}
-                          >
-                            {item.info.class_name}
-                          </Text>
-
-                          {/* 自定义模块显示测试按钮和状态 */}
-                          {isCustom && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                              <Button
-                                size="small"
-                                icon={<PlayCircleOutlined />}
-                                loading={testStatus === 'testing'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTestModule(item);
-                                }}
-                              >
-                                {t('prefillParams.classInfo.test')}
-                              </Button>
-                              {getTestIcon(testStatus)}
-                            </div>
-                          )}
-
-                          {testStatus !== 'idle' && testResult && (
-                            <Alert
-                              message={testStatus === 'success' ? t('prefillParams.test.success') : t('prefillParams.test.failed')}
-                              description={
-                                <Text style={{ fontSize: 10, display: 'block', maxHeight: 40, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-                                  {testResult}
-                                </Text>
-                              }
-                              type={testStatus === 'success' ? 'success' : 'error'}
-                              showIcon
-                              style={{ padding: '3px 6px', fontSize: 10, marginTop: 3 }}
-                            />
-                          )}
-
-                          {item.info.has_prefill && (
-                            <Text type="success" style={{ fontSize: 10 }}>
-                              {t('prefillParams.classInfo.hasPrefill')}
-                            </Text>
-                          )}
-                        </Space>
-                      </Card>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* 右侧详情 */}
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                height: '100%',
-                overflow: 'hidden',
-              }}
-            >
-              <Card
-                style={{
-                  borderRadius: 10,
-                  border: `1px solid ${palette.panelBorder}`,
-                  background: palette.surfaceMuted,
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-                styles={{ body: { padding: '16px 20px', flex: 1, overflow: 'auto' } }}
-              >
-                {selectedClass ? (
-                  <div>
-                    <Space style={{ marginBottom: 10 }}>
-                      <Title level={5} style={{ margin: 0 }}>
-                        {selectedClass.type}
-                      </Title>
-                      <Badge status={selectedClass.info.has_prefill ? 'success' : 'default'} />
-                      <Tag color={selectedClass.info.is_custom ? 'blue' : 'default'}>
-                        {selectedClass.info.is_custom ? t('prefillParams.classInfo.custom') : t('prefillParams.classInfo.builtin')}
-                      </Tag>
-                    </Space>
-                    <Paragraph style={{ marginBottom: 6 }}>
-                      <Text strong>{t('prefillParams.classInfo.className')}: </Text>
-                      <Text code>{selectedClass.info.class_name}</Text>
-                    </Paragraph>
-                    <Paragraph style={{ marginBottom: 6 }}>
-                      <Text strong>{t('prefillParams.classInfo.kind')}: </Text>
-                      <Text>
-                        {selectedClass.kind === 'env_module'
-                          ? t('prefillParams.classInfo.envModule')
-                          : t('prefillParams.classInfo.agent')}
-                      </Text>
-                    </Paragraph>
-                    <div style={{ marginTop: 12 }}>
-                      <Text strong style={{ display: 'block', marginBottom: 6 }}>{t('prefillParams.classInfo.description')}</Text>
-                      <div style={{
-                        padding: 10,
-                        borderRadius: 6,
-                        background: palette.editorBackground,
-                        border: `1px solid ${palette.panelBorder}`,
-                      }}>
-                        <MarkdownRenderer content={selectedClass.info.description} isDark={isDark} />
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateColumns: narrow ? '1fr' : 'minmax(260px, 320px) minmax(0, 1fr)',
+          gridTemplateRows: narrow ? 'minmax(180px, 34%) minmax(0, 1fr)' : 'minmax(0, 1fr)',
+          gap: SKILL_UI.space.lg,
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <PageSection
+            palette={palette}
+            icon={<AppstoreOutlined />}
+            title={
+              activeTab === 'env_module'
+                ? t('prefillParams.classInfo.envModule')
+                : t('prefillParams.classInfo.agent')
+            }
+            subtitle={t('prefillParams.catalogHint')}
+            style={{
+              marginBottom: 0,
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 2 }}>
+              {filteredClasses.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('prefillParams.noClasses')} />
+              ) : (
+                filteredClasses.map((item) => {
+                  const key = moduleKey(item);
+                  const selected = selectedKey === key;
+                  const hasPrefill =
+                    item.info.has_prefill || Object.keys(item.params).length > 0;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleSelect(item)}
+                      style={{
+                        ...surfaceCardStyle(palette, {
+                          accent: selected ? palette.linkForeground : undefined,
+                        }),
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        marginBottom: SKILL_UI.space.sm,
+                        padding: '12px 14px',
+                        background: selected
+                          ? palette.activeSelectionBackground
+                          : palette.surfaceMuted,
+                        borderColor: selected ? palette.focusBorder : palette.panelBorder,
+                        color: palette.editorForeground,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text strong style={{ fontSize: 13, flex: 1, minWidth: 0 }} ellipsis>
+                          {item.type}
+                        </Text>
+                        {hasPrefill ? (
+                          <Tag color="success" style={{ margin: 0 }}>
+                            {t('prefillParams.filter.prefill')}
+                          </Tag>
+                        ) : null}
+                        {item.info.is_custom ? (
+                          <Tag color="blue" style={{ margin: 0 }}>
+                            {t('prefillParams.classInfo.custom')}
+                          </Tag>
+                        ) : null}
                       </div>
-                    </div>
-                    <div style={{ marginTop: 16 }}>
-                      <Title level={5}>{t('prefillParams.classInfo.prefillParams')}</Title>
-                      {Object.keys(selectedClass.params).length === 0 ? (
-                        <Alert message={t('prefillParams.classInfo.noPrefillParams')} type="info" showIcon style={{ marginTop: 6 }} />
-                      ) : (
-                        <div style={{ marginTop: 6 }}>
-                          <JsonViewer
-                            data={selectedClass.params}
-                            isDark={isDark}
-                            showCopy={true}
-                            showExpandCollapse={true}
-                            defaultExpandDepth={3}
-                            maxHeight="300px"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <Empty description={t('prefillParams.selectClass')} style={{ marginTop: 60 }} />
-                )}
-              </Card>
+                      <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.45 }}>
+                        {shortDescription(item.info.description || item.info.class_name)}
+                      </Text>
+                    </button>
+                  );
+                })
+              )}
             </div>
-          </div>
+          </PageSection>
+        </div>
+
+        <div
+          style={{
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingBottom: SKILL_UI.space.md,
+          }}
+        >
+          {!selectedClass ? (
+            <div style={{ ...sectionShellStyle(palette), marginBottom: 0 }}>
+              <Empty description={t('prefillParams.selectClass')} style={{ margin: '40px 0' }} />
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SKILL_UI.space.lg }}>
+              <PageSection
+                palette={palette}
+                icon={<CodeOutlined />}
+                title={selectedClass.type}
+                subtitle={selectedClass.info.class_name}
+                extra={
+                  <Space wrap size="small">
+                    <Tag>
+                      {selectedClass.info.is_custom
+                        ? t('prefillParams.classInfo.custom')
+                        : t('prefillParams.classInfo.builtin')}
+                    </Tag>
+                    {(selectedClass.info.has_prefill ||
+                      Object.keys(selectedClass.params).length > 0) && (
+                      <Tag color="success">{t('prefillParams.classInfo.hasPrefill')}</Tag>
+                    )}
+                    {editorDirty ? <Tag color="warning">{t('prefillParams.dirty')}</Tag> : null}
+                    <Tooltip title={t('prefillParams.copy.hint')}>
+                      <Button size="small" icon={<CopyOutlined />} onClick={() => void handleCopySnippet()}>
+                        {t('prefillParams.copy.button')}
+                      </Button>
+                    </Tooltip>
+                    {selectedClass.info.is_custom ? (
+                      <>
+                        <Button size="small" icon={<FolderOpenOutlined />} onClick={handleOpenSource}>
+                          {t('prefillParams.openSource')}
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={
+                            selectedTestStatus === 'testing' ? (
+                              <LoadingOutlined />
+                            ) : selectedTestStatus === 'success' ? (
+                              <CheckCircleOutlined />
+                            ) : selectedTestStatus === 'error' ? (
+                              <CloseCircleOutlined />
+                            ) : (
+                              <PlayCircleOutlined />
+                            )
+                          }
+                          loading={selectedTestStatus === 'testing'}
+                          onClick={handleTest}
+                        >
+                          {t('prefillParams.classInfo.test')}
+                        </Button>
+                      </>
+                    ) : null}
+                  </Space>
+                }
+                style={{ marginBottom: 0 }}
+              >
+                <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                  {t('prefillParams.classInfo.description')}
+                </Text>
+                <div
+                  style={{
+                    ...surfaceCardStyle(palette, { muted: true }),
+                    padding: 12,
+                  }}
+                >
+                  <MarkdownRenderer
+                    content={
+                      selectedClass.info.init_description?.trim() ||
+                      selectedClass.info.description ||
+                      ''
+                    }
+                    isDark={isDark}
+                  />
+                </div>
+              </PageSection>
+
+              <PageSection
+                palette={palette}
+                icon={<SaveOutlined />}
+                title={t('prefillParams.classInfo.prefillParams')}
+                subtitle={t('prefillParams.editorHint')}
+                extra={
+                  <Space size="small" wrap>
+                    <Button size="small" icon={<ClearOutlined />} onClick={handleClear} disabled={saving}>
+                      {t('prefillParams.clear')}
+                    </Button>
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<SaveOutlined />}
+                      loading={saving}
+                      disabled={!editorDirty}
+                      onClick={handleSave}
+                    >
+                      {t('prefillParams.save.button')}
+                    </Button>
+                  </Space>
+                }
+                style={{ marginBottom: 0 }}
+              >
+                <TextArea
+                  value={editorText}
+                  onChange={(e) => {
+                    setEditorText(e.target.value);
+                    setEditorDirty(true);
+                  }}
+                  autoSize={{ minRows: 8, maxRows: 20 }}
+                  spellCheck={false}
+                  style={{
+                    fontFamily:
+                      'var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace)',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    background: palette.inputBackground,
+                    color: palette.inputForeground,
+                    borderColor: palette.inputBorder,
+                  }}
+                />
+              </PageSection>
+
+              <PageSection
+                palette={palette}
+                icon={<CodeOutlined />}
+                title={t('prefillParams.snippet.title')}
+                subtitle={t('prefillParams.snippet.hint')}
+                style={{ marginBottom: 0 }}
+              >
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: 12,
+                    borderRadius: SKILL_UI.radius.sm,
+                    background: palette.codeBlockBackground,
+                    border: `1px solid ${palette.panelBorder}`,
+                    fontSize: 11,
+                    lineHeight: 1.45,
+                    overflow: 'auto',
+                    maxHeight: 200,
+                  }}
+                >
+                  {(() => {
+                    const parsed = parseParamsJson(editorText);
+                    return buildInitSnippet(
+                      selectedClass,
+                      parsed.ok ? parsed.value : selectedClass.params
+                    );
+                  })()}
+                </pre>
+              </PageSection>
+
+              {selectedClass.info.is_custom &&
+              selectedTestStatus !== 'idle' &&
+              selectedTestResult ? (
+                <Alert
+                  type={selectedTestStatus === 'success' ? 'success' : 'error'}
+                  showIcon
+                  message={
+                    selectedTestStatus === 'success'
+                      ? t('prefillParams.test.success')
+                      : t('prefillParams.test.failed')
+                  }
+                  description={
+                    <Text style={{ fontSize: 11, whiteSpace: 'pre-wrap' }}>{selectedTestResult}</Text>
+                  }
+                />
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
-    </ConfigProvider>
+    </>,
+    { mode: 'split' }
   );
+
 };

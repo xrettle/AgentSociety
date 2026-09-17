@@ -130,6 +130,23 @@ export class PrefillParamsViewProvider {
           case 'openPrefillParamsJson':
             await this._openPrefillParamsJson();
             break;
+          case 'saveClassPrefill':
+            await this._handleSaveClassPrefill(message);
+            break;
+          case 'openCustomModuleSource':
+            await this._handleOpenCustomModuleSource(message);
+            break;
+          case 'startBackend':
+            await this._handleStartBackend();
+            break;
+          case 'openConfigPage':
+            await vscode.commands.executeCommand('aiSocialScientist.openConfigPage');
+            break;
+          case 'copyText':
+            if (typeof message.text === 'string' && message.text) {
+              await vscode.env.clipboard.writeText(message.text);
+            }
+            break;
         }
       },
       null,
@@ -140,6 +157,34 @@ export class PrefillParamsViewProvider {
     this._handleRequestData();
   }
 
+  private _prefillParamsPath(workspaceRoot: string): string {
+    return path.join(workspaceRoot, '.agentsociety', 'prefill_params.json');
+  }
+
+  private _readPrefillParamsFile(workspaceRoot: string): {
+    version: string;
+    env_modules: Record<string, Record<string, unknown>>;
+    agents: Record<string, Record<string, unknown>>;
+  } {
+    const prefillPath = this._prefillParamsPath(workspaceRoot);
+    const empty = { version: '1.0', env_modules: {}, agents: {} };
+    if (!fs.existsSync(prefillPath)) {
+      return empty;
+    }
+    const raw = JSON.parse(fs.readFileSync(prefillPath, 'utf-8')) as Record<string, unknown>;
+    return {
+      version: typeof raw.version === 'string' ? raw.version : '1.0',
+      env_modules:
+        raw.env_modules && typeof raw.env_modules === 'object' && !Array.isArray(raw.env_modules)
+          ? (raw.env_modules as Record<string, Record<string, unknown>>)
+          : {},
+      agents:
+        raw.agents && typeof raw.agents === 'object' && !Array.isArray(raw.agents)
+          ? (raw.agents as Record<string, Record<string, unknown>>)
+          : {},
+    };
+  }
+
   private async _openPrefillParamsJson(): Promise<void> {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
@@ -147,24 +192,149 @@ export class PrefillParamsViewProvider {
       return;
     }
     const agentsocietyDir = path.join(workspaceFolder.uri.fsPath, '.agentsociety');
-    const prefillPath = path.join(agentsocietyDir, 'prefill_params.json');
+    const prefillPath = this._prefillParamsPath(workspaceFolder.uri.fsPath);
     try {
       if (!fs.existsSync(agentsocietyDir)) {
         fs.mkdirSync(agentsocietyDir, { recursive: true });
       }
       if (!fs.existsSync(prefillPath)) {
-        const template = {
-          version: '1.0',
-          env_modules: {},
-          agents: {},
-        };
-        fs.writeFileSync(prefillPath, `${JSON.stringify(template, null, 2)}\n`, 'utf-8');
+        fs.writeFileSync(
+          prefillPath,
+          `${JSON.stringify({ version: '1.0', env_modules: {}, agents: {} }, null, 2)}\n`,
+          'utf-8'
+        );
       }
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(prefillPath));
       await vscode.window.showTextDocument(doc, { preview: false });
     } catch (e: any) {
       vscode.window.showErrorMessage(e?.message || String(e));
     }
+  }
+
+  private async _handleSaveClassPrefill(message: {
+    kind?: string;
+    type?: string;
+    params?: Record<string, unknown>;
+  }): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      this._postToWebview({
+        command: 'saveResult',
+        success: false,
+        error: localize('prefillParamsViewProvider.noWorkspace'),
+      });
+      return;
+    }
+    const kind = message.kind === 'agent' ? 'agent' : message.kind === 'env_module' ? 'env_module' : '';
+    const typeName = typeof message.type === 'string' ? message.type.trim() : '';
+    if (!kind || !typeName) {
+      this._postToWebview({
+        command: 'saveResult',
+        success: false,
+        error: localize('prefillParams.save.invalidTarget'),
+      });
+      return;
+    }
+    const params =
+      message.params && typeof message.params === 'object' && !Array.isArray(message.params)
+        ? message.params
+        : {};
+
+    try {
+      const agentsocietyDir = path.join(workspaceFolder.uri.fsPath, '.agentsociety');
+      if (!fs.existsSync(agentsocietyDir)) {
+        fs.mkdirSync(agentsocietyDir, { recursive: true });
+      }
+      const data = this._readPrefillParamsFile(workspaceFolder.uri.fsPath);
+      const bucket = kind === 'env_module' ? data.env_modules : data.agents;
+      if (Object.keys(params).length === 0) {
+        delete bucket[typeName];
+      } else {
+        bucket[typeName] = params;
+      }
+      const prefillPath = this._prefillParamsPath(workspaceFolder.uri.fsPath);
+      fs.writeFileSync(prefillPath, `${JSON.stringify(data, null, 2)}\n`, 'utf-8');
+      this._postToWebview({
+        command: 'saveResult',
+        success: true,
+        kind,
+        type: typeName,
+        params,
+      });
+    } catch (e: any) {
+      this._postToWebview({
+        command: 'saveResult',
+        success: false,
+        kind,
+        type: typeName,
+        error: e?.message || String(e),
+      });
+    }
+  }
+
+  private async _handleOpenCustomModuleSource(message: {
+    kind?: string;
+    className?: string;
+  }): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showErrorMessage(localize('prefillParamsViewProvider.noWorkspace'));
+      return;
+    }
+    const className = typeof message.className === 'string' ? message.className.trim() : '';
+    if (!className) {
+      return;
+    }
+    const kindDir = message.kind === 'agent' ? 'agents' : 'envs';
+    const root = path.join(workspaceFolder.uri.fsPath, 'custom', kindDir);
+    const hit = this._findPythonFileDefiningClass(root, className);
+    if (!hit) {
+      vscode.window.showWarningMessage(
+        localize('prefillParams.openSource.notFound', className)
+      );
+      return;
+    }
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(hit));
+    await vscode.window.showTextDocument(doc, { preview: false });
+  }
+
+  private _findPythonFileDefiningClass(rootDir: string, className: string): string | undefined {
+    if (!fs.existsSync(rootDir)) {
+      return undefined;
+    }
+    const stack = [rootDir];
+    const classRe = new RegExp(`^class\\s+${className}\\b`, 'm');
+    while (stack.length) {
+      const current = stack.pop()!;
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === 'examples' || entry.name === '__pycache__') {
+            continue;
+          }
+          stack.push(full);
+          continue;
+        }
+        if (!entry.isFile() || !entry.name.endsWith('.py') || entry.name.startsWith('__')) {
+          continue;
+        }
+        try {
+          const text = fs.readFileSync(full, 'utf-8');
+          if (classRe.test(text)) {
+            return full;
+          }
+        } catch {
+          /* skip unreadable */
+        }
+      }
+    }
+    return undefined;
   }
 
   public revealAndRefresh(): void {
@@ -184,6 +354,7 @@ export class PrefillParamsViewProvider {
       this._postToWebview({
         command: 'error',
         error: localize('prefillParamsViewProvider.noWorkspace'),
+        backendOffline: false,
       });
       return;
     }
@@ -198,9 +369,38 @@ export class PrefillParamsViewProvider {
         prefillParams: prefillResponse.data,
       });
     } catch (error: any) {
+      const errorText = error?.message || localize('prefillParams.errorMessages.loadFailed');
+      const backendOffline =
+        /未连接|not connected|ECONNREFUSED|Failed to fetch|fetch failed|NetworkError|后端服务响应超时/i.test(
+          String(errorText)
+        );
       this._postToWebview({
         command: 'error',
-        error: error.message || localize('prefillParams.errorMessages.loadFailed'),
+        error: errorText,
+        backendOffline,
+      });
+    }
+  }
+
+  private async _handleStartBackend(): Promise<void> {
+    try {
+      const started = await vscode.commands.executeCommand<boolean>(
+        'aiSocialScientist.startBackend',
+        { silent: true }
+      );
+      this._postToWebview({
+        command: 'startBackendResult',
+        success: started === true,
+        error: started === true ? undefined : localize('extension.backend.startFailed'),
+      });
+      if (started === true) {
+        await this._handleRequestData();
+      }
+    } catch (error: any) {
+      this._postToWebview({
+        command: 'startBackendResult',
+        success: false,
+        error: error?.message || localize('extension.backend.startFailed'),
       });
     }
   }

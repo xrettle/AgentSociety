@@ -38,10 +38,12 @@ import { ConfigHealthStatusBar } from './services/configHealthStatus';
 import { formatDurationMs } from './shared/formatDuration';
 import { disposeAllSharedOutputChannels } from './shared/outputChannels';
 import { WorkspaceExportManager } from './services/workspaceExportManager';
+import { WorkspaceImportManager } from './services/workspaceImportManager';
 import { filePathToAtReference } from './atReference';
 import { AIChatInvoker } from './aiChatInvoker';
 import { openClaudeCodeConfig } from './claudeCodeConfigProvider';
-import { LiteratureIndexViewer } from './literatureIndexViewer';
+import { registerLiteratureLibraryCommands } from './literatureLibraryCommands';
+import { openPdfPreview } from './openWorkspaceFile';
 import { StepsViewer } from './stepsViewer';
 
 import { PidStatusViewer } from './pidStatusViewer';
@@ -89,6 +91,7 @@ function activateExtension(context: vscode.ExtensionContext) {
   ConfigPageViewProvider.attachGatewayManager(aiCliGatewayManager);
   ConfigPageViewProvider.attachConfigHealthStatus(configHealthStatusBar);
   const workspaceExportManager = new WorkspaceExportManager();
+  const workspaceImportManager = new WorkspaceImportManager();
   context.subscriptions.push({
     dispose: () => {
       if (backendManager) {
@@ -103,6 +106,7 @@ function activateExtension(context: vscode.ExtensionContext) {
   });
   void restoreAiCliGatewayIfEnabled();
   context.subscriptions.push(workspaceExportManager);
+  context.subscriptions.push(workspaceImportManager);
 
   // 首次启动或配置未完成时，打开配置页；否则按设置决定是否自动启动后端
   const config = vscode.workspace.getConfiguration('aiSocialScientist');
@@ -208,6 +212,13 @@ function activateExtension(context: vscode.ExtensionContext) {
     'aiSocialScientist.exportWorkspaceZip',
     async () => {
       await workspaceExportManager.exportWorkspaceZip();
+    }
+  );
+
+  const importWorkspaceZipCommand = vscode.commands.registerCommand(
+    'aiSocialScientist.importWorkspaceZip',
+    async () => {
+      await workspaceImportManager.importWorkspaceZip();
     }
   );
 
@@ -934,27 +945,30 @@ function activateExtension(context: vscode.ExtensionContext) {
     }
   );
 
-  // 文献索引预览命令
-  const viewLiteratureIndexCommand = vscode.commands.registerCommand(
-    'aiSocialScientist.viewLiteratureIndex',
-    async (item: any) => {
-      if (!item || !item.filePath) {
-        vscode.window.showErrorMessage(localize('extension.noLiteratureIndexPath'));
+  // 文献库：打开索引 / 同步完善 / Bib 导入导出（插件侧，不经 MCP）
+  const literatureLibraryCommands = registerLiteratureLibraryCommands(context);
+
+  const openPdfPreviewCommand = vscode.commands.registerCommand(
+    'aiSocialScientist.openPdfPreview',
+    async (filePathOrItem?: string | { filePath?: string }) => {
+      const filePath =
+        typeof filePathOrItem === 'string'
+          ? filePathOrItem
+          : filePathOrItem?.filePath;
+      if (!filePath || !fs.existsSync(filePath)) {
+        vscode.window.showErrorMessage(
+          vscode.env.language.startsWith('zh') ? '找不到 PDF 文件。' : 'PDF file not found.'
+        );
         return;
       }
-
-      const filePath = item.filePath;
-
-      // 检查文件是否存在
-      if (!fs.existsSync(filePath)) {
-        vscode.window.showErrorMessage(localize('extension.literatureIndex.missing'));
-        return;
-      }
-
       try {
-        await LiteratureIndexViewer.show(context, filePath);
+        await openPdfPreview(filePath);
       } catch (error: any) {
-        vscode.window.showErrorMessage(localize('extension.literatureIndex.openFailed'));
+        vscode.window.showErrorMessage(
+          vscode.env.language.startsWith('zh')
+            ? `无法预览 PDF: ${error.message || error}`
+            : `Could not preview PDF: ${error.message || error}`
+        );
       }
     }
   );
@@ -1183,8 +1197,11 @@ function activateExtension(context: vscode.ExtensionContext) {
     configureEnvCommand,
     fixWorkspaceCommand,
     exportWorkspaceZipCommand,
+    importWorkspaceZipCommand,
     deleteLiteratureCommand,
     renameLiteratureCommand,
+    ...literatureLibraryCommands,
+    openPdfPreviewCommand,
     openMarkdownInEditorCommand,
     openHtmlReportCommand,
     openTreeFileInEditorCommand,
@@ -1214,7 +1231,6 @@ function activateExtension(context: vscode.ExtensionContext) {
     snapshotCurrentSkillCommand,
     editSkillPresetsCommand,
     formatJsonCommand,
-    viewLiteratureIndexCommand,
     viewStepsYamlCommand,
     viewPidStatusCommand,
     viewJsonFileCommand,

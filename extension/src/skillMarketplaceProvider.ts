@@ -42,12 +42,31 @@ import {
 import {
   isValidGitBranch,
   isValidGitRepoUrl,
+  isValidSkillId,
+  isSafeSkillRelativePath,
+  isAllowedSkillSourceBaseUrl,
+  isPathSafe,
+  isUnderDir,
   canReadSkillDir,
 } from './skillMarketplace/security';
 import { ConfigPageViewProvider } from './configPageViewProvider';
 import { McpServerManager, MCP_SERVER_PRESETS, type McpServerInput } from './services/mcpServerManager';
 import { probeHttpMcpServer } from './services/mcpClient';
 import { appendSharedOutputLine, OUTPUT_CHANNEL_MAIN } from './shared/outputChannels';
+
+function hostFromMaybeUrl(value: string | undefined): string | undefined {
+  const raw = (value ?? '').trim();
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const withProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) ? raw : `https://${raw}`;
+    const host = new URL(withProtocol).hostname.toLowerCase().replace(/^www\./, '');
+    return host || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const PANEL_VIEW_TYPE = 'aiSocialScientist.skillMarketplace';
 
@@ -403,6 +422,7 @@ export class SkillMarketplacePanel {
           name: s.name,
           description: s.description,
           source: s.source,
+          source_label: s.source_label,
           path: s.path,
           has_skill_md: s.has_skill_md,
           script: s.script,
@@ -420,11 +440,11 @@ export class SkillMarketplacePanel {
     }
   }
 
-  private async _scanAgentSkills(): Promise<void> {
+  private async _scanAgentSkills(options?: { quiet?: boolean }): Promise<void> {
     try {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       const response = await this._apiClient.scanAgentSkills(workspaceFolder?.uri.fsPath);
-      if (response.success) {
+      if (response.success && !options?.quiet) {
         vscode.window.showInformationMessage(response.message);
       }
       await this._loadAgentSkills();
@@ -969,6 +989,32 @@ export class SkillMarketplacePanel {
 
   // ============ Marketplace ============
 
+  private _configuredGitHosts(): string[] {
+    const agentRaw = vscode.workspace.getConfiguration('agentSkills').get<unknown>('skillSources');
+    const claudeRaw = vscode.workspace.getConfiguration('agentSkills').get<unknown>('claudeSkillSources');
+    const agentSources = normalizeSkillSources(Array.isArray(agentRaw) ? agentRaw : []);
+    const claudeSources = normalizeSkillSources(Array.isArray(claudeRaw) ? claudeRaw : []);
+    const hosts = new Set<string>();
+    for (const source of [...agentSources, ...claudeSources]) {
+      if (source.baseUrl && !isAllowedSkillSourceBaseUrl(source.baseUrl)) {
+        continue;
+      }
+      const fromBase = hostFromMaybeUrl(source.baseUrl);
+      if (fromBase) {
+        hosts.add(fromBase);
+      }
+      try {
+        const fromRepo = hostFromMaybeUrl(getPlatformAdapter(source.platform).getRepoUrl(source));
+        if (fromRepo) {
+          hosts.add(fromRepo);
+        }
+      } catch {
+        // ignore malformed source entries
+      }
+    }
+    return [...hosts];
+  }
+
   private async _loadMarketplaceSkills(): Promise<void> {
     const agentRaw = vscode.workspace.getConfiguration('agentSkills').get<unknown>('skillSources');
     const claudeRaw = vscode.workspace.getConfiguration('agentSkills').get<unknown>('claudeSkillSources');
@@ -996,6 +1042,14 @@ export class SkillMarketplacePanel {
 
       for (const source of sources) {
         const label = `${source.owner}/${source.repo} (${source.platform})`;
+        if (source.baseUrl && !isAllowedSkillSourceBaseUrl(source.baseUrl)) {
+          errors.push({
+            code: 'GITHUB_SOURCE_FAILED',
+            source: label,
+            message: `Disallowed baseUrl for ${label}`,
+          });
+          continue;
+        }
         try {
           const skills = await this._fetchSkillsFromSource(source, installTarget);
           remote.push(...skills);
@@ -1200,11 +1254,23 @@ export class SkillMarketplacePanel {
         throw new Error('Open a workspace folder before installing skills.');
       }
 
+      if (!isValidSkillId(skill.id)) {
+        throw new Error(`Invalid skill id: ${skill.id}`);
+      }
+      const skillRelPath = (skill.path || '.').trim() || '.';
+      if (!isSafeSkillRelativePath(skillRelPath)) {
+        throw new Error(`Invalid skill path: ${skill.path}`);
+      }
+
       await this._postMessage({ type: 'installProgress', payload: { skillId: skill.id, status: 'downloading' } });
 
-      const targetDir = installTarget === 'agent'
-        ? path.join(workspaceFolder.uri.fsPath, 'custom', 'skills', skill.id)
-        : path.join(workspaceFolder.uri.fsPath, '.claude', 'skills', skill.id);
+      const skillsRoot = installTarget === 'agent'
+        ? path.join(workspaceFolder.uri.fsPath, 'custom', 'skills')
+        : path.join(workspaceFolder.uri.fsPath, '.claude', 'skills');
+      const targetDir = path.join(skillsRoot, skill.id);
+      if (!isUnderDir(path.resolve(targetDir), path.resolve(skillsRoot))) {
+        throw new Error(`Install path escapes skills directory: ${skill.id}`);
+      }
 
       if (skill.id.startsWith('agentsociety-')) {
         throw new Error(`Built-in skill "${skill.id}" is managed by version presets; do not overwrite from marketplace.`);
@@ -1214,18 +1280,18 @@ export class SkillMarketplacePanel {
       if (!isValidGitBranch(branch)) {
         throw new Error(`Invalid branch name: ${branch}`);
       }
-      if (!isValidGitRepoUrl(skill.repo)) {
+      if (!isValidGitRepoUrl(skill.repo, this._configuredGitHosts())) {
         throw new Error(`Invalid or disallowed repository URL: ${skill.repo}`);
       }
 
       if (fs.existsSync(targetDir)) {
         fs.rmSync(targetDir, { recursive: true, force: true });
       }
-      fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+      fs.mkdirSync(skillsRoot, { recursive: true });
 
       await this._postMessage({ type: 'installProgress', payload: { skillId: skill.id, status: 'installing' } });
 
-      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `skill-install-${skill.id}-`));
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-install-'));
       const cloneResult = spawnSync('git', ['clone', '--depth', '1', '--branch', branch, skill.repo, tempDir], {
         encoding: 'utf-8',
         timeout: 120000
@@ -1234,11 +1300,16 @@ export class SkillMarketplacePanel {
         throw new Error(`git clone failed: ${cloneResult.stderr || 'unknown error'}`);
       }
 
-      const sourcePath = path.join(tempDir, skill.path);
-      if (fs.existsSync(sourcePath) && skill.path !== '.' && skill.path !== '') {
+      const sourcePath = skillRelPath === '.' || skillRelPath === ''
+        ? tempDir
+        : path.join(tempDir, skillRelPath);
+      if (!isPathSafe(sourcePath, tempDir)) {
+        throw new Error(`Skill path escapes clone directory: ${skill.path}`);
+      }
+      if (fs.existsSync(sourcePath) && skillRelPath !== '.' && skillRelPath !== '') {
         fs.cpSync(sourcePath, targetDir, { recursive: true });
-      } else if (skill.path === '.' || skill.path === '' || skill.path === skill.id) {
-        // Copy skill contents without the .git directory from a shallow clone.
+      } else if (skillRelPath === '.' || skillRelPath === '' || skillRelPath === skill.id) {
+        fs.mkdirSync(targetDir, { recursive: true });
         for (const entry of fs.readdirSync(tempDir, { withFileTypes: true })) {
           if (entry.name === '.git') {
             continue;
@@ -1254,7 +1325,7 @@ export class SkillMarketplacePanel {
         payload: { skillId: skill.id, name: skill.name, skillType: installTarget }
       });
       if (installTarget === 'agent') {
-        await this._loadAgentSkills();
+        await this._scanAgentSkills({ quiet: true });
       } else {
         await this._loadClaudeCodeSkills();
       }
@@ -1295,7 +1366,7 @@ export class SkillMarketplacePanel {
       if (response.success) {
         vscode.window.showInformationMessage(response.message);
         await this._postMessage({ type: 'agentSkillImported', payload: { name: path.basename(uris[0].fsPath) } });
-        await this._loadAgentSkills();
+        await this._scanAgentSkills({ quiet: true });
       }
     } catch (error: any) {
       this._log(`[SkillManagement] Failed to import skill: ${error.message}`);
@@ -1386,13 +1457,24 @@ export class SkillMarketplacePanel {
           branch: s.branch?.trim() || 'main',
         };
         if (s.skillsPath?.trim()) {
-          item.skillsPath = s.skillsPath.trim().replace(/^\/+|\/+$/g, '');
+          const skillsPath = s.skillsPath.trim().replace(/^\/+|\/+$/g, '');
+          if (!isSafeSkillRelativePath(skillsPath)) {
+            throw new Error(`Invalid skillsPath: ${s.skillsPath}`);
+          }
+          item.skillsPath = skillsPath;
         }
         if (s.platform && s.platform !== 'github') {
           item.platform = s.platform;
         }
         if (s.baseUrl?.trim()) {
-          item.baseUrl = s.baseUrl.trim();
+          const baseUrl = s.baseUrl.trim().replace(/\/+$/, '');
+          if (!isAllowedSkillSourceBaseUrl(baseUrl)) {
+            throw new Error(`Invalid or disallowed baseUrl: ${s.baseUrl}`);
+          }
+          item.baseUrl = baseUrl;
+        }
+        if (!isValidGitBranch(item.branch)) {
+          throw new Error(`Invalid branch: ${item.branch}`);
         }
         normalized.push(item);
       }
@@ -1587,10 +1669,21 @@ export class SkillMarketplacePanel {
         throw new Error('No workspace folder opened');
       }
 
-      const localRoot =
-        skill.installTarget === 'agent'
-          ? path.join(workspaceFolder.uri.fsPath, 'custom', 'skills', skill.id)
-          : path.join(workspaceFolder.uri.fsPath, '.claude', 'skills', skill.id);
+      if (!isValidSkillId(skill.id)) {
+        throw new Error(`Invalid skill id: ${skill.id}`);
+      }
+      const skillRelPath = (skill.path || '.').trim() || '.';
+      if (!isSafeSkillRelativePath(skillRelPath)) {
+        throw new Error(`Invalid skill path: ${skill.path}`);
+      }
+
+      const skillsRoot = skill.installTarget === 'agent'
+        ? path.join(workspaceFolder.uri.fsPath, 'custom', 'skills')
+        : path.join(workspaceFolder.uri.fsPath, '.claude', 'skills');
+      const localRoot = path.join(skillsRoot, skill.id);
+      if (!isUnderDir(path.resolve(localRoot), path.resolve(skillsRoot))) {
+        throw new Error(`Local skill path escapes skills directory: ${skill.id}`);
+      }
 
       if (!fs.existsSync(localRoot)) {
         throw new Error(`Local skill not found: ${localRoot}`);
@@ -1600,11 +1693,11 @@ export class SkillMarketplacePanel {
       if (!isValidGitBranch(branch)) {
         throw new Error(`Invalid branch name: ${branch}`);
       }
-      if (!isValidGitRepoUrl(skill.repo)) {
+      if (!isValidGitRepoUrl(skill.repo, this._configuredGitHosts())) {
         throw new Error(`Invalid or disallowed repository URL: ${skill.repo}`);
       }
 
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `skill-diff-${skill.id}-`));
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-diff-'));
       const cloneResult = spawnSync('git', ['clone', '--depth', '1', '--branch', branch, skill.repo, tempDir], {
         encoding: 'utf-8',
         timeout: 120000,
@@ -1614,8 +1707,10 @@ export class SkillMarketplacePanel {
         throw new Error(`git clone failed: ${cloneResult.stderr || 'unknown error'}`);
       }
 
-      const remoteRoot = path.join(tempDir, skill.path);
-      if (!fs.existsSync(remoteRoot)) {
+      const remoteRoot = skillRelPath === '.' || skillRelPath === ''
+        ? tempDir
+        : path.join(tempDir, skillRelPath);
+      if (!isPathSafe(remoteRoot, tempDir) || !fs.existsSync(remoteRoot)) {
         fs.rmSync(tempDir, { recursive: true, force: true });
         throw new Error(`Skill path not found: ${remoteRoot}`);
       }

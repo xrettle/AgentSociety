@@ -1,118 +1,90 @@
-"""
-Public Goods Game Example
+"""Public Goods Game example using contrib PublicGoodsAgent + PublicGoodsEnv.
 
-A classic economic game where agents decide how much to contribute
-to a public good that benefits everyone.
-
-This example uses AgentSociety to coordinate multiple agents.
+Requires LLM credentials (``AGENTSOCIETY_LLM_API_KEY`` / ``AGENTSOCIETY_LLM_API_BASE``).
 """
+
+from __future__ import annotations
 
 import os
 
-# Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import asyncio
-import re
 from datetime import datetime
 from pathlib import Path
-from agentsociety2 import PersonAgent
+
+from agentsociety2.contrib.env import PublicGoodsEnv
 from agentsociety2.env import CodeGenRouter
-from agentsociety2.contrib.env import PublicGoodsGame
-from agentsociety2.storage import ReplayWriter
 from agentsociety2.society import AgentSociety
 
+NUM_ROUNDS = 3
+NUM_AGENTS = 4
+INITIAL_ENDOWMENT = 20
+PUBLIC_POOL_MULTIPLIER = 1.6
 
-async def main():
-    writer = ReplayWriter(Path("public_goods.db"))
-    await writer.init()
 
-    print("=== Public Goods Game ===\n")
-    print("Each agent has an endowment they can contribute to a public good.")
-    print("Total contributions are multiplied and distributed equally.\n")
-
-    # Create the game
-    game = PublicGoodsGame(
-        endowment=100,           # Each agent starts with $100
-        contribution_factor=1.5,  # Total is multiplied by 1.5
-    )
-
-    # Create 4 agents with different personalities
-    agents = []
-    profiles = [
-        {"name": "Alice", "personality": "altruistic and community-minded"},
-        {"name": "Bob", "personality": "self-interested and rational"},
-        {"name": "Charlie", "personality": "cautious and skeptical"},
-        {"name": "Diana", "personality": "optimistic and trusting"},
+async def main() -> None:
+    run_dir = Path("run_public_goods")
+    personalities = [
+        "altruistic and community-minded",
+        "self-interested and rational",
+        "cautious and skeptical",
+        "optimistic and trusting",
+    ]
+    names = ["Alice", "Bob", "Charlie", "Diana"]
+    agent_specs = [
+        {
+            "id": i + 1,
+            "profile": {
+                "id": i + 1,
+                "name": names[i],
+                "personality": personalities[i],
+            },
+            "config": {
+                "num_rounds": NUM_ROUNDS,
+                "num_agents": NUM_AGENTS,
+                "initial_endowment": INITIAL_ENDOWMENT,
+                "public_pool_multiplier": PUBLIC_POOL_MULTIPLIER,
+            },
+        }
+        for i in range(NUM_AGENTS)
     ]
 
-    for i, profile in enumerate(profiles, 1):
-        agent = PersonAgent(id=i, profile=profile)
-        agents.append(agent)
-
-    # Create the society
+    env_module = PublicGoodsEnv(
+        num_agents=NUM_AGENTS,
+        initial_endowment=INITIAL_ENDOWMENT,
+        public_pool_multiplier=PUBLIC_POOL_MULTIPLIER,
+    )
     society = AgentSociety(
-        agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
-        agent_class_name="PersonAgent",
-        env_router=CodeGenRouter(env_modules=[game]),
+        agent_specs=agent_specs,
+        agent_class_name="PublicGoodsAgent",
+        env_router=CodeGenRouter(env_modules=[env_module]),
         start_t=datetime.now(),
+        run_dir=run_dir,
         enable_replay=True,
     )
     await society.init()
 
-    # Play 3 rounds
-    for round_num in range(1, 4):
-        print(f"\n--- Round {round_num} ---")
+    print("=== Public Goods Game ===\n")
+    print(f"Running {NUM_ROUNDS} rounds with {NUM_AGENTS} agents...\n")
 
-        contributions = {}
-        for agent in agents:
-            # Get contribution decision through society
-            decision = await society.ask(
-                f"You are {agent._name}. You have ${game.endowment}. How much will you contribute "
-                f"to the public good (0-${game.endowment})? The total contributions "
-                f"will be multiplied by {game.contribution_factor} and divided equally "
-                f"among all {len(agents)} players. Explain your reasoning."
+    for round_num in range(1, NUM_ROUNDS + 1):
+        print(f"--- Round {round_num}/{NUM_ROUNDS} ---")
+        await society.step(tick=1)
+        if env_module.round_history:
+            latest = env_module.round_history[-1]
+            print(
+                f"  total={latest.get('total_contribution')} "
+                f"gain_per_agent={latest.get('gain_per_agent')} "
+                f"contributions={latest.get('contributions')}"
             )
-
-            # Extract contribution amount (simple parsing)
-            match = re.search(r'\$?(\d+)', decision)
-            if match:
-                amount = int(match.group(1))
-                amount = min(max(amount, 0), game.endowment)  # Clamp to valid range
-            else:
-                amount = game.endowment // 2  # Default to half
-
-            contributions[agent._id] = amount
-            print(f"{agent._name}: contributes ${amount}")
-            print(f"  Reasoning: {decision[:100]}...")
-
-        # Calculate results
-        total = sum(contributions.values())
-        multiplied = int(total * game.contribution_factor)
-        each_return = multiplied // len(agents)
-
-        print("Round Results:")
-        print(f"  Total contributions: ${total}")
-        print(f"  After multiplier (${game.contribution_factor}x): ${multiplied}")
-        print(f"  Each player receives: ${each_return}\n")
-
-        # Payoffs
-        for agent in agents:
-            contribution = contributions[agent._id]
-            payoff = (game.endowment - contribution) + each_return
-            print(f"  {agent._name}: ${game.endowment} - ${contribution} + ${each_return} = ${payoff}")
-
-    # Final reflection
-    print("\n=== Final Reflection ===\n")
-    final_thoughts = await society.ask(
-        "The game is over. Reflect on the group's behavior. "
-        "Did the group cooperate enough? What could have been done differently?"
-    )
-    print(f"Final thoughts: {final_thoughts}\n")
+        else:
+            print("  (no round settled yet — check agent step logs)")
 
     await society.close()
-    print("Game data saved to: public_goods.db")
+    print(f"\nDone. Results under {run_dir}")
+    print(f"Rounds recorded: {len(env_module.round_history)}")
 
 
 if __name__ == "__main__":

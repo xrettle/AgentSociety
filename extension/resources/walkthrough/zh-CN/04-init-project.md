@@ -29,7 +29,8 @@ workspace-root/
 ├── custom/
 ├── .claude/skills/
 ├── hypothesis_<id>/     # 后续由工作流创建
-├── analysis/            # 使用分析技能时创建
+├── presentation/        # 分析报告与资源
+├── synthesis/           # 跨假设综合结果
 └── paper/               # 使用 paper-toolkit 时创建
 ```
 

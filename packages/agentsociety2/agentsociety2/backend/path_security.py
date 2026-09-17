@@ -9,6 +9,11 @@ from pathlib import Path
 from fastapi import HTTPException
 
 _SAFE_SEGMENT_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+# Allow normal segments and single-dot hidden names (e.g. `.agentsociety`).
+# Reject `.` / `..` and any segment that is only dots.
+_SAFE_PATH_PART_RE = re.compile(
+    r"^(?:[A-Za-z0-9_]|[.][A-Za-z0-9_])(?:[A-Za-z0-9_-]|[.][A-Za-z0-9_-])*$"
+)
 _ARTIFACT_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*\.md$")
 
 
@@ -46,31 +51,22 @@ def _ensure_under(
     *,
     detail: str = "Path escapes allowed directory",
 ) -> Path:
-    """Resolve ``candidate`` and require it stays under ``base``.
+    """Resolve ``candidate``, require it stays under ``base``, and rebuild it.
 
-    Rebuilds the path from ``base`` + relative segments so the returned value
-    is not a tainted user string (CodeQL path-injection sanitizer pattern).
+    Each remaining path segment must match ``_SAFE_PATH_PART_RE`` so the
+    returned path is reconstructed from allowlisted tokens, not the raw input.
     """
-    base_resolved = os.path.realpath(os.fspath(base))
-    target_resolved = os.path.realpath(os.fspath(candidate))
-    try:
-        relative = os.path.relpath(target_resolved, base_resolved)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=detail) from None
-    if relative == os.pardir or relative.startswith(f"{os.pardir}{os.sep}"):
-        raise HTTPException(status_code=400, detail=detail)
-    if os.path.isabs(relative):
+    base_resolved = Path(os.path.realpath(os.fspath(base)))
+    target_resolved = Path(os.path.realpath(os.fspath(candidate)))
+    if not target_resolved.is_relative_to(base_resolved):
         raise HTTPException(status_code=400, detail=detail)
 
     safe = base_resolved
-    if relative not in (os.curdir, ""):
-        for part in relative.split(os.sep):
-            if part in ("", os.curdir):
-                continue
-            if part == os.pardir:
-                raise HTTPException(status_code=400, detail=detail)
-            safe = os.path.join(safe, part)
-    return Path(safe)
+    for part in target_resolved.relative_to(base_resolved).parts:
+        if not _SAFE_PATH_PART_RE.fullmatch(part):
+            raise HTTPException(status_code=400, detail=detail)
+        safe = safe / part
+    return safe
 
 
 def resolve_under_root(root: Path, *parts: str) -> Path:
@@ -160,9 +156,13 @@ def resolve_artifact_path(
 
 
 def require_safe_skill_name(name: str) -> str:
-    if not name or "/" in name or "\\" in name or name in {".", ".."}:
-        raise HTTPException(status_code=400, detail="Invalid skill name")
-    if ".." in Path(name).parts:
+    """Return ``name`` when it matches the skill-name allowlist.
+
+    :param name: Proposed skill directory name.
+    :returns: The validated name.
+    :raises HTTPException: When the name is empty or contains unsafe characters.
+    """
+    if not _SAFE_SEGMENT_RE.fullmatch(name):
         raise HTTPException(status_code=400, detail="Invalid skill name")
     return name
 

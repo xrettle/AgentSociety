@@ -28,6 +28,8 @@
 |------|------|
 | 🔄 刷新 | 重新加载项目树 |
 | 🧩 技能 | 打开技能管理 |
+| ⬇️ 导出 | 把当前研究项目打包发给别人 |
+| ⬆️ 导入 | 打开别人分享的项目压缩包 |
 | ⚙️ 配置 | 打开 LLM / API 配置 |
 | 📖 帮助 | 打开使用指南 |
 
@@ -42,7 +44,8 @@ workspace-root/
 ├── custom/          # 自定义模块与 Agent 技能
 ├── .claude/skills/  # Claude / Codex 技能
 ├── hypothesis_*/    # 假设与实验
-├── analysis/        # 分析工作区
+├── presentation/    # 分析报告与资源
+├── synthesis/       # 跨假设综合结果
 └── paper/           # 论文工作区
 ```
 

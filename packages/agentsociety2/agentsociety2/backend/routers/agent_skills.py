@@ -214,9 +214,7 @@ async def create_skill(req: CreateRequest):
     """
     workspace = _require_workspace(req.workspace_path)
 
-    safe_name = require_safe_skill_name(
-        req.name.strip().replace("/", "_").replace("\\", "_").replace("..", "_")
-    )
+    safe_name = require_safe_skill_name(req.name.strip())
 
     dest = skill_install_dir(workspace, safe_name)
     if dest.exists():
@@ -236,11 +234,7 @@ async def create_skill(req: CreateRequest):
     resolve_under_root(dest, "SKILL.md").write_text(skill_md_content, encoding="utf-8")
 
     if req.script and req.script_content:
-        # Validate the relative script path before writing
-        safe_script = require_safe_skill_name(
-            req.script.strip().replace("/", "_").replace("\\", "_")
-        )
-        script_path = resolve_skill_relative(dest, safe_script)
+        script_path = resolve_skill_relative(dest, req.script.strip())
         script_path.parent.mkdir(parents=True, exist_ok=True)
         script_path.write_text(req.script_content, encoding="utf-8")
 

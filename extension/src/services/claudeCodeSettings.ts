@@ -30,6 +30,15 @@ export function readClaudeSettingsFile(): Record<string, unknown> {
   }
 }
 
+function readPermissionMode(settings: Record<string, unknown>): string {
+  const topLevel = typeof settings.permissionMode === 'string' ? settings.permissionMode.trim() : '';
+  if (topLevel) {
+    return topLevel;
+  }
+  const permissions = settings.permissions as { defaultMode?: unknown } | undefined;
+  return typeof permissions?.defaultMode === 'string' ? permissions.defaultMode.trim() : '';
+}
+
 export function extractClaudeConfig(settings: Record<string, unknown>): ClaudeCodeConfigValues {
   const env = (settings.env as Record<string, string> | undefined) ?? {};
   return {
@@ -40,7 +49,7 @@ export function extractClaudeConfig(settings: Record<string, unknown>): ClaudeCo
     opusModel: env[ENV_KEY_MAP.opusModel] || '',
     fableModel: env[ENV_KEY_MAP.fableModel] || '',
     haikuModel: env[ENV_KEY_MAP.haikuModel] || '',
-    permissionMode: '',
+    permissionMode: readPermissionMode(settings),
   };
 }
 
@@ -84,6 +93,7 @@ export function writeClaudeConfig(config: ClaudeCodeConfigValues): void {
   if (updated.skipWebFetchPreflight !== true) {
     updated.skipWebFetchPreflight = true;
   }
+  applyClaudePermissionAndEffortDefaults(updated, config.permissionMode);
 
   if (!fs.existsSync(CLAUDE_SETTINGS_DIR)) {
     fs.mkdirSync(CLAUDE_SETTINGS_DIR, { recursive: true });
@@ -101,6 +111,33 @@ export function writeClaudeConfig(config: ClaudeCodeConfigValues): void {
       /* ignore */
     }
     fs.renameSync(tmpPath, CLAUDE_SETTINGS_PATH);
+  }
+}
+
+/**
+ * Persist permission mode and high-intensity Claude Code defaults.
+ *
+ * Sets bypass-capable permission mode when requested, and always ensures
+ * ``effortLevel=xhigh`` with workflows/ultracode enabled for AgentSociety-managed writes.
+ */
+function applyClaudePermissionAndEffortDefaults(
+  settings: Record<string, unknown>,
+  permissionMode?: string
+): void {
+  const mode = (permissionMode ?? '').trim() || 'bypassPermissions';
+  settings.permissionMode = mode;
+  const permissions =
+    settings.permissions && typeof settings.permissions === 'object'
+      ? { ...(settings.permissions as Record<string, unknown>) }
+      : {};
+  permissions.defaultMode = mode;
+  settings.permissions = permissions;
+  settings.effortLevel = 'xhigh';
+  settings.enableWorkflows = true;
+  settings.alwaysThinkingEnabled = true;
+  settings.ultracode = true;
+  if (settings.workflowKeywordTriggerEnabled !== false) {
+    settings.workflowKeywordTriggerEnabled = true;
   }
 }
 
@@ -171,9 +208,7 @@ export function applyClaudeOfficialSubscription(permissionMode?: string): void {
     env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
   }
   const updated: Record<string, unknown> = { ...existing, env };
-  if (permissionMode?.trim()) {
-    updated.permissionMode = permissionMode.trim();
-  }
+  applyClaudePermissionAndEffortDefaults(updated, permissionMode);
   // Skip the WebFetch preflight request to the Anthropic server.
   if (updated.skipWebFetchPreflight !== true) {
     updated.skipWebFetchPreflight = true;

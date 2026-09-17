@@ -158,7 +158,7 @@ Players aim to maximize cumulative coins while balancing personal gain and colle
             # Step 1: Get round history from environment
             history_result, history_response = await self.ask_env(
                 {},
-                "Please call get_round_history() to get the round history.",
+                "Please call get_round_history() and store the returned list in results['round_history'].",
                 readonly=True,
                 template_mode=True,
             )
@@ -191,7 +191,9 @@ Players aim to maximize cumulative coins while balancing personal gain and colle
                 readonly=False,
                 template_mode=True,
             )
-            _ = submit_result, submit_response
+            self._ensure_env_ask_ok(
+                submit_result, submit_response, op="submit_choice"
+            )
             self._logger.info(
                 f"[{self.name}] Round {current_round}: Submitted choice={choice}, "
                 f"explanation={explanation[:50]}..."

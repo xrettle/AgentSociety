@@ -39,6 +39,7 @@
        {
            "id": 1,
            "profile": {
+               "id": 1,
                "name": "Alice",
                "age": 28,
                "personality": "friendly, curious, optimistic",
@@ -81,21 +82,26 @@
 博弈论示例
 ---------------------
 
+这些示例使用 contrib 下的博弈 agent / env，并通过 ``society.step()`` 推进回合。
+需要配置 LLM 凭证（参见 :doc:`installation`）。
+
 **囚徒困境** (``games/01_prisoners_dilemma.py``)
 
-一个经典的博弈论场景：
-
-* 两个具有不同个性的智能体
-* 具有收益的顺序决策
-* 对结果的反思
+* ``PrisonersDilemmaAgent`` + ``PrisonersDilemmaEnv``
+* 多轮同时决策（Cooperate / Defect）
+* 结果写入 ``run_dir``（含 env state 与 replay）
 
 **公共物品博弈** (``games/02_public_goods.py``)
 
-多轮集体行动实验：
+* ``PublicGoodsAgent`` + ``PublicGoodsEnv``
+* 多名智能体多轮贡献决策
 
-* 四个具有不同个性特征的智能体
-* 多轮贡献决策
-* 小组结果计算
+**声誉博弈** (``games/reputation_game.py``)
+
+* ``LLMDonorAgent`` + ``ReputationGameEnv``
+* 基于声誉的捐赠决策短跑示例
+
+完整批量实验脚本见 ``packages/agentsociety2/experiments/env_main_*_v2.py``。
 
 高级示例
 -----------------
@@ -104,7 +110,8 @@
 
 使用自定义智能体类型扩展 AgentSociety 2：
 
-* 实现必需的抽象方法（ask、step、dump、load）
+* 实现 workspace 契约（``create`` / ``from_workspace`` / ``to_workspace``）
+* 通过 ``get_registry().register_agent_module(...)`` 注册后交给 ``AgentSociety``
 * 为研究需求创建专门的智能体
 
 **多路由器比较** (``advanced/02_multi_router.py``)

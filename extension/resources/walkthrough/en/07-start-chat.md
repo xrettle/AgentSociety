@@ -33,3 +33,7 @@ You can also enter from **AI Chat** in the sidebar, the title-bar chat control, 
 ![Alternate chat entry](../images/gif/start-chat-alternate.gif)
 
 > The AI Social Scientist reduces orchestration overhead; it does not replace scientific judgment. Review hypotheses, operationalization, interventions, analysis, and evidence boundaries before releasing claims.
+
+### Share with a colleague
+
+When a project is ready to hand off, use **Export Workspace** in the sidebar. The picker shows the research question, hypotheses and experiments, literature, data, reports, project settings, and skills; existing key content is selected by default. Secrets, virtual environments, and Git history are not exported. With **Import Workspace**, the recipient chooses a parent folder and a new project name; the extension creates the directory without overwriting an existing project. They then enter their own model keys.
