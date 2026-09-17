@@ -65,6 +65,8 @@ logger = get_logger()
 # 避免每步重序列化大列表）；SOCIETY_STEP.json 每步写少量标量。两文件均原子写入。
 SOCIETY_JSON = "SOCIETY.json"
 SOCIETY_STEP_JSON = "SOCIETY_STEP.json"
+# LLM token 用量汇总（含 prompt 缓存命中）。收尾写一次；resume 时被忽略。
+LLM_STATS_JSON = "LLM_STATS.json"
 SOCIETY_SCHEMA_VERSION = 1
 
 
@@ -234,6 +236,59 @@ class AgentSociety:
     def agent_specs(self) -> list[dict]:
         """返回 agent specs（元数据快照）。"""
         return list(self._agent_specs)
+
+    @property
+    def token_stats(self) -> dict[str, dict[str, int]]:
+        """按模型聚合的 LLM token 用量（agent 侧，快照）。
+
+        每项含 ``calls`` / ``input`` / ``output`` / ``cached_input``。
+        ``cached_input`` 是 ``input`` 中命中 provider prompt 前缀缓存的部分。
+        仅统计 agent 侧调用；env router（coder 角色）的用量见
+        :meth:`router_token_stats`。
+        """
+        return {model: dict(s) for model, s in self._token_stats.items()}
+
+    @property
+    def router_token_stats(self) -> dict[str, dict[str, int]]:
+        """env router（coder/summary 角色）的 token 用量快照。
+
+        :meth:`RouterBase.get_token_usages` 返回的是**快照而非增量**，所以这里
+        取一次合并即可，不要按步累加，否则会重复计数。
+        """
+        env_router = getattr(self, "_env_router", None)
+        getter = getattr(env_router, "get_token_usages", None)
+        if getter is None:
+            return {}
+        usages = getter()
+        stats = {
+            model: {
+                "calls": int(getattr(u, "call_count", 0) or 0),
+                "input": int(getattr(u, "input_tokens", 0) or 0),
+                "output": int(getattr(u, "output_tokens", 0) or 0),
+                "cached_input": int(getattr(u, "cached_input_tokens", 0) or 0),
+            }
+            for model, u in (usages or {}).items()
+        }
+        return {model: s for model, s in stats.items() if s["calls"] or s["input"]}
+
+    def all_token_stats(self) -> dict[str, dict[str, int]]:
+        """agent 侧 + env router 侧的 token 用量合并快照。"""
+        from agentsociety2.config.llm_dispatcher import merge_token_stats
+
+        return merge_token_stats(self.token_stats, self.router_token_stats)
+
+    def cache_hit_rate(self) -> float:
+        """Prompt 前缀缓存命中率（``cached_input / input``，全部调用合计）。
+
+        .. note::
+           分母包含 ask 轮与一次性工具调用（world description、memory
+           consolidation），这些结构上不可能命中前缀缓存、恒为 0%，因此该聚合值
+           会**低估** ReAct 循环自身的命中率。要看后者请用 ``llm.completion``
+           trace span 上的 ``llm.cache_hit_rate``。
+        """
+        from agentsociety2.config.llm_dispatcher import cache_hit_rate
+
+        return cache_hit_rate(self.all_token_stats())
 
     # ------------------------------------------------------------------
     # Replay: agent profile persistence (record-based)
@@ -467,6 +522,59 @@ class AgentSociety:
             self._run_dir / SOCIETY_STEP_JSON,
             json.dumps(payload, ensure_ascii=False, indent=2, default=str),
         )
+
+    def write_llm_stats_json(self) -> dict[str, Any] | None:
+        """把 LLM token 用量与缓存命中率写到 ``run_dir/LLM_STATS.json``。
+
+        含 agent 侧与 env router（coder）侧的合并快照、逐模型明细、以及聚合命中率。
+        原始计数器一并保留——不同网关对 ``input`` 是否含 cache read 的口径不同，
+        保留原值便于自行换算。
+
+        :returns: 写入的 payload；无 run_dir 时返回 ``None``。
+        """
+        if self._run_dir is None:
+            return None
+
+        from agentsociety2.config.llm_dispatcher import cache_hit_rate, merge_token_stats
+
+        # Snapshot each side once: ``router_token_stats`` hits the env router.
+        agent_stats = self.token_stats
+        router_stats = self.router_token_stats
+        combined = merge_token_stats(agent_stats, router_stats)
+
+        def _totals(stats: dict[str, dict[str, int]]) -> dict[str, int]:
+            return {
+                "calls": sum(int(s.get("calls", 0)) for s in stats.values()),
+                "input": sum(int(s.get("input", 0)) for s in stats.values()),
+                "output": sum(int(s.get("output", 0)) for s in stats.values()),
+                "cached_input": sum(
+                    int(s.get("cached_input", 0)) for s in stats.values()
+                ),
+            }
+
+        payload = {
+            "schema_version": 1,
+            "step_count": self._step_count,
+            "current_time": self._t.isoformat(),
+            "models": combined,
+            "totals": _totals(combined),
+            "cache_hit_rate": cache_hit_rate(combined),
+            "agent_side": {
+                "models": agent_stats,
+                "totals": _totals(agent_stats),
+                "cache_hit_rate": cache_hit_rate(agent_stats),
+            },
+            "router_side": {
+                "models": router_stats,
+                "totals": _totals(router_stats),
+                "cache_hit_rate": cache_hit_rate(router_stats),
+            },
+        }
+        atomic_write_text(
+            self._run_dir / LLM_STATS_JSON,
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+        )
+        return payload
 
     def mark_step_completed(self, step_idx: int) -> None:
         """标记第 ``step_idx`` 个顶层 step 已完成并立即持久化进度。

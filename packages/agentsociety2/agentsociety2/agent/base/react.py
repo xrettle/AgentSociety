@@ -18,6 +18,7 @@ from typing import Any
 __all__ = [
     "ReactDecision",
     "ReactToolResult",
+    "ReactTurn",
 ]
 
 
@@ -30,12 +31,40 @@ class ReactDecision:
         action: Tool/action name.
         args: Parsed tool arguments.
         final: Final text when the action is ``finish``.
+        call_id: The provider's tool-call id for this decision. Empty when the
+            decision came from the text-parsing fallback (models that emit the
+            call as text rather than as a native tool call), which has no ids.
+            The ReAct loop echoes it back on the ``role: "tool"`` reply, so a
+            native turn's ids are answered 1:1 and the next request stays valid.
     """
 
     thought: str
     action: str
     args: dict[str, Any]
     final: str
+    call_id: str = ""
+
+
+@dataclass(frozen=True)
+class ReactTurn:
+    """One ReAct completion: what was parsed plus what to append to the thread.
+
+    The loop appends ``assistant_message`` (followed by its tool replies, or by
+    error text when ``error`` is set) so that every request is a strict
+    prefix-extension of the previous one — which is what lets the provider's
+    prompt-prefix cache grow across turns instead of resetting.
+
+    Args:
+        decisions: Parsed decisions (empty when the response was unusable).
+        error: Schema/parse error text, or ``""`` when the turn was clean.
+        assistant_message: Normalized assistant message to append, or ``None``
+            when the provider returned nothing appendable (no choices / no
+            content).
+    """
+
+    decisions: list[ReactDecision]
+    error: str
+    assistant_message: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

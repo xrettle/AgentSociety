@@ -218,9 +218,16 @@ class LiteLLMLogger:
         response_content = _shorten(response_content, logging.INFO)
         self.logger.info(f"[LiteLLM] {model} | Response:\n{response_content}")
 
+        # Prompt-cache hits. Imported lazily: config/ imports this module, so a
+        # top-level import here would be circular.
+        from agentsociety2.config.llm_dispatcher import extract_cached_tokens
+
+        cached_tokens = extract_cached_tokens(response_obj)
+
         # Log token usage and timing at INFO level
         self.logger.info(
-            f"[LiteLLM] Model: {model} | Tokens - Input: {input_tokens}, "
+            f"[LiteLLM] Model: {model} | Tokens - Input: {input_tokens} "
+            f"(cached: {cached_tokens}), "
             f"Output: {output_tokens}, Total: {total_tokens} | "
             f"Duration: {duration:.3f}s"
         )

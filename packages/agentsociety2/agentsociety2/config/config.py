@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from typing import Any, Literal, Optional
@@ -26,6 +27,7 @@ __all__ = [
     "extract_json",
     "get_llm_router",
     "get_llm_router_and_model",
+    "get_llm_thinking",
     "get_model_name",
 ]
 
@@ -42,6 +44,108 @@ def _env_int_or_cpu(name: str) -> int:
     """Read an int env var, falling back to the machine logical CPU count."""
     raw = os.getenv(name)
     return int(raw) if raw and raw.strip() else (os.cpu_count() or 1)
+
+
+def _env_str(name: str) -> Optional[str]:
+    """Read a stripped env var, treating unset/blank as ``None``."""
+    raw = os.getenv(name)
+    return raw.strip() if raw and raw.strip() else None
+
+
+def _env_json_obj(name: str) -> Optional[dict[str, Any]]:
+    """Parse an env var holding a JSON object; warn and ignore if malformed.
+
+    A malformed env var must never abort a run, so every failure path here is a
+    warning plus ``None`` rather than an exception.
+    """
+    raw = _env_str(name)
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        logger.warning("Ignoring %s: not valid JSON (%r)", name, raw[:120])
+        return None
+    if not isinstance(value, dict):
+        logger.warning("Ignoring %s: expected a JSON object, got %s", name, type(value).__name__)
+        return None
+    return value
+
+
+_THINKING_ON = {"on", "1", "true", "yes", "enable", "enabled"}
+_THINKING_OFF = {"off", "0", "false", "no", "disable", "disabled"}
+
+# ``off`` 时若没配 extra_body，我们唯一做的假设：OpenAI Chat Completions 的
+# reasoning_effort 取最低档。网关若不认这个值，用
+# AGENTSOCIETY_LLM_EXTRA_BODY 覆盖（配了 extra_body 就只发 extra_body）。
+_DEFAULT_THINKING_OFF_EFFORT = "minimal"
+
+
+def get_llm_thinking(role: str = "default") -> dict[str, Any]:
+    """解析某角色的推理（thinking）开关，返回构造 ``ThinkingSettings`` 的参数。
+
+    环境变量（``coder`` 角色优先读 ``AGENTSOCIETY_CODER_LLM_*``，未设时回退到
+    默认组；其他角色只读默认组）：
+
+    - ``AGENTSOCIETY_LLM_THINKING``：``on`` / ``off``（兼容 ``1/0/true/false``）。
+      **未设 = 不发送任何新参数**，出站请求与不启用该功能时逐字节相同。
+    - ``AGENTSOCIETY_LLM_REASONING_EFFORT``：作为 ``reasoning_effort`` 发送。
+    - ``AGENTSOCIETY_LLM_EXTRA_BODY``：JSON 对象，合并进 ``extra_body``，用于
+      网关私有开关（如 ``{"enable_thinking": false}``）。
+
+    ``off`` 的确切语义：**配了 extra_body 就只发 extra_body，不发
+    ``reasoning_effort``**（避免网关同时收到两个开关而报错）；没配则发
+    ``reasoning_effort``，取 ``REASONING_EFFORT``，缺省 ``"minimal"``。
+
+    这里刻意在**调用时**读 ``os.getenv``（而非只在 import 时读），以便测试用
+    monkeypatch 覆盖；``Config`` 上的同名类属性仅作文档用途。
+
+    :param role: ``default`` / ``coder`` / ``embedding``。
+    :returns: ``{"policy": "inherit"|"on"|"off", "reasoning_effort": str|None,
+        "extra_body": dict|None}``。
+    """
+    if role == "coder":
+        def _read(suffix: str) -> Optional[str]:
+            return _env_str(f"AGENTSOCIETY_CODER_LLM_{suffix}") or _env_str(
+                f"AGENTSOCIETY_LLM_{suffix}"
+            )
+
+        def _read_json(suffix: str) -> Optional[dict[str, Any]]:
+            coder_var = f"AGENTSOCIETY_CODER_LLM_{suffix}"
+            if _env_str(coder_var) is not None:
+                return _env_json_obj(coder_var)
+            return _env_json_obj(f"AGENTSOCIETY_LLM_{suffix}")
+
+        raw_policy = _read("THINKING")
+        effort = _read("REASONING_EFFORT")
+        extra_body = _read_json("EXTRA_BODY")
+    else:
+        raw_policy = _env_str("AGENTSOCIETY_LLM_THINKING")
+        effort = _env_str("AGENTSOCIETY_LLM_REASONING_EFFORT")
+        extra_body = _env_json_obj("AGENTSOCIETY_LLM_EXTRA_BODY")
+
+    if raw_policy is None:
+        return {"policy": "inherit", "reasoning_effort": None, "extra_body": None}
+
+    lowered = raw_policy.lower()
+    if lowered in _THINKING_ON:
+        return {"policy": "on", "reasoning_effort": effort, "extra_body": extra_body}
+    if lowered in _THINKING_OFF:
+        if extra_body is not None:
+            # 网关私有开关优先，且不叠加 reasoning_effort。
+            return {"policy": "off", "reasoning_effort": None, "extra_body": extra_body}
+        return {
+            "policy": "off",
+            "reasoning_effort": effort or _DEFAULT_THINKING_OFF_EFFORT,
+            "extra_body": None,
+        }
+
+    logger.warning(
+        "Ignoring AGENTSOCIETY_*_LLM_THINKING=%r (expected on/off); "
+        "sending no reasoning parameters",
+        raw_policy,
+    )
+    return {"policy": "inherit", "reasoning_effort": None, "extra_body": None}
 
 
 def _router_model_names(model_list: list[dict[str, Any]]) -> list[str]:
@@ -340,6 +444,70 @@ class Config:
     where ``ceil(N / BATCH_SIZE) >= LLM_RAY_MAX_WORKERS`` to saturate the
     workers; otherwise some workers sit idle. Smaller batches add scheduling
     overhead; larger batches mean one slow agent can stall its whole batch.
+    """
+
+    # 推理（thinking）开关。这些类属性只是文档用途：实际解析发生在
+    # :func:`get_llm_thinking` 调用时（读取 os.getenv），以便按角色回退与测试覆盖。
+    LLM_THINKING: Optional[str] = os.getenv("AGENTSOCIETY_LLM_THINKING")
+    """
+    是否启用模型推理（thinking）：``on`` / ``off``（兼容 ``1/0/true/false``）。
+
+    Environment variable: AGENTSOCIETY_LLM_THINKING
+    Default: unset（**不发送任何新参数**，行为与未启用该功能时完全一致）
+
+    ``off`` 时发送 ``reasoning_effort``（取 ``AGENTSOCIETY_LLM_REASONING_EFFORT``，
+    缺省 ``"minimal"``）；若同时配置了 ``AGENTSOCIETY_LLM_EXTRA_BODY``，则只发
+    ``extra_body`` 而不发 ``reasoning_effort``，以适配网关私有开关。
+
+    仅适用于 OpenAI 兼容 chat-completions 接口，不做模型族自动探测。
+    """
+
+    LLM_REASONING_EFFORT: Optional[str] = os.getenv("AGENTSOCIETY_LLM_REASONING_EFFORT")
+    """
+    显式的 ``reasoning_effort`` 取值（``minimal`` / ``low`` / ``medium`` / ``high``）。
+
+    Environment variable: AGENTSOCIETY_LLM_REASONING_EFFORT
+    Default: unset（``off`` 时回退到 ``"minimal"``；``on`` 时不发送该字段）
+    """
+
+    LLM_EXTRA_BODY: Optional[str] = os.getenv("AGENTSOCIETY_LLM_EXTRA_BODY")
+    """
+    网关私有的 OpenAI 兼容开关，JSON 对象字符串，合并进请求的 ``extra_body``。
+
+    Environment variable: AGENTSOCIETY_LLM_EXTRA_BODY
+    Default: unset
+
+    例：``{"enable_thinking": false}``、``{"thinking": {"type": "disabled"}}``、
+    ``{"chat_template_kwargs": {"enable_thinking": false}}``。JSON 解析失败只记
+    warning 并忽略，不会中断实验。
+    """
+
+    CODER_LLM_THINKING: Optional[str] = os.getenv("AGENTSOCIETY_CODER_LLM_THINKING") or LLM_THINKING
+    """
+    ``AGENTSOCIETY_LLM_THINKING`` 的 coder 角色覆盖（env router 的代码生成）。
+
+    Environment variable: AGENTSOCIETY_CODER_LLM_THINKING
+    Default: 回退到 ``AGENTSOCIETY_LLM_THINKING``
+    """
+
+    CODER_LLM_REASONING_EFFORT: Optional[str] = (
+        os.getenv("AGENTSOCIETY_CODER_LLM_REASONING_EFFORT") or LLM_REASONING_EFFORT
+    )
+    """
+    ``AGENTSOCIETY_LLM_REASONING_EFFORT`` 的 coder 角色覆盖。
+
+    Environment variable: AGENTSOCIETY_CODER_LLM_REASONING_EFFORT
+    Default: 回退到 ``AGENTSOCIETY_LLM_REASONING_EFFORT``
+    """
+
+    CODER_LLM_EXTRA_BODY: Optional[str] = (
+        os.getenv("AGENTSOCIETY_CODER_LLM_EXTRA_BODY") or LLM_EXTRA_BODY
+    )
+    """
+    ``AGENTSOCIETY_LLM_EXTRA_BODY`` 的 coder 角色覆盖。
+
+    Environment variable: AGENTSOCIETY_CODER_LLM_EXTRA_BODY
+    Default: 回退到 ``AGENTSOCIETY_LLM_EXTRA_BODY``
     """
 
     # Web Search API settings

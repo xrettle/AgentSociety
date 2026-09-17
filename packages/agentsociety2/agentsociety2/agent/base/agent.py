@@ -31,10 +31,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
-from agentsociety2.agent.base.react import ReactDecision, ReactToolResult
+from agentsociety2.agent.base.react import (
+    ReactDecision,
+    ReactToolResult,
+    ReactTurn,
+)
 from agentsociety2.agent.base.tool_schema import react_tool_schemas
 from agentsociety2.agent.base.todo import TodoStateStore
 from agentsociety2.agent.person_prompt import (
+    json_block as _json_block,
     short_text as _short_text,
     xml_block as _xml_block,
 )
@@ -84,6 +89,101 @@ def _brief_memories_summary(memories: Any) -> str:
     elif isinstance(first, str):
         text = first.strip()
     return text[:160]
+
+
+#: Cap on the assistant text echoed back into the thread alongside native tool
+#: calls. Reasoning models can put a lot of prose there; the echo exists for
+#: conversational fidelity, not to re-read it.
+_ASSISTANT_ECHO_MAX_CHARS = 4000
+
+
+def _tool_call_payload(call_id: str, name: str, arguments: str) -> dict[str, Any]:
+    """Build one OpenAI ``tool_calls`` entry."""
+    return {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": name, "arguments": arguments},
+    }
+
+
+def _raw_assistant_message(content: str, tool_calls: Any) -> dict[str, Any]:
+    """Echo a native assistant turn verbatim (ids and arguments untouched).
+
+    Used on the parse-error path: the loop answers **every** raw id with the
+    error text, so the ids and ``arguments`` must match what the provider sent.
+    """
+    return {
+        "role": "assistant",
+        "content": _short_text(content, limit=_ASSISTANT_ECHO_MAX_CHARS) or None,
+        "tool_calls": [
+            _tool_call_payload(
+                str(getattr(tool_call, "id", "") or f"call_{index}"),
+                str(getattr(getattr(tool_call, "function", None), "name", "") or ""),
+                str(
+                    getattr(getattr(tool_call, "function", None), "arguments", "")
+                    or "{}"
+                ),
+            )
+            for index, tool_call in enumerate(tool_calls)
+        ],
+    }
+
+
+def _decisions_assistant_message(
+    content: str, decisions: list[ReactDecision]
+) -> dict[str, Any]:
+    """Build the assistant turn from the decisions that will actually run.
+
+    Rebuilding (rather than echoing the raw response) is required: when a
+    response contains a ``finish`` call, ``_build_react_decisions`` drops the
+    other calls, and an echoed id that nothing answers makes the next request
+    invalid.
+    """
+    return {
+        "role": "assistant",
+        "content": _short_text(content, limit=_ASSISTANT_ECHO_MAX_CHARS) or None,
+        "tool_calls": [
+            _tool_call_payload(
+                decision.call_id,
+                decision.action,
+                json.dumps(decision.args, ensure_ascii=False, default=str),
+            )
+            for decision in decisions
+            if decision.call_id
+        ],
+    }
+
+
+def _react_tool_replies(
+    decisions: list[ReactDecision],
+    entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build the messages answering one turn's tool calls.
+
+    Two encodings, matching how the turn was parsed:
+
+    - **native** (every decision carries a ``call_id``) — one ``role: "tool"``
+      message per call, keyed by id. Failed calls get an ``ERROR: `` prefix:
+      the native encoding has no ``ok`` field, so the text is the only place
+      the model can learn the call failed.
+    - **text-parsed** (no ids) — a single user message carrying the same
+      ``<recent_observations>`` JSON block the model would have seen under the
+      previous re-render layout, so text-fallback models lose no information.
+    """
+    if decisions and all(decision.call_id for decision in decisions):
+        return [
+            {
+                "role": "tool",
+                "tool_call_id": decision.call_id,
+                "content": (
+                    entry["observation"]
+                    if entry.get("ok")
+                    else f"ERROR: {entry['observation']}"
+                ),
+            }
+            for decision, entry in zip(decisions, entries)
+        ]
+    return [{"role": "user", "content": _json_block("recent_observations", entries)}]
 
 
 def _synthesize_step_fallback_episode(
@@ -811,6 +911,67 @@ The constructor ``__init__`` is arg-less.
             "initialized_at": getattr(self, "_initialized_at", None),
         }
 
+    def build_prompt_agent_view(
+        self,
+        *,
+        tick: int | None,
+        t: Any | None,
+    ) -> dict[str, Any]:
+        """Project AGENT.json down to its run-stable, prompt-safe subset.
+
+        :meth:`build_agent_json` is the persisted AGENT.json payload — it is
+        read back by the resume path and is documented as a subclass extension
+        point, so it is left alone. This projection strips what must not reach
+        the prompt:
+
+        - ``initialized_at`` — wall-clock, differs per agent and per run.
+        - ``current_time`` / ``tick`` / ``step_count`` — change every step, so
+          they are emitted as a separate ``<turn_state>`` block placed after
+          the run-stable blocks.
+        - ``workspace.root`` — an absolute host path, useless to the model
+          (every workspace tool takes a workspace-relative path).
+
+        Subclass extras added by a :meth:`build_agent_json` override survive.
+
+        Args:
+            tick: Current simulation tick, if available.
+            t: Current simulation time, if available.
+
+        Returns:
+            Prompt-safe view of the agent self-description.
+        """
+        data = dict(self.build_agent_json(tick=tick, t=t))
+        for volatile in ("initialized_at", "current_time", "tick", "step_count"):
+            data.pop(volatile, None)
+        workspace = dict(data.get("workspace") or {})
+        workspace.pop("root", None)
+        data["workspace"] = workspace
+        return data
+
+    def build_prompt_turn_state(
+        self,
+        *,
+        tick: int | None,
+        t: Any | None,
+    ) -> dict[str, Any]:
+        """Build the per-step ``<turn_state>`` block payload.
+
+        Constant across every ReAct turn within one simulation step, which is
+        why it is rendered ahead of ``<recent_observations>``.
+
+        Args:
+            tick: Current simulation tick, if available.
+            t: Current simulation time, if available.
+
+        Returns:
+            Per-step state dictionary.
+        """
+        return {
+            "current_time": t.isoformat() if t is not None else None,
+            "tick": tick,
+            "step_count": getattr(self, "_step_count", 0),
+        }
+
     def persist_agent_json(
         self,
         *,
@@ -1237,8 +1398,10 @@ The constructor ``__init__`` is arg-less.
                 ) as workspace_span:
                     result = self._workspace.write_text(path, content)
                     workspace_span.attributes["result.bytes"] = result.bytes_written
-                target = str(self._workspace.resolve(path))
-                return ReactToolResult(True, f"written: {path}", {"path": target})
+                # Workspace-relative, like ``read``/``grep``: an absolute host
+                # path is noise to the model and varies per agent, so it would
+                # break prompt-prefix reuse for no benefit.
+                return ReactToolResult(True, f"written: {path}", {"path": path})
             if action == "append":
                 path = str(args.get("path") or "")
                 if self._is_core_owned_workspace_path(path):
@@ -1601,6 +1764,24 @@ The constructor ``__init__`` is arg-less.
         self._last_finish_memories = None
         self._last_raw_answer_text = ""
         self._last_react_error = ""
+        # ONE thread per loop invocation, built once and thereafter only
+        # appended to. That is what makes every request a strict
+        # prefix-extension of the previous one, so the provider's prompt-prefix
+        # cache grows across turns instead of resetting each turn (measured
+        # ~52% -> ~82% aggregate hit rate over a 6-turn conversation).
+        #
+        # Do NOT rebuild this per turn, and do NOT truncate it from the front:
+        # both destroy the cached prefix and give back the entire win.
+        messages: list[dict[str, Any]] = list(
+            self.build_react_messages(
+                tick=tick,
+                t=t,
+                observations=observations,
+                question=question,
+                readonly=readonly,
+                skill_hooks=skill_hooks,
+            )
+        )
         with self.trace_span(
             "react.loop",
             attributes={
@@ -1625,20 +1806,27 @@ The constructor ``__init__`` is arg-less.
                     # current turn yields empty decisions for a different reason
                     # (e.g. an empty-content response that carries no error).
                     self._last_react_error = ""
-                    decisions = await self._call_react_llm(
-                        tick=tick,
-                        t=t,
-                        observations=observations,
-                        question=question,
-                        readonly=readonly,
-                        skill_hooks=skill_hooks,
+                    react_turn = await self._call_react_llm_with_messages(
+                        messages, readonly=readonly
                     )
+                    decisions = react_turn.decisions
                     turn_span.attributes.update(
                         {
                             "react.action": ", ".join(d.action for d in decisions)
                             if decisions
                             else "(none)",
                             "react.tool_count": len(decisions),
+                            "llm.message_count": len(messages),
+                            # Which encoding served this turn — lets a production
+                            # run be sliced by it, so the append-only change can
+                            # be A/B-ed from logs without a permanent switch.
+                            "react.history_encoding": (
+                                "tool"
+                                if (react_turn.assistant_message or {}).get(
+                                    "tool_calls"
+                                )
+                                else "user"
+                            ),
                         }
                     )
 
@@ -1673,10 +1861,13 @@ The constructor ``__init__`` is arg-less.
                         # No valid tool call this turn (parse/validation failed
                         # even after the within-turn retry). Instead of silently
                         # ending as "done" — which drops the ask answer / step
-                        # memory — push the error back as an observation so the
-                        # model can self-correct on a later turn. The loop is
-                        # still bounded by _max_react_turns; if the model never
-                        # recovers we synthesize a fallback below.
+                        # memory — record the failure so the model can
+                        # self-correct on a later turn. The corrective feedback
+                        # is already in `messages`; `observations` stays the
+                        # side-channel that react.tool_ok and the end-of-loop
+                        # fallbacks read. The loop is still bounded by
+                        # _max_react_turns; if the model never recovers we
+                        # synthesize a fallback below.
                         feedback = (
                             self._last_react_error or "No valid tool call was produced."
                         )
@@ -1691,11 +1882,25 @@ The constructor ``__init__`` is arg-less.
                         )
                         continue
 
+                    if react_turn.assistant_message is not None:
+                        messages.append(react_turn.assistant_message)
+                    entries: list[dict[str, Any]] = []
                     for decision in decisions:
-                        result = await self._execute_react_tool(
-                            decision,
-                            readonly=readonly,
-                        )
+                        try:
+                            result = await self._execute_react_tool(
+                                decision,
+                                readonly=readonly,
+                            )
+                        except Exception as exc:
+                            # Every id in the assistant turn must be answered
+                            # before the next assistant/user message, so a
+                            # throwing tool becomes a failed result rather than
+                            # a stranded tool_call id.
+                            result = ReactToolResult(
+                                False,
+                                f"tool execution failed: {exc}",
+                                {"error": str(exc)},
+                            )
                         if not result.ok:
                             logger.warning(
                                 "Agent %s: ReAct tool failed: action=%s observation=%s",
@@ -1703,7 +1908,7 @@ The constructor ``__init__`` is arg-less.
                                 decision.action,
                                 _short_text(result.observation, limit=300),
                             )
-                        observations.append(
+                        entries.append(
                             {
                                 "turn": turn,
                                 "action": decision.action,
@@ -1712,6 +1917,11 @@ The constructor ``__init__`` is arg-less.
                                 "data": result.data,
                             }
                         )
+                    observations.extend(entries)
+                    messages.extend(_react_tool_replies(decisions, entries))
+                    self._append_context_refresh(
+                        messages, decisions, entries, tick=tick, t=t
+                    )
                     turn_span.attributes["react.tool_ok"] = all(
                         obs["ok"] for obs in observations if obs.get("turn") == turn
                     )
@@ -1741,56 +1951,24 @@ The constructor ``__init__`` is arg-less.
             )
             return final
 
-    async def _call_react_llm(
-        self,
-        *,
-        tick: int,
-        t: datetime,
-        observations: list[dict[str, Any]],
-        question: str | None = None,
-        readonly: bool = False,
-        skill_hooks: list[dict[str, Any]] | None = None,
-    ) -> list[ReactDecision]:
-        """Call the LLM for the next ReAct decisions.
-
-        Builds messages via the subclass ``build_react_messages`` hook, then
-        dispatches to :meth:`_call_react_llm_with_messages`.
-
-        Args:
-            tick: Current simulation tick.
-            t: Current simulation time.
-            observations: Recent observation list.
-            question: Optional external question (ask mode).
-            readonly: Whether mutation tools are blocked.
-            skill_hooks: Optional pre_step hook outputs for the prompt.
-
-        Returns:
-            Parsed ReAct decisions for this turn.
-        """
-        messages = self.build_react_messages(
-            tick=tick,
-            t=t,
-            observations=observations,
-            question=question,
-            readonly=readonly,
-            skill_hooks=skill_hooks,
-        )
-        return await self._call_react_llm_with_messages(messages, readonly=readonly)
-
     async def _call_react_llm_with_messages(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         readonly: bool = False,
-    ) -> list[ReactDecision]:
+    ) -> ReactTurn:
         """Call the LLM and retry once on invalid tool arguments.
 
+        ``messages`` is extended **in place** with this turn's assistant message
+        and, on error, with the corrective replies — so the next request is a
+        prefix-extension of this one and the prompt-prefix cache keeps growing.
+
         Args:
-            messages: OpenAI-style chat messages.
+            messages: OpenAI-style chat messages (mutated in place).
             readonly: Whether mutation tools are blocked.
 
         Returns:
-            Parsed ReAct decisions (possibly empty).
+            The parsed :class:`ReactTurn` from the final attempt.
         """
         with self.trace_span(
             "llm.completion",
@@ -1800,37 +1978,130 @@ The constructor ``__init__`` is arg-less.
                 "input.message_count": len(messages),
             },
         ) as span:
-            response = await self._complete_react_once(messages, readonly=readonly)
-            decisions, error = self._parse_react_responses(response, readonly=readonly)
-            if error:
-                self._last_react_error = error
-                retry_messages = [
-                    *messages,
-                    {
-                        "role": "assistant",
-                        "content": "Invalid tool call arguments.",
-                    },
+            turn, appended = await self._append_react_turn(
+                messages, readonly=readonly, span=span
+            )
+            if turn.error:
+                self._last_react_error = turn.error
+                span.attributes["llm.retry"] = True
+                span.attributes["input.message_count"] = len(messages)
+                turn, appended = await self._append_react_turn(
+                    messages, readonly=readonly, span=span
+                )
+            if turn.error:
+                self._last_react_error = turn.error
+                span.attributes["schema.error"] = turn.error
+                logger.warning("Agent %s: invalid ReAct decision: %s", self.id, turn.error)
+            if not turn.decisions and not appended:
+                # Guarantee the next request differs from this one. The thread
+                # is no longer rebuilt per turn, so an un-appended empty turn
+                # would re-send a byte-identical prompt — and with a prefix
+                # cache in play the model could spin on it until the turn limit.
+                messages.append(
                     {
                         "role": "user",
                         "content": _xml_block(
-                            "schema_error",
-                            error + "\nCall valid tool(s) with valid arguments.",
+                            "react_error",
+                            (
+                                self._last_react_error
+                                or "No valid tool call was produced."
+                            )
+                            + "\nRespond with a single valid tool call.",
                         ),
-                    },
-                ]
-                span.attributes["llm.retry"] = True
-                response = await self._complete_react_once(
-                    retry_messages,
-                    readonly=readonly,
+                    }
                 )
-                decisions, error = self._parse_react_responses(
-                    response, readonly=readonly
+        return turn
+
+    async def _append_react_turn(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        readonly: bool,
+        span: Any,
+    ) -> tuple[ReactTurn, bool]:
+        """Run one completion, appending error-correction replies when needed.
+
+        On success the assistant message is deliberately **not** appended here:
+        :meth:`run_react_loop` appends it together with its tool replies, so a
+        tool that raises can still produce a reply and never leaves an
+        unanswered tool-call id.
+
+        Args:
+            messages: Chat messages (mutated in place).
+            readonly: Whether mutation tools are blocked.
+            span: The open ``llm.completion`` span, for usage accounting.
+
+        Returns:
+            ``(turn, appended)`` — ``appended`` reports whether ``messages`` grew.
+        """
+        response = await self._complete_react_once(messages, readonly=readonly)
+        self._record_llm_usage(span, response)
+        turn = self._parse_react_turn(response, readonly=readonly)
+        if not turn.error:
+            return turn, False
+
+        error_block = _xml_block(
+            "schema_error",
+            turn.error + "\nCall valid tool(s) with valid arguments.",
+        )
+        if turn.assistant_message is not None:
+            messages.append(turn.assistant_message)
+            tool_calls = turn.assistant_message.get("tool_calls") or []
+            # An assistant turn that carries tool_calls must have every id
+            # answered before any later assistant/user message, so answer them
+            # with the error text rather than following up with a bare user turn.
+            for tool_call in tool_calls:
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": error_block,
+                    }
                 )
-            if error:
-                self._last_react_error = error
-                span.attributes["schema.error"] = error
-                logger.warning("Agent %s: invalid ReAct decision: %s", self.id, error)
-        return decisions
+            if not tool_calls:
+                messages.append({"role": "user", "content": error_block})
+        else:
+            messages.append({"role": "user", "content": error_block})
+        return turn, True
+
+    def _record_llm_usage(self, span: Any, response: Any) -> None:
+        """Copy one response's token usage onto the ``llm.completion`` span.
+
+        Exposes per-turn, per-agent prompt-cache hits in the trace JSONL. This
+        is what localizes a low hit rate to "the shared system prefix missed"
+        vs "the per-turn window was invalidated" vs "this was an ask-mode turn",
+        which the aggregate counters in the run summary cannot distinguish.
+
+        Span attributes are accumulated across the within-turn retry, so a turn
+        that retried reports the sum of both completions.
+
+        Args:
+            span: The open ``llm.completion`` trace span.
+            response: Raw LLM response from the dispatcher.
+
+        Returns:
+            None.
+        """
+        from agentsociety2.config.llm_dispatcher import extract_cached_tokens
+
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        cached = extract_cached_tokens(response)
+        attributes = span.attributes
+        attributes["llm.input_tokens"] = (
+            int(attributes.get("llm.input_tokens", 0)) + input_tokens
+        )
+        attributes["llm.cached_input_tokens"] = (
+            int(attributes.get("llm.cached_input_tokens", 0)) + cached
+        )
+        total_input = int(attributes["llm.input_tokens"])
+        attributes["llm.cache_hit_rate"] = (
+            max(0.0, min(1.0, int(attributes["llm.cached_input_tokens"]) / total_input))
+            if total_input > 0
+            else 0.0
+        )
 
     async def _complete_react_once(
         self,
@@ -1924,6 +2195,25 @@ The constructor ``__init__`` is arg-less.
     ) -> tuple[list[ReactDecision], str]:
         """Parse OpenAI tool calls from one LLM response.
 
+        Thin delegate over :meth:`_parse_react_turn`, kept because callers and
+        tests only need the ``(decisions, error)`` pair.
+
+        Args:
+            response: Raw LLM response object.
+            readonly: Whether the loop is in readonly (ask) mode.
+
+        Returns:
+            Tuple of (decisions, error).  When ``error`` is non-empty the
+            caller may retry once; ``decisions`` is empty on error.
+        """
+        turn = self._parse_react_turn(response, readonly=readonly)
+        return turn.decisions, turn.error
+
+    def _parse_react_turn(
+        self, response: Any, *, readonly: bool = False
+    ) -> ReactTurn:
+        """Parse one LLM response into decisions plus the assistant turn to append.
+
         Some OpenAI-compatible endpoints never emit native ``tool_calls`` and
         instead render every tool invocation as text in ``message.content``
         (e.g. ``ask_env(instruction="...", readonly=false)``). To keep agents
@@ -1941,23 +2231,44 @@ The constructor ``__init__`` is arg-less.
         the failure back to the model and retries (the primary correction
         mechanism). The raw free text is stashed for the end-of-loop fallback.
 
+        Besides the decisions, this returns the normalized ``assistant_message``
+        the loop appends to the thread so each request extends the previous
+        one. Two shapes are produced, and they must not be mixed within a turn:
+
+        - **native** (the response carried ``tool_calls``) — the message
+          carries ``tool_calls`` rebuilt from the *surviving* decisions, not
+          echoed from the raw response. ``_build_react_decisions`` keeps only
+          the ``finish`` decision when one is present, so echoing the raw call
+          list would leave tool-call ids that nothing answers and the next
+          request would be rejected.
+        - **text** (no native calls) — a plain assistant text message; the
+          results are appended by the loop as a ``<recent_observations>`` user
+          block, exactly the shape the model already saw.
+
+        On error with native calls, the message echoes the *raw* calls (ids and
+        ``arguments`` verbatim) so the loop can answer every id with the error
+        text.
+
         Args:
             response: Raw LLM response object.
             readonly: Whether the loop is in readonly (ask) mode.
 
         Returns:
-            Tuple of (decisions, error).  When ``error`` is non-empty the
-            caller may retry once; ``decisions`` is empty on error.
+            :class:`ReactTurn` with decisions, error, and the message to append
+            (``None`` when the response carried nothing appendable).
         """
         if not getattr(response, "choices", None):
-            return [], "missing response choices"
+            return ReactTurn([], "missing response choices", None)
         message = getattr(response.choices[0], "message", None)
         if message is None:
-            return [], "missing response message"
+            return ReactTurn([], "missing response message", None)
+
+        content = str(getattr(message, "content", "") or "").strip()
         tool_calls = getattr(message, "tool_calls", None) or []
         if tool_calls:
             calls: list[tuple[str, dict[str, Any]]] = []
-            for tool_call in tool_calls:
+            call_ids: list[str] = []
+            for index, tool_call in enumerate(tool_calls):
                 function = getattr(tool_call, "function", None)
                 name = str(getattr(function, "name", "") or "").strip()
                 raw_args = str(getattr(function, "arguments", "") or "{}")
@@ -1969,25 +2280,49 @@ The constructor ``__init__`` is arg-less.
                     try:
                         parsed_args = json.loads(raw_args)
                     except Exception as exc:
-                        return [], f"invalid tool arguments for {name}: {exc}"
+                        return ReactTurn(
+                            [],
+                            f"invalid tool arguments for {name}: {exc}",
+                            _raw_assistant_message(content, tool_calls),
+                        )
                 if not isinstance(parsed_args, Mapping):
-                    return [], f"tool arguments for {name} must be an object"
+                    return ReactTurn(
+                        [],
+                        f"tool arguments for {name} must be an object",
+                        _raw_assistant_message(content, tool_calls),
+                    )
                 calls.append((name, dict(parsed_args)))
-            return self._build_react_decisions(calls, readonly=readonly)
+                # Providers normally supply an id; synthesize one when they do
+                # not, so every native turn can still be answered 1:1.
+                call_ids.append(str(getattr(tool_call, "id", "") or f"call_{index}"))
+
+            decisions, error = self._build_react_decisions(
+                calls, readonly=readonly, call_ids=call_ids
+            )
+            if error:
+                return ReactTurn(
+                    decisions, error, _raw_assistant_message(content, tool_calls)
+                )
+            return ReactTurn(
+                decisions, "", _decisions_assistant_message(content, decisions)
+            )
 
         # No native tool calls: try parsing tool invocations from the text
         # content before rejecting the response. Many OpenAI-compatible models
         # emit calls only as text.
-        content = str(getattr(message, "content", "") or "").strip()
         if not content:
-            return [], ""
+            return ReactTurn([], "", None)
+        assistant_message: dict[str, Any] = {"role": "assistant", "content": content}
         if readonly:
             # Stash the raw free text so run_react_loop can fall back to it if
             # the model never produces a valid finish(answer=...) tool call.
             self._last_raw_answer_text = content
         text_calls = self._parse_text_tool_calls(content)
         if text_calls:
-            return self._build_react_decisions(text_calls, readonly=readonly)
+            decisions, error = self._build_react_decisions(
+                text_calls, readonly=readonly
+            )
+            return ReactTurn(decisions, error, assistant_message)
         # Ask mode: attempt a conservative answer extraction from free text
         # before giving up. This recovers obvious cases (e.g. {"answer": ...});
         # everything else falls through to an error so the loop corrects the
@@ -1995,17 +2330,23 @@ The constructor ``__init__`` is arg-less.
         if readonly:
             answer = self._extract_free_text_answer(content)
             if answer:
-                return self._build_react_decisions(
+                decisions, error = self._build_react_decisions(
                     [("finish", {"answer": answer})], readonly=readonly
                 )
-            return (
+                return ReactTurn(decisions, error, assistant_message)
+            return ReactTurn(
                 [],
                 "In ask mode you must deliver your answer through the `finish` "
                 "tool with a non-empty `answer` argument. Free-text answers are "
                 "not accepted. Re-issue your complete answer as a single "
                 "finish(answer=...) tool call.",
+                assistant_message,
             )
-        return [], "Respond with tool calls only. Free text is not accepted."
+        return ReactTurn(
+            [],
+            "Respond with tool calls only. Free text is not accepted.",
+            assistant_message,
+        )
 
     # Keys whose JSON value may carry a direct answer in ask-mode free text.
     _FREE_TEXT_ANSWER_KEYS = ("answer", "final", "result", "response", "value")
@@ -2067,6 +2408,7 @@ The constructor ``__init__`` is arg-less.
         calls: list[tuple[str, dict[str, Any]]],
         *,
         readonly: bool = False,
+        call_ids: list[str] | None = None,
     ) -> tuple[list[ReactDecision], str]:
         """Build ReAct decisions from a list of (name, args) tool calls.
 
@@ -2082,12 +2424,18 @@ The constructor ``__init__`` is arg-less.
         Args:
             calls: Ordered ``(tool_name, args)`` pairs.
             readonly: Whether the loop is in readonly (ask) mode.
+            call_ids: Optional provider tool-call ids, positional with
+                ``calls``. Omitted by the text-parsing fallback, which has no
+                ids; the resulting decisions then carry ``call_id=""``.
 
         Returns:
             Tuple of (decisions, error).
         """
         decisions: list[ReactDecision] = []
-        for name, args in calls:
+        for index, (name, args) in enumerate(calls):
+            call_id = (
+                call_ids[index] if call_ids and index < len(call_ids) else ""
+            )
             if name == "finish":
                 if readonly:
                     answer = str(args.get("answer") or "").strip()
@@ -2098,7 +2446,7 @@ The constructor ``__init__`` is arg-less.
                             "with your complete answer to the question. Re-issue "
                             "your answer as a single finish(answer=...) tool call.",
                         )
-                    decisions.append(ReactDecision("", name, args, answer))
+                    decisions.append(ReactDecision("", name, args, answer, call_id))
                 else:
                     memories = args.get("memories")
                     if not isinstance(memories, list) or not memories:
@@ -2110,9 +2458,9 @@ The constructor ``__init__`` is arg-less.
                             "decision/event/observation/intention) and call "
                             "finish again.",
                         )
-                    decisions.append(ReactDecision("", name, args, ""))
+                    decisions.append(ReactDecision("", name, args, "", call_id))
             else:
-                decisions.append(ReactDecision("", name, args, ""))
+                decisions.append(ReactDecision("", name, args, "", call_id))
         finish_decisions = [d for d in decisions if d.action == "finish"]
         if finish_decisions:
             return finish_decisions[:1], ""
@@ -2400,6 +2748,66 @@ The constructor ``__init__`` is arg-less.
             "Subclasses must implement build_react_messages to use the "
             "generic ReAct loop."
         )
+
+    def build_context_refresh_message(
+        self,
+        *,
+        actions: list[str],
+        tick: int,
+        t: datetime,
+    ) -> dict[str, Any] | None:
+        """Message to append when a tool invalidated a block of the thread head.
+
+        The thread is built once per loop invocation, so per-agent blocks that
+        live in the first user message (``<todo_context>``, ``<skill_content>``)
+        no longer re-render every turn. Re-rendering them would rebuild the
+        prompt and throw away the cached prefix; appending a refreshed block
+        keeps the prefix intact. Subclass hook (default: no refresh).
+
+        Only actions that **succeeded** are passed in, and at most one message
+        is appended per turn even when several of them fired.
+
+        Args:
+            actions: Names of the tool actions that succeeded this turn.
+            tick: Current simulation tick.
+            t: Current simulation time.
+
+        Returns:
+            A chat message to append, or ``None`` when nothing needs refreshing.
+        """
+        return None
+
+    def _append_context_refresh(
+        self,
+        messages: list[dict[str, Any]],
+        decisions: list[ReactDecision],
+        entries: list[dict[str, Any]],
+        *,
+        tick: int,
+        t: datetime,
+    ) -> None:
+        """Append the subclass's context-refresh message, if it returns one.
+
+        Must run **after** the tool replies: a ``role: "tool"`` reply has to
+        follow its assistant turn before any later message.
+
+        Args:
+            messages: Chat messages (mutated in place).
+            decisions: Decisions executed this turn.
+            entries: Their observation entries, positionally aligned.
+            tick: Current simulation tick.
+            t: Current simulation time.
+        """
+        actions = [
+            decision.action
+            for decision, entry in zip(decisions, entries)
+            if entry.get("ok")
+        ]
+        if not actions:
+            return
+        refresh = self.build_context_refresh_message(actions=actions, tick=tick, t=t)
+        if refresh is not None:
+            messages.append(refresh)
 
     # ==================================================================
     # TODO handling (generic)

@@ -9,17 +9,23 @@ Re-exports:
 
 - :class:`AgentBase` (so ``from agentsociety2.agent.base import AgentBase``
   continues to work).
-- :class:`ReactDecision`, :class:`ReactToolResult` (from ``react``).
+- :class:`ReactDecision`, :class:`ReactToolResult`, :class:`ReactTurn`
+  (from ``react``).
 - :class:`TodoStateStore` (from ``todo``).
 """
 
 from agentsociety2.agent.base.agent import AgentBase
-from agentsociety2.agent.base.react import ReactDecision, ReactToolResult
+from agentsociety2.agent.base.react import (
+    ReactDecision,
+    ReactToolResult,
+    ReactTurn,
+)
 from agentsociety2.agent.base.todo import TodoStateStore
 
 __all__ = [
     "AgentBase",
     "ReactDecision",
     "ReactToolResult",
+    "ReactTurn",
     "TodoStateStore",
 ]
