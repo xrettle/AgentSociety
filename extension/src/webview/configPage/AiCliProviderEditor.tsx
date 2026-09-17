@@ -501,16 +501,38 @@ export function ProviderEditor({
             />
           ) : null}
           {!isSubscription ? (
-            <Input.Password
-              size="small"
-              placeholder={t('claudeCodeConfig.providerKeyPlaceholder')}
-              value={draft.apiKey}
-              onChange={(e) => {
-                autoFetchFingerprintRef.current = '';
-                patch({ apiKey: e.target.value, authMode: 'api' });
-              }}
-              autoComplete="off"
-            />
+            <>
+              <Input.Password
+                size="small"
+                placeholder={t('claudeCodeConfig.providerKeyPlaceholder')}
+                value={draft.apiKey}
+                onChange={(e) => {
+                  autoFetchFingerprintRef.current = '';
+                  patch({ apiKey: e.target.value, authMode: 'api' });
+                }}
+                autoComplete="off"
+              />
+              <Space size={6} wrap style={{ width: '100%' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  {t('claudeCodeConfig.providerAuthHeaderMode')}
+                </Text>
+                <Tooltip title={t('claudeCodeConfig.providerAuthHeaderModeHint')}>
+                  <QuestionCircleOutlined style={{ opacity: 0.65, cursor: 'help' }} />
+                </Tooltip>
+                <Select
+                  size="small"
+                  style={{ minWidth: 180, flex: 1 }}
+                  value={draft.authHeaderMode ?? 'auto'}
+                  options={[
+                    { value: 'auto', label: t('claudeCodeConfig.providerAuthHeaderAuto') },
+                    { value: 'bearer', label: t('claudeCodeConfig.providerAuthHeaderBearer') },
+                    { value: 'x-api-key', label: t('claudeCodeConfig.providerAuthHeaderXApiKey') },
+                    { value: 'both', label: t('claudeCodeConfig.providerAuthHeaderBoth') },
+                  ]}
+                  onChange={(value) => patch({ authHeaderMode: value })}
+                />
+              </Space>
+            </>
           ) : (
             <Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
               {isOfficialOpenAiBaseUrl(draft.baseUrl)

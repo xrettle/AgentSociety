@@ -605,6 +605,72 @@ class AgentBase(ABC):
         )
         return ctx, answer
 
+    @staticmethod
+    def _extract_json_list_from_text(text: str) -> list[Any]:
+        """Scan ``text`` for the first JSON array and return it.
+
+        :param text: Free-form text that may embed a JSON array.
+        :returns: The first decoded list, or ``[]`` if none is found.
+        """
+        decoder = json.JSONDecoder()
+        for idx, ch in enumerate(text):
+            if ch != "[":
+                continue
+            try:
+                value, _ = decoder.raw_decode(text[idx:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, list):
+                return value
+        return []
+
+    def _extract_env_list_result(
+        self,
+        env_result: Any,
+        answer: str,
+        key: str,
+    ) -> list[Any]:
+        """Extract a list payload from an ``ask_env`` return value.
+
+        Prefers a direct list, then ``env_result[key]``, then the first JSON
+        array embedded in ``answer``.
+
+        :param env_result: First element of ``ask_env`` (usually ``results``).
+        :param answer: Second element of ``ask_env`` (printed summary text).
+        :param key: Dict key to read when ``env_result`` is a mapping.
+        :returns: A list (possibly empty).
+        """
+        if isinstance(env_result, list):
+            return env_result
+        if isinstance(env_result, dict):
+            value = env_result.get(key)
+            if isinstance(value, list):
+                return value
+        return self._extract_json_list_from_text(answer)
+
+    def _ensure_env_ask_ok(
+        self,
+        env_result: Any,
+        answer: str,
+        *,
+        op: str,
+    ) -> None:
+        """Raise if an ``ask_env`` call did not report a successful status.
+
+        :param env_result: First element of ``ask_env`` (usually ``results``).
+        :param answer: Second element of ``ask_env`` (printed summary text).
+        :param op: Short label for the operation (used in the error message).
+        :raises RuntimeError: When status is missing or not success-like.
+        """
+        if not isinstance(env_result, dict):
+            raise RuntimeError(
+                f"{op} returned non-dict results: {type(env_result).__name__}"
+            )
+        status = str(env_result.get("status", "")).lower()
+        if status not in {"success", "submitted"}:
+            reason = env_result.get("reason") or answer.strip()[:200] or "no reason"
+            raise RuntimeError(f"{op} failed (status={status or 'missing'}): {reason}")
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------

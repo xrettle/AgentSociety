@@ -65,6 +65,11 @@
     "onCommand:aiSocialScientist.refreshProjectView",
     "onCommand:aiSocialScientist.formatJsonFile",
     "onCommand:aiSocialScientist.viewLiteratureIndex",
+    "onCommand:aiSocialScientist.syncLiteratureLibrary",
+    "onCommand:aiSocialScientist.exportLiteratureBibCopy",
+    "onCommand:aiSocialScientist.exportLiteratureBibFile",
+    "onCommand:aiSocialScientist.importLiteratureBib",
+    "onCommand:aiSocialScientist.openPdfPreview",
     "onCommand:aiSocialScientist.viewStepsYaml",
     "onCommand:aiSocialScientist.copyFilePath",
     "onCommand:aiSocialScientist.copyAtReference",
@@ -73,7 +78,8 @@
     "onCommand:aiSocialScientist.viewAnalysisHarnessStatus",
     "onCommand:aiSocialScientist.viewCsvFile",
     "onCommand:aiSocialScientist.openInExplorer",
-    "onCommand:aiSocialScientist.exportWorkspaceZip"
+    "onCommand:aiSocialScientist.exportWorkspaceZip",
+    "onCommand:aiSocialScientist.importWorkspaceZip"
   ],
   "icon": "resources/icon128.png",
   "main": "./out/extension.js",
@@ -224,6 +230,36 @@
         "icon": "$(edit)"
       },
       {
+        "command": "aiSocialScientist.viewLiteratureIndex",
+        "title": "AI Social Scientist: 打开文献库",
+        "icon": "$(library)"
+      },
+      {
+        "command": "aiSocialScientist.syncLiteratureLibrary",
+        "title": "AI Social Scientist: 同步完善文献库",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "aiSocialScientist.exportLiteratureBibCopy",
+        "title": "AI Social Scientist: 复制文献 BibTeX",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "aiSocialScientist.exportLiteratureBibFile",
+        "title": "AI Social Scientist: 导出 library.bib",
+        "icon": "$(export)"
+      },
+      {
+        "command": "aiSocialScientist.importLiteratureBib",
+        "title": "AI Social Scientist: 导入 BibTeX",
+        "icon": "$(desktop-download)"
+      },
+      {
+        "command": "aiSocialScientist.openPdfPreview",
+        "title": "AI Social Scientist: 预览 PDF",
+        "icon": "$(file-pdf)"
+      },
+      {
         "command": "aiSocialScientist.openTreeFileInEditor",
         "title": "AI Social Scientist: Open in Editor",
         "icon": "$(go-to-file)"
@@ -309,11 +345,6 @@
         "icon": "$(json)"
       },
       {
-        "command": "aiSocialScientist.viewLiteratureIndex",
-        "title": "AI Social Scientist: View Literature Index",
-        "icon": "$(book)"
-      },
-      {
         "command": "aiSocialScientist.viewStepsYaml",
         "title": "AI Social Scientist: View Steps Timeline",
         "icon": "$(list-ordered)"
@@ -355,8 +386,13 @@
       },
       {
         "command": "aiSocialScientist.exportWorkspaceZip",
-        "title": "AI Social Scientist: 导出工作区 ZIP",
+        "title": "导出工作区为 .zip 分享包",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "aiSocialScientist.importWorkspaceZip",
+        "title": "从 .zip 分享包导入工作区",
+        "icon": "$(cloud-upload)"
       }
     ],
     "menus": {
@@ -379,6 +415,10 @@
         },
         {
           "command": "aiSocialScientist.formatJsonFile",
+          "when": "false"
+        },
+        {
+          "command": "aiSocialScientist.openPdfPreview",
           "when": "false"
         },
         {
@@ -438,18 +478,18 @@
           "group": "navigation@1"
         },
         {
-          "command": "aiSocialScientist.openSkillMarketplace",
+          "command": "aiSocialScientist.openWalkthrough",
           "when": "view == projectStructureView && workspaceFolderCount > 0",
           "group": "navigation@2"
         },
         {
-          "command": "aiSocialScientist.openWalkthrough",
+          "command": "aiSocialScientist.exportWorkspaceZip",
           "when": "view == projectStructureView && workspaceFolderCount > 0",
           "group": "navigation@3"
         },
         {
-          "command": "aiSocialScientist.exportWorkspaceZip",
-          "when": "view == projectStructureView && workspaceFolderCount > 0",
+          "command": "aiSocialScientist.importWorkspaceZip",
+          "when": "view == projectStructureView",
           "group": "navigation@4"
         }
       ],
@@ -466,8 +506,33 @@
         },
         {
           "command": "aiSocialScientist.renameLiterature",
-          "when": "view == projectStructureView && viewItem =~ /^literatureFile/ && !(viewItem =~ /literatureIndex/)",
+          "when": "view == projectStructureView && viewItem =~ /^literatureFile/ && !(viewItem =~ /literatureIndex/) && !(viewItem =~ /literatureBib/)",
           "group": "1_modification"
+        },
+        {
+          "command": "aiSocialScientist.viewLiteratureIndex",
+          "when": "view == projectStructureView && (viewItem =~ /literatureRoot/ || viewItem =~ /literatureIndex/)",
+          "group": "1_literature@1"
+        },
+        {
+          "command": "aiSocialScientist.syncLiteratureLibrary",
+          "when": "view == projectStructureView && (viewItem =~ /literatureRoot/ || viewItem =~ /literatureIndex/)",
+          "group": "1_literature@2"
+        },
+        {
+          "command": "aiSocialScientist.importLiteratureBib",
+          "when": "view == projectStructureView && (viewItem =~ /literatureRoot/ || viewItem =~ /literatureIndex/)",
+          "group": "1_literature@3"
+        },
+        {
+          "command": "aiSocialScientist.exportLiteratureBibCopy",
+          "when": "view == projectStructureView && (viewItem =~ /literatureRoot/ || viewItem =~ /literatureIndex/ || viewItem =~ /literatureBib/)",
+          "group": "1_literature@4"
+        },
+        {
+          "command": "aiSocialScientist.exportLiteratureBibFile",
+          "when": "view == projectStructureView && (viewItem =~ /literatureRoot/ || viewItem =~ /literatureIndex/)",
+          "group": "1_literature@5"
         },
         {
           "command": "aiSocialScientist.openTreeFileInEditor",
@@ -488,11 +553,6 @@
           "command": "aiSocialScientist.formatJsonFile",
           "when": "view == projectStructureView && (viewItem =~ / json$/ || viewItem =~ /^json / || viewItem == pidJson)",
           "group": "2_actions"
-        },
-        {
-          "command": "aiSocialScientist.viewLiteratureIndex",
-          "when": "view == projectStructureView && viewItem =~ /literatureIndex/",
-          "group": "1_actions"
         },
         {
           "command": "aiSocialScientist.viewStepsYaml",
@@ -739,50 +799,50 @@
     "package": "vsce package -o ai-social-scientist.vsix",
     "package:check": "npm run check && npm run package",
     "lint": "eslint src",
-    "test:gateway": "npm run compile && node --test test/gateway-enhancements.test.js"
+    "test:gateway": "npm run compile && node --test test/*.test.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "26.1.1",
-    "@types/react": "^18.2.0",
+    "@types/react": "^18.3.31",
     "@types/react-dom": "^18.2.0",
     "@types/vscode": "^1.95.0",
     "@types/write-file-atomic": "^4.0.3",
     "@vscode/vsce": "^3.9.2",
-    "concurrently": "^10.0.3",
-    "css-loader": "^7.1.4",
-    "eslint": "^10.8.0",
-    "globals": "^17.7.0",
-    "less": "^4.2.0",
-    "less-loader": "^12.2.0",
+    "concurrently": "^10.0.5",
+    "css-loader": "^7.1.5",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "less": "^4.9.1",
+    "less-loader": "^12.3.3",
     "style-loader": "^3.3.3",
     "terser-webpack-plugin": "^5.6.1",
     "ts-loader": "^9.6.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.57.2",
-    "webpack": "^5.108.4",
+    "typescript-eslint": "^8.70.0",
+    "webpack": "^5.111.0",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.2.0",
-    "@ant-design/x": "^2.0.0",
-    "@ant-design/x-markdown": "^2.1.1",
-    "@deck.gl/core": "^9.3.6",
-    "@deck.gl/layers": "^9.3.6",
-    "@deck.gl/react": "^9.3.5",
-    "@deck.gl/widgets": "^9.3.5",
-    "antd": "^6.5.0",
-    "dayjs": "^1.11.19",
+    "@ant-design/icons": "^6.3.4",
+    "@ant-design/x": "^2.9.0",
+    "@ant-design/x-markdown": "^2.9.0",
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/react": "^9.4.0",
+    "@deck.gl/widgets": "^9.4.0",
+    "@luma.gl/webgpu": "^9.4.1",
+    "antd": "^6.6.4",
+    "dayjs": "^1.11.23",
     "https-proxy-agent": "^7.0.6",
-    "i18next": "^26.3.4",
-    "js-yaml": "^4.3.0",
-    "mapbox-gl": "3.26.0",
+    "i18next": "^26.4.2",
+    "js-yaml": "^5.4.2",
+    "mapbox-gl": "^3.30.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-i18next": "^17.0.8",
-    "react-map-gl": "^8.1.1",
-    "smol-toml": "^1.7.0",
+    "react-i18next": "^17.0.14",
+    "react-map-gl": "^8.1.3",
+    "smol-toml": "^1.8.0",
     "socks-proxy-agent": "^8.0.5",
     "write-file-atomic": "^8.0.0"
   },
@@ -793,7 +853,7 @@
     "mermaid": {
       "uuid": ">=14.0.0"
     },
-    "brace-expansion": "5.0.8",
+    "brace-expansion": "5.0.12",
     "postcss": ">=8.5.18",
     "dompurify": ">=3.4.12",
     "fast-uri": ">=3.1.4",

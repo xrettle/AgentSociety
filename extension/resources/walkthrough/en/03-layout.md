@@ -28,6 +28,8 @@ The interface implements the paper's **Interactive Research Environment (IRE)**:
 |--------|----------|
 | 🔄 Refresh | Reload the project tree |
 | 🧩 Skills | Open skill management |
+| ⬇️ Export | Pack this research project to send to someone else |
+| ⬆️ Import | Open a project archive someone shared with you |
 | ⚙️ Config | Open LLM / API settings |
 | 📖 Help | Open the user guide |
 
@@ -42,7 +44,8 @@ workspace-root/
 ├── custom/          # Custom modules and agent skills
 ├── .claude/skills/  # Claude / Codex skills
 ├── hypothesis_*/    # Hypotheses and experiments
-├── analysis/        # Analysis workspace
+├── presentation/    # Analysis reports and assets
+├── synthesis/       # Cross-hypothesis synthesis
 └── paper/           # Paper workspace
 ```
 

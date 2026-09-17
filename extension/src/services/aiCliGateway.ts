@@ -21,6 +21,7 @@ import {
   resolveUpstreamTargetUrl,
   type AiCliGatewayUpstream,
 } from './aiCliGatewayUpstream';
+import { applyUpstreamAuthHeaders } from '../aiCli/upstreamAuthHeaders';
 import { applyAnthropicModelMapping } from './anthropicModelMapping';
 import { buildAnthropicGatewayModelsResponse } from './anthropicGatewayModels';
 import {
@@ -294,58 +295,16 @@ function filterForwardHeaders(
   return out;
 }
 
-/**
- * Inject authentication headers for the upstream API.
- *
- * For Anthropic-compatible upstreams: adds `x-api-key` + `Authorization: Bearer`.
- * For OpenAI-compatible upstreams: adds `Authorization: Bearer` only.
- * The `anthropic-version` header is set to `2023-06-01` if present on the request.
- */
-function isOpenAiHostname(hostname: string): boolean {
-  return (
-    hostname === 'api.openai.com' ||
-    hostname.endsWith('.api.openai.com') ||
-    hostname === 'openai.com' ||
-    hostname.endsWith('.openai.com')
-  );
-}
-
-function isAnthropicHostname(hostname: string): boolean {
-  return (
-    hostname === 'api.anthropic.com' ||
-    hostname.endsWith('.api.anthropic.com') ||
-    hostname === 'anthropic.com' ||
-    hostname.endsWith('.anthropic.com')
-  );
-}
-
 function applyUpstreamAuth(
   headers: Record<string, string>,
   apiKey: string,
-  upstreamBaseUrl: string
+  upstreamBaseUrl: string,
+  authHeaderMode?: AiCliGatewayUpstream['authHeaderMode']
 ): void {
-  const token = apiKey.trim();
-  if (!token) {
-    return;
-  }
-  headers.authorization = `Bearer ${token}`;
-  let upstreamHost: string;
-  try {
-    upstreamHost = new URL(upstreamBaseUrl).hostname.toLowerCase();
-  } catch {
-    upstreamHost = upstreamBaseUrl.toLowerCase();
-  }
-  const isOpenAiUpstream = isOpenAiHostname(upstreamHost);
-  if (
-    !isOpenAiUpstream &&
-    (isAnthropicHostname(upstreamHost) || headers['anthropic-version'] !== undefined)
-  ) {
-    if (!headers['anthropic-version']) {
-      headers['anthropic-version'] = '2023-06-01';
-    }
-    headers['x-api-key'] = token;
-  }
-  delete headers['x-upstream-base'];
+  applyUpstreamAuthHeaders(headers, apiKey, {
+    upstreamBaseUrl,
+    mode: authHeaderMode,
+  });
 }
 
 /**
@@ -577,9 +536,10 @@ export class AiCliGateway {
     if (!baseUrl || !apiKey) {
       throw new Error('upstream_incomplete');
     }
-    this.upstream = { baseUrl, apiKey };
+    const normalized: AiCliGatewayUpstream = { ...upstream, baseUrl, apiKey };
+    this.upstream = normalized;
     if (this.upstreams.length === 0) {
-      this.upstreams = [{ baseUrl, apiKey }];
+      this.upstreams = [normalized];
     }
     if (this.server) {
       return this.getStatus();
@@ -1073,7 +1033,7 @@ export class AiCliGateway {
   ): Promise<ProxyAttemptResult> {
     const headers = filterForwardHeaders(clientReq.headers, parsed.host);
     headers['x-upstream-base'] = upstream.baseUrl;
-    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl);
+    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl, upstream.authHeaderMode);
     const mappedRequest = applyAnthropicRequestMapping(
       upstream,
       urlPath,
@@ -1231,7 +1191,7 @@ export class AiCliGateway {
   ): Promise<ProxyAttemptResult> {
     const headers = filterForwardHeaders(clientReq.headers, parsed.host);
     headers['x-upstream-base'] = upstream.baseUrl;
-    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl);
+    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl, upstream.authHeaderMode);
     const mappedRequest = applyAnthropicRequestMapping(
       upstream,
       urlPath,
@@ -1600,7 +1560,8 @@ export class AiCliGateway {
     urlPath: string,
     startTime: number,
     body: Buffer,
-    upstream: AiCliGatewayUpstream
+    upstream: AiCliGatewayUpstream,
+    overrideChatRequest?: Record<string, unknown>
   ): Promise<ProxyAttemptResult> {
 
     let responsesRequest: Record<string, unknown>;
@@ -1612,16 +1573,23 @@ export class AiCliGateway {
     }
 
     const chatModel = resolveCodexChatModel(responsesRequest.model, upstream);
-    const chatRequest = translateResponsesRequestToChat(
-      responsesRequest,
-      chatModel,
-      upstream.baseUrl
-    );
+    let chatRequest: Record<string, unknown>;
+    if (overrideChatRequest) {
+      chatRequest = overrideChatRequest;
+    } else {
+      const preflightResponses = applyPreflightRectifiers(responsesRequest, this.rectifier, chatModel);
+      chatRequest = translateResponsesRequestToChat(
+        preflightResponses,
+        chatModel,
+        upstream.baseUrl
+      );
+      chatRequest = applyPreflightRectifiers(chatRequest, this.rectifier, chatModel);
+    }
     const targetUrl = resolveChatCompletionsTargetUrl(upstream.baseUrl);
     const parsed = new URL(targetUrl);
     const isStreaming = chatRequest.stream !== false;
     const headers = filterForwardHeaders(clientReq.headers, parsed.host);
-    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl);
+    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl, upstream.authHeaderMode);
     const chatBody = Buffer.from(JSON.stringify(chatRequest), 'utf-8');
     headers['content-type'] = 'application/json';
     headers['content-length'] = String(chatBody.length);
@@ -1640,12 +1608,26 @@ export class AiCliGateway {
           proxyRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           proxyRes.on('end', () => {
             const respBody = Buffer.concat(chunks);
-            const detail = summarizeUpstreamErrorBody(respBody, status);
-            this.lastError = detail;
             if (canRetry) {
-              resolve({ ok: false, status, canRetry: true, detail });
+              resolve({ ok: false, status, canRetry: true, detail: summarizeUpstreamErrorBody(respBody, status) });
               return;
             }
+            const fixed = this.tryBuildRectifiedBody(clientReq, chatBody, status, respBody);
+            if (fixed && !clientRes.headersSent) {
+              void this.proxyCodexResponsesViaChat(
+                clientReq,
+                clientRes,
+                method,
+                urlPath,
+                startTime,
+                body,
+                upstream,
+                JSON.parse(fixed.toString('utf-8')) as Record<string, unknown>
+              ).then(resolve);
+              return;
+            }
+            const detail = summarizeUpstreamErrorBody(respBody, status);
+            this.lastError = detail;
             clientRes.writeHead(status, {
               'content-type': proxyRes.headers['content-type'] ?? 'application/json',
               'content-length': String(respBody.length),
@@ -1823,7 +1805,7 @@ export class AiCliGateway {
     const parsed = new URL(targetUrl);
     const isStreaming = chatRequest.stream !== false;
     const headers = filterForwardHeaders(clientReq.headers, parsed.host);
-    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl);
+    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl, upstream.authHeaderMode);
     const chatBody = Buffer.from(JSON.stringify(chatRequest), 'utf-8');
     headers['content-type'] = 'application/json';
     headers['content-length'] = String(chatBody.length);
@@ -2029,7 +2011,8 @@ export class AiCliGateway {
     urlPath: string,
     startTime: number,
     body: Buffer,
-    upstream: AiCliGatewayUpstream
+    upstream: AiCliGatewayUpstream,
+    overrideAnthropicRequest?: Record<string, unknown>
   ): Promise<ProxyAttemptResult> {
     let responsesRequest: Record<string, unknown>;
     try {
@@ -2047,12 +2030,19 @@ export class AiCliGateway {
     const anthropicModel = String(
       mappedModel.mappedModel ?? mappedModel.originalModel ?? upstream.model ?? requestedModel ?? 'claude-sonnet-4'
     );
-    const anthropicRequest = translateResponsesRequestToAnthropicMessages(responsesRequest, anthropicModel);
+    let anthropicRequest: Record<string, unknown>;
+    if (overrideAnthropicRequest) {
+      anthropicRequest = overrideAnthropicRequest;
+    } else {
+      anthropicRequest = translateResponsesRequestToAnthropicMessages(responsesRequest, anthropicModel);
+      anthropicRequest = applyPreflightRectifiers(anthropicRequest, this.rectifier, anthropicModel);
+      anthropicRequest = applyBedrockRequestOptimizer(anthropicRequest, this.optimizer, upstream.baseUrl);
+    }
     const targetUrl = resolveUpstreamTargetUrl(upstream.baseUrl, '/v1/messages');
     const parsed = new URL(targetUrl);
     const isStreaming = anthropicRequest.stream !== false;
     const headers = filterForwardHeaders(clientReq.headers, parsed.host);
-    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl);
+    applyUpstreamAuth(headers, upstream.apiKey, upstream.baseUrl, upstream.authHeaderMode);
     const anthropicBody = Buffer.from(JSON.stringify(anthropicRequest), 'utf-8');
     headers['content-type'] = 'application/json';
     headers['content-length'] = String(anthropicBody.length);
@@ -2076,6 +2066,20 @@ export class AiCliGateway {
               return;
             }
             const respBody = Buffer.concat(chunks);
+            const fixed = this.tryBuildRectifiedBody(clientReq, anthropicBody, status, respBody);
+            if (fixed && !clientRes.headersSent) {
+              void this.proxyCodexResponsesViaAnthropic(
+                clientReq,
+                clientRes,
+                method,
+                urlPath,
+                startTime,
+                body,
+                upstream,
+                JSON.parse(fixed.toString('utf-8')) as Record<string, unknown>
+              ).then(resolve);
+              return;
+            }
             const detail = summarizeUpstreamErrorBody(respBody, status);
             this.lastError = detail;
             clientRes.writeHead(status, {

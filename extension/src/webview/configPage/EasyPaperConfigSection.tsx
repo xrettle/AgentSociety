@@ -17,6 +17,9 @@ export interface EasyPaperConfigSectionProps {
   defaultLlmApiBase: string;
   defaultLlmModel: string;
   onSave: () => void;
+  /** When false, hide the section footer save button (wizard uses bottom CTA). */
+  showInlineSave?: boolean;
+  showIntro?: boolean;
 }
 
 export function EasyPaperConfigSection({
@@ -26,6 +29,8 @@ export function EasyPaperConfigSection({
   defaultLlmModel,
   onSave,
   form,
+  showInlineSave = true,
+  showIntro = true,
 }: EasyPaperConfigSectionProps) {
   const vlmEnabled = Boolean(Form.useWatch('vlmEnabled', form));
 
@@ -43,13 +48,15 @@ export function EasyPaperConfigSection({
 
   return (
     <div style={tabBodyStyle}>
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16, fontSize: 12 }}
-        message={t('easyPaperConfig.infoTitle')}
-        description={t('easyPaperConfig.infoDescription')}
-      />
+      {showIntro ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16, fontSize: 12 }}
+          message={t('easyPaperConfig.infoTitle')}
+          description={t('easyPaperConfig.infoDescription')}
+        />
+      ) : null}
 
       <Form form={form} layout="vertical" component={false}>
         <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
@@ -110,14 +117,16 @@ export function EasyPaperConfigSection({
           </>
         ) : null}
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-          <Button type="primary" icon={<SaveOutlined />} onClick={onSave}>
-            {t('easyPaperConfig.save')}
-          </Button>
-          <Text type="secondary" style={{ fontSize: 11, alignSelf: 'center' }}>
-            {t('easyPaperConfig.saveHint')}
-          </Text>
-        </div>
+        {showInlineSave ? (
+          <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+            <Button type="primary" icon={<SaveOutlined />} onClick={onSave}>
+              {t('easyPaperConfig.save')}
+            </Button>
+            <Text type="secondary" style={{ fontSize: 11, alignSelf: 'center' }}>
+              {t('easyPaperConfig.saveHint')}
+            </Text>
+          </div>
+        ) : null}
       </Form>
     </div>
   );

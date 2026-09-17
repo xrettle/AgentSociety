@@ -333,6 +333,7 @@ export function AiCliProviderGroup({
                   apiKey: d.apiKey,
                   apiKind: d.apiKind,
                   authMode: d.authMode,
+                  authHeaderMode: d.authHeaderMode,
                   activeClaude: d.activeClaude,
                   activeCodex: d.activeCodex,
                   failoverClaude: d.failoverClaude,

@@ -6,9 +6,19 @@ description: Use when academic literature needs to be gathered or refreshed for 
 
 # Academic Literature Search
 
-Search academic literature through the **academic literature search gateway** and save results to the workspace `papers/` directory. Queries all configured data sources (local, arXiv, CrossRef, OpenAlex) by default.
+Search academic literature through the **academic literature search gateway** (MCP) and save results to the workspace `papers/` directory. Queries all configured data sources (local, arXiv, CrossRef, OpenAlex) by default.
 
 The runtime connects via **MCP** using workspace `.env` only. You do **not** need Claude `mcp.json` for this skill.
+
+## Plugin vs this skill
+
+| Need | Where |
+| ---- | ----- |
+| Topic / keyword search across sources | **This skill** (`literature-search`) — requires MCP key |
+| Open-access PDF helpers for search hits | **This skill** (`literature-full-text`) |
+| Upload PDF/MD, paste DOI/arXiv, sync metadata, BibTeX import/export | **VS Code extension** literature library UI (public APIs + local files; **no MCP**) |
+
+Do not reimplement DOI paste / local upload / Bib sync with this skill.
 
 ## When to Use
 
@@ -16,14 +26,14 @@ The runtime connects via **MCP** using workspace `.env` only. You do **not** nee
 - Starting a new research topic and `TOPIC.md` does not yet exist
 - Existing `TOPIC.md` needs enrichment with more references
 - User asks "what has been published on X?"
-- User asks to refresh or expand `papers/literature_index.json`
+- User asks to refresh or expand `papers/literature_index.json` **via search**
 
 **Do NOT use when:**
 
 - User already has a well-defined hypothesis and wants to design experiments (use hypothesis skill)
 - User needs to run a simulation (use experiment-config skill)
 - User only wants to read a local PDF already in the workspace; open or summarize that file directly
-
+- User wants to manage the local library (upload, DOI add, BibTeX, sync fill) — use the extension literature UI
 ## Quick Reference
 
 Use the Python interpreter from `.env`. See `CLAUDE.md` for setup.

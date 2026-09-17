@@ -10,6 +10,16 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { filePathToAtReference } from './atReference';
+import { openWorkspaceFile } from './openWorkspaceFile';
+import {
+  downloadLiteraturePdfs,
+  exportLiteratureBibtex,
+  importLiteratureBibtex,
+  ingestByIdentifier,
+  ingestLocalFile,
+  syncLiteratureLibrary,
+  type LiteratureSyncPayload,
+} from './services/literatureIngest';
 
 interface LiteratureEntry {
   title?: string;
@@ -38,6 +48,7 @@ interface LiteratureIndex {
 
 export class LiteratureIndexViewer {
   private static currentPanel: vscode.WebviewPanel | undefined;
+  private static currentIndexPath: string | undefined;
 
   private static safeWorkspacePath(workspaceRoot: string, filePath: string): string | undefined {
     const candidatePath = path.isAbsolute(filePath)
@@ -46,6 +57,341 @@ export class LiteratureIndexViewer {
     const relative = path.relative(workspaceRoot, candidatePath);
     const isInside = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
     return isInside ? candidatePath : undefined;
+  }
+
+  private static reloadIndex(indexPath: string): LiteratureIndex {
+    const content = fs.readFileSync(indexPath, 'utf-8');
+    return JSON.parse(content) as LiteratureIndex;
+  }
+
+  private static refreshPanel(panel: vscode.WebviewPanel, indexPath: string): void {
+    const data = this.reloadIndex(indexPath);
+    this.updateWebview(panel, data, indexPath);
+    void vscode.commands.executeCommand('aiSocialScientist.refreshProjectView');
+  }
+
+  private static async handleAddByIdentifier(
+    panel: vscode.WebviewPanel,
+    indexPath: string,
+    identifier: string
+  ): Promise<void> {
+    const isZh = vscode.env.language.startsWith('zh');
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const raw = identifier.trim();
+    if (!workspaceFolder || !raw) {
+      vscode.window.showWarningMessage(isZh ? '请输入 DOI 或 arXiv 编号。' : 'Enter a DOI or arXiv id.');
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: isZh ? '正在查询文献元数据…' : 'Looking up bibliographic metadata…',
+      },
+      async () => {
+        try {
+          const payload = await ingestByIdentifier(workspaceFolder.uri.fsPath, raw);
+          if (!payload.ok) {
+            throw new Error(payload.error || 'Lookup failed');
+          }
+          this.refreshPanel(panel, indexPath);
+          if (payload.duplicate) {
+            vscode.window.showWarningMessage(
+              isZh
+                ? `已在库中：${payload.title || raw}`
+                : `Already in library: ${payload.title || raw}`
+            );
+          } else {
+            vscode.window.showInformationMessage(
+              isZh ? `已添加：${payload.title || raw}` : `Added: ${payload.title || raw}`
+            );
+          }
+        } catch (error: any) {
+          vscode.window.showErrorMessage(
+            isZh
+              ? `添加失败: ${error.message || error}`
+              : `Add failed: ${error.message || error}`
+          );
+        }
+      }
+    );
+  }
+
+  private static async handleUploadFiles(
+    panel: vscode.WebviewPanel,
+    indexPath: string
+  ): Promise<void> {
+    const isZh = vscode.env.language.startsWith('zh');
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
+      return;
+    }
+
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: true,
+      openLabel: isZh ? '添加到文献库' : 'Add to library',
+      filters: {
+        Literature: ['pdf', 'md', 'markdown', 'txt'],
+      },
+    });
+    if (!uris || uris.length === 0) {
+      return;
+    }
+
+    let added = 0;
+    let duplicates = 0;
+    const errors: string[] = [];
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: isZh ? '正在导入文献文件…' : 'Importing literature files…',
+      },
+      async () => {
+        for (const uri of uris) {
+          try {
+            const payload = await ingestLocalFile(workspaceFolder.uri.fsPath, uri.fsPath);
+            if (!payload.ok) {
+              errors.push(payload.error || uri.fsPath);
+              continue;
+            }
+            if (payload.duplicate) {
+              duplicates += 1;
+            } else if (payload.added) {
+              added += 1;
+            }
+          } catch (error: any) {
+            errors.push(`${path.basename(uri.fsPath)}: ${error.message || error}`);
+          }
+        }
+      }
+    );
+
+    this.refreshPanel(panel, indexPath);
+    if (errors.length > 0) {
+      vscode.window.showErrorMessage(
+        isZh
+          ? `部分文件导入失败（${errors.length}）：${errors[0]}`
+          : `Some imports failed (${errors.length}): ${errors[0]}`
+      );
+    } else if (added > 0) {
+      vscode.window.showInformationMessage(
+        isZh
+          ? `已添加 ${added} 篇${duplicates ? `，跳过重复 ${duplicates} 篇` : ''}`
+          : `Added ${added} item(s)${duplicates ? `, skipped ${duplicates} duplicate(s)` : ''}`
+      );
+    } else if (duplicates > 0) {
+      vscode.window.showWarningMessage(
+        isZh ? `全部为重复条目（${duplicates}）` : `All ${duplicates} item(s) already in library`
+      );
+    }
+  }
+
+  private static parseEntryIds(raw: unknown): number[] | undefined {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return undefined;
+    }
+    const ids = raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0);
+    return ids.length > 0 ? ids : undefined;
+  }
+
+  private static formatSyncSummary(payload: LiteratureSyncPayload, isZh: boolean): string {
+    const meta = payload.metadata_updated ?? 0;
+    const pdf = payload.pdf_downloaded ?? 0;
+    const noCand = payload.pdf_no_candidate ?? 0;
+    const failed = (payload.metadata_failed ?? 0) + (payload.pdf_failed ?? 0);
+    if (isZh) {
+      return `同步完成：补全元数据 ${meta}，下载原文 ${pdf}`
+        + (noCand ? `，无开放 PDF ${noCand}` : '')
+        + (failed ? `，失败 ${failed}` : '')
+        + '（公开接口，不使用文献 MCP）';
+    }
+    return `Sync done: metadata ${meta}, PDFs ${pdf}`
+      + (noCand ? `, no OA PDF ${noCand}` : '')
+      + (failed ? `, failed ${failed}` : '')
+      + ' (public APIs only; literature MCP not used)';
+  }
+
+  private static async handleSyncLibrary(
+    panel: vscode.WebviewPanel,
+    indexPath: string,
+    entryIds?: number[]
+  ): Promise<void> {
+    const isZh = vscode.env.language.startsWith('zh');
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: isZh
+          ? '正在同步完善（公开元数据 + 开放 PDF）…'
+          : 'Syncing library (public metadata + OA PDFs)…',
+      },
+      async () => {
+        try {
+          const payload = await syncLiteratureLibrary(workspaceFolder.uri.fsPath, entryIds);
+          if (!payload.ok) {
+            throw new Error(payload.error || 'Sync failed');
+          }
+          this.refreshPanel(panel, indexPath);
+          vscode.window.showInformationMessage(this.formatSyncSummary(payload, isZh));
+        } catch (error: any) {
+          vscode.window.showErrorMessage(
+            isZh
+              ? `同步失败: ${error.message || error}`
+              : `Sync failed: ${error.message || error}`
+          );
+        }
+      }
+    );
+  }
+
+  private static async handleDownloadPdfs(
+    panel: vscode.WebviewPanel,
+    indexPath: string,
+    entryIds: number[]
+  ): Promise<void> {
+    const isZh = vscode.env.language.startsWith('zh');
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder || entryIds.length === 0) {
+      vscode.window.showWarningMessage(
+        isZh ? '请先选择要下载原文的文献。' : 'Select articles to download first.'
+      );
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: isZh ? '正在尝试下载开放原文…' : 'Trying open-access PDF download…',
+      },
+      async () => {
+        try {
+          const payload = await downloadLiteraturePdfs(
+            workspaceFolder.uri.fsPath,
+            entryIds,
+            true
+          );
+          if (!payload.ok) {
+            throw new Error(payload.error || 'Download failed');
+          }
+          this.refreshPanel(panel, indexPath);
+          vscode.window.showInformationMessage(this.formatSyncSummary(payload, isZh));
+        } catch (error: any) {
+          vscode.window.showErrorMessage(
+            isZh
+              ? `下载失败: ${error.message || error}`
+              : `Download failed: ${error.message || error}`
+          );
+        }
+      }
+    );
+  }
+
+  private static async handleExportBib(
+    entryIds?: number[],
+    mode: 'copy' | 'file' = 'copy'
+  ): Promise<void> {
+    const isZh = vscode.env.language.startsWith('zh');
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
+      return;
+    }
+
+    try {
+      const payload = await exportLiteratureBibtex(
+        workspaceFolder.uri.fsPath,
+        entryIds,
+        mode === 'copy'
+      );
+      if (!payload.ok) {
+        throw new Error(payload.error || 'Export failed');
+      }
+      const bibtex = typeof payload.bibtex === 'string' ? payload.bibtex : '';
+      if (!bibtex.trim()) {
+        vscode.window.showWarningMessage(isZh ? '没有可导出的条目。' : 'Nothing to export.');
+        return;
+      }
+      if (mode === 'copy') {
+        await vscode.env.clipboard.writeText(bibtex);
+        vscode.window.showInformationMessage(
+          isZh
+            ? `已复制 ${payload.count ?? 0} 条 BibTeX`
+            : `Copied ${payload.count ?? 0} BibTeX entr(y/ies)`
+        );
+      } else {
+        vscode.window.showInformationMessage(
+          isZh
+            ? `已写入 ${payload.path || 'papers/library.bib'}（${payload.count ?? 0} 条）`
+            : `Wrote ${payload.path || 'papers/library.bib'} (${payload.count ?? 0})`
+        );
+        void vscode.commands.executeCommand('aiSocialScientist.refreshProjectView');
+      }
+    } catch (error: any) {
+      vscode.window.showErrorMessage(
+        isZh
+          ? `导出 BibTeX 失败: ${error.message || error}`
+          : `BibTeX export failed: ${error.message || error}`
+      );
+    }
+  }
+
+  private static async handleImportBib(
+    panel: vscode.WebviewPanel,
+    indexPath: string
+  ): Promise<void> {
+    const isZh = vscode.env.language.startsWith('zh');
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
+      return;
+    }
+
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: isZh ? '导入 BibTeX' : 'Import BibTeX',
+      filters: { BibTeX: ['bib'] },
+    });
+    if (!uris || uris.length === 0) {
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: isZh ? '正在导入 BibTeX…' : 'Importing BibTeX…',
+      },
+      async () => {
+        try {
+          const payload = await importLiteratureBibtex(
+            workspaceFolder.uri.fsPath,
+            uris[0].fsPath
+          );
+          if (!payload.ok) {
+            throw new Error(payload.error || 'Import failed');
+          }
+          this.refreshPanel(panel, indexPath);
+          vscode.window.showInformationMessage(
+            isZh
+              ? `导入完成：新增 ${payload.added ?? 0}，重复 ${payload.duplicates ?? 0}`
+              : `Import done: added ${payload.added ?? 0}, duplicates ${payload.duplicates ?? 0}`
+          );
+        } catch (error: any) {
+          vscode.window.showErrorMessage(
+            isZh
+              ? `导入失败: ${error.message || error}`
+              : `Import failed: ${error.message || error}`
+          );
+        }
+      }
+    );
   }
 
   public static async show(context: vscode.ExtensionContext, filePath: string): Promise<void> {
@@ -63,6 +409,7 @@ export class LiteratureIndexViewer {
     // 如果已有面板，复用它
     if (this.currentPanel) {
       this.currentPanel.reveal(vscode.ViewColumn.One);
+      this.currentIndexPath = filePath;
       this.updateWebview(this.currentPanel, data, filePath);
       return;
     }
@@ -79,10 +426,12 @@ export class LiteratureIndexViewer {
     );
 
     this.currentPanel = panel;
+    this.currentIndexPath = filePath;
 
     // 处理面板关闭
     panel.onDidDispose(() => {
       this.currentPanel = undefined;
+      this.currentIndexPath = undefined;
     });
 
     // 处理来自 webview 的消息
@@ -100,13 +449,7 @@ export class LiteratureIndexViewer {
                 throw new Error('Refused to open a path outside the workspace');
               }
 
-              const uri = vscode.Uri.file(candidatePath);
-              const ext = path.extname(candidatePath).toLowerCase();
-              if (ext === '.md') {
-                await vscode.commands.executeCommand('markdown.showPreview', uri);
-              } else {
-                await vscode.commands.executeCommand('vscode.open', uri);
-              }
+              await openWorkspaceFile(candidatePath);
             }
           } catch (error: any) {
             const isZh = vscode.env.language.startsWith('zh');
@@ -152,6 +495,30 @@ export class LiteratureIndexViewer {
               typeof message.emptyMessage === 'string' && message.emptyMessage
                 ? message.emptyMessage
                 : (isZh ? '没有可复制的内容' : 'Nothing to copy')
+            );
+          }
+        } else if (message.command === 'addByIdentifier') {
+          const identifier = typeof message.identifier === 'string' ? message.identifier : '';
+          await this.handleAddByIdentifier(panel, filePath, identifier);
+        } else if (message.command === 'uploadFiles') {
+          await this.handleUploadFiles(panel, filePath);
+        } else if (message.command === 'syncLibrary') {
+          await this.handleSyncLibrary(panel, filePath, this.parseEntryIds(message.entryIds));
+        } else if (message.command === 'downloadPdfs') {
+          const ids = this.parseEntryIds(message.entryIds) || [];
+          await this.handleDownloadPdfs(panel, filePath, ids);
+        } else if (message.command === 'exportBib') {
+          const mode = message.mode === 'file' ? 'file' : 'copy';
+          await this.handleExportBib(this.parseEntryIds(message.entryIds), mode);
+        } else if (message.command === 'importBib') {
+          await this.handleImportBib(panel, filePath);
+        } else if (message.command === 'refresh') {
+          try {
+            this.refreshPanel(panel, filePath);
+          } catch (error: any) {
+            const isZh = vscode.env.language.startsWith('zh');
+            vscode.window.showErrorMessage(
+              isZh ? `刷新失败: ${error.message}` : `Refresh failed: ${error.message}`
             );
           }
         } else if (message.command === 'deleteEntry') {
@@ -204,6 +571,7 @@ export class LiteratureIndexViewer {
             currentData.updated_at = new Date().toISOString();
             fs.writeFileSync(indexPath, JSON.stringify(currentData, null, 2), 'utf-8');
             this.updateWebview(panel, currentData, indexPath);
+            void vscode.commands.executeCommand('aiSocialScientist.refreshProjectView');
             vscode.window.showInformationMessage(isZh ? `已删除「${title}」` : `Deleted "${title}"`);
           } catch (error: any) {
             vscode.window.showErrorMessage(isZh ? `删除失败: ${error.message}` : `Delete failed: ${error.message}`);
@@ -428,8 +796,67 @@ export class LiteratureIndexViewer {
 
     .empty-state {
       text-align: center;
-      padding: 40px;
+      padding: 48px 24px;
       color: var(--vscode-descriptionForeground);
+      border: 1px dashed var(--vscode-panel-border);
+      border-radius: 8px;
+      background-color: var(--vscode-input-background);
+    }
+
+    .empty-state h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      color: var(--vscode-editor-foreground);
+    }
+
+    .empty-state p {
+      margin: 0 0 20px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .empty-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .ingest-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 8px;
+      background-color: var(--vscode-input-background);
+    }
+
+    .ingest-bar input[type="text"] {
+      flex: 1 1 240px;
+      min-width: 0;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid var(--vscode-input-border);
+      background-color: var(--vscode-editor-background);
+      color: var(--vscode-input-foreground);
+      border-radius: 4px;
+      outline: none;
+    }
+
+    .ingest-bar input[type="text"]:focus {
+      border-color: var(--vscode-focusBorder);
+    }
+
+    .hidden-when-empty {
+      display: block;
+    }
+
+    body.is-empty .hidden-when-empty {
+      display: none;
     }
 
     .filter-group {
@@ -608,11 +1035,11 @@ export class LiteratureIndexViewer {
     }
   </style>
 </head>
-<body>
+<body class="${total === 0 ? 'is-empty' : ''}">
   <div class="header">
     <div>
-      <h1>${isChinese ? '📚 文献索引' : '📚 Literature Index'}</h1>
-      <div class="subtitle">${isChinese ? '检索、排序、复制 @引用，并打开本地笔记或原文 PDF。' : 'Search, sort, copy @references, and open local notes or full-text PDFs.'}</div>
+      <h1>${isChinese ? '文献库' : 'Literature Library'}</h1>
+      <div class="subtitle">${isChinese ? '上传 PDF、粘贴 DOI 或导入 Bib；可同步补全元数据与开放原文。主题检索请用文献技能。' : 'Upload PDFs, paste a DOI, or import BibTeX. Sync fills metadata and open-access PDFs. Use the literature skill for topic search.'}</div>
     </div>
     <div class="stats">
       ${isChinese ? `共 ${total} 篇文献` : `${total} articles`}
@@ -620,7 +1047,16 @@ export class LiteratureIndexViewer {
     </div>
   </div>
 
-  <div class="toolbar">
+  <div class="ingest-bar">
+    <input type="text" id="doiInput" placeholder="${isChinese ? '粘贴 DOI 或 arXiv 编号，例如 10.1038/... 或 1706.03762' : 'Paste DOI or arXiv id, e.g. 10.1038/... or 1706.03762'}" />
+    <button class="batch-btn primary" id="addDoiBtn">${isChinese ? '用 DOI 添加' : 'Add by DOI'}</button>
+    <button class="batch-btn" id="uploadBtn">${isChinese ? '上传 PDF / MD' : 'Upload PDF / MD'}</button>
+    <button class="batch-btn" id="importBibBtn">${isChinese ? '导入 Bib' : 'Import Bib'}</button>
+    <button class="batch-btn" id="syncBtn" title="${isChinese ? '补全缺失的作者/年份/摘要等，并尝试下载开放获取 PDF' : 'Fill missing authors/year/abstract and try open-access PDF download'}">${isChinese ? '同步完善' : 'Sync & Fill'}</button>
+    <button class="batch-btn" id="refreshBtn">${isChinese ? '刷新' : 'Refresh'}</button>
+  </div>
+
+  <div class="toolbar hidden-when-empty">
     <div class="search-box">
       <input type="text" id="searchInput" placeholder="${isChinese ? '搜索标题、作者、摘要或关键词...' : 'Search title, authors, abstract, or keywords...'}" />
     </div>
@@ -635,13 +1071,16 @@ export class LiteratureIndexViewer {
       </div>
     </div>
   </div>
-  <div id="resultLine" class="result-line"></div>
+  <div id="resultLine" class="result-line hidden-when-empty"></div>
 
-  <div class="batch-actions">
+  <div class="batch-actions hidden-when-empty">
     <input type="checkbox" id="selectAll" class="select-all-checkbox" />
     <label for="selectAll" style="font-size: 12px; margin-right: 12px;">${isChinese ? '全选' : 'Select All'}</label>
-    <button class="batch-btn primary" id="copySelectedBtn">📋 ${isChinese ? '复制选中 @引用' : 'Copy Selected @Refs'}</button>
-    <button class="batch-btn" id="exportBtn">📋 ${isChinese ? '复制列表 CSV' : 'Copy List CSV'}</button>
+    <button class="batch-btn primary" id="copySelectedBtn">${isChinese ? '复制选中 @引用' : 'Copy Selected @Refs'}</button>
+    <button class="batch-btn" id="downloadSelectedBtn">${isChinese ? '下载选中原文' : 'Download Selected PDFs'}</button>
+    <button class="batch-btn" id="copyBibBtn">${isChinese ? '复制 BibTeX' : 'Copy BibTeX'}</button>
+    <button class="batch-btn" id="writeBibBtn">${isChinese ? '写入 library.bib' : 'Write library.bib'}</button>
+    <button class="batch-btn" id="exportBtn">${isChinese ? '复制列表 CSV' : 'Copy List CSV'}</button>
   </div>
 
   <div id="entries"></div>
@@ -754,7 +1193,34 @@ export class LiteratureIndexViewer {
       updateResultLine(filteredEntries.length);
 
       if (filteredEntries.length === 0) {
-        container.innerHTML = '<div class="empty-state">' + (entries.length === 0 ? (isChinese ? '文献索引还是空的。把 PDF 或 Markdown 文献放入 papers/ 后再刷新索引。' : 'The literature index is empty. Add PDFs or Markdown notes under papers/ and refresh the index.') : (isChinese ? '没有找到匹配的文献' : 'No matching articles found')) + '</div>';
+        if (entries.length === 0) {
+          container.innerHTML =
+            '<div class="empty-state">' +
+            '<h2>' + (isChinese ? '还没有文献' : 'No papers yet') + '</h2>' +
+            '<p>' + (isChinese
+              ? '上传 PDF / Markdown，或粘贴 DOI、arXiv 编号添加。主题检索仍可用 Claude 技能 /agentsociety-literature-search。'
+              : 'Upload a PDF / Markdown file, or paste a DOI or arXiv id. Topic search still uses the /agentsociety-literature-search skill.') +
+            '</p>' +
+            '<div class="empty-actions">' +
+            '<button class="batch-btn primary" id="emptyUploadBtn">' + (isChinese ? '上传 PDF / MD' : 'Upload PDF / MD') + '</button>' +
+            '<button class="batch-btn" id="emptyFocusDoiBtn">' + (isChinese ? '填写 DOI' : 'Focus DOI field') + '</button>' +
+            '</div></div>';
+          const emptyUpload = document.getElementById('emptyUploadBtn');
+          const emptyFocus = document.getElementById('emptyFocusDoiBtn');
+          if (emptyUpload) {
+            emptyUpload.addEventListener('click', function() {
+              vscodeApi.postMessage({ command: 'uploadFiles' });
+            });
+          }
+          if (emptyFocus) {
+            emptyFocus.addEventListener('click', function() {
+              const input = document.getElementById('doiInput');
+              if (input) { input.focus(); }
+            });
+          }
+        } else {
+          container.innerHTML = '<div class="empty-state">' + (isChinese ? '没有找到匹配的文献' : 'No matching articles found') + '</div>';
+        }
         updateSelectAllState();
         return;
       }
@@ -830,11 +1296,13 @@ export class LiteratureIndexViewer {
           \${sourceUrl ? \`<div class="file-path">🔗 \${isChinese ? '原文链接' : 'Source'}: \${escapeHtml(sourceUrl)}</div>\` : ''}
           <div class="file-path">\${fullTextPath ? '📎' : 'ⓘ'} \${escapeHtml(fullTextLabel)}\${fullTextPath ? \`: \${escapeHtml(fullTextPath)}\` : ''}\${fullTextReason ? \` · \${escapeHtml(fullTextReason)}\` : ''}</div>
           <div class="entry-actions">
-            \${originalTarget ? \`<button class="action-btn primary" data-original-target="\${escapeHtml(originalTarget)}" data-is-local-file="\${fullTextPath ? 'true' : 'false'}" onclick="handleOpenOriginal(this)">📖 \${isChinese ? '查看原文' : 'View Original'}</button>\` : ''}
-            \${filePath ? \`<button class="action-btn" data-original-target="\${escapeHtml(filePath)}" data-is-local-file="true" onclick="handleOpenOriginal(this)">📝 \${isChinese ? '查看 Markdown' : 'View Markdown'}</button>\` : ''}
-            \${filePath ? \`<button class="action-btn" onclick="copyAtReferenceForEntry(this)">📋 \${isChinese ? '复制 @引用' : 'Copy @Ref'}</button>\` : ''}
-            \${sourceUrl ? \`<button class="action-btn" data-source-url="\${escapeHtml(sourceUrl)}" onclick="handleCopySourceUrl(this)">🔗 \${isChinese ? '复制原文链接' : 'Copy Source Link'}</button>\` : ''}
-            <button class="action-btn danger" data-entry-id="\${escapeHtml(String(entry._entry_id || index))}" data-title="\${escapeHtml(title)}" onclick="handleDeleteEntry(this)">🗑 \${isChinese ? '删除' : 'Delete'}</button>
+            \${originalTarget ? \`<button class="action-btn primary" data-original-target="\${escapeHtml(originalTarget)}" data-is-local-file="\${fullTextPath ? 'true' : 'false'}" onclick="handleOpenOriginal(this)">\${isChinese ? '查看原文' : 'View Original'}</button>\` : ''}
+            \${!fullTextPath ? \`<button class="action-btn" data-entry-id="\${escapeHtml(String(entry._entry_id || index))}" onclick="handleDownloadEntry(this)">\${isChinese ? '获取原文' : 'Fetch PDF'}</button>\` : ''}
+            \${filePath ? \`<button class="action-btn" data-original-target="\${escapeHtml(filePath)}" data-is-local-file="true" onclick="handleOpenOriginal(this)">\${isChinese ? '查看笔记' : 'View Note'}</button>\` : ''}
+            \${filePath ? \`<button class="action-btn" onclick="copyAtReferenceForEntry(this)">\${isChinese ? '复制 @引用' : 'Copy @Ref'}</button>\` : ''}
+            <button class="action-btn" data-entry-id="\${escapeHtml(String(entry._entry_id || index))}" onclick="handleCopyEntryBib(this)">\${isChinese ? '复制 BibTeX' : 'Copy BibTeX'}</button>
+            \${sourceUrl ? \`<button class="action-btn" data-source-url="\${escapeHtml(sourceUrl)}" onclick="handleCopySourceUrl(this)">\${isChinese ? '复制链接' : 'Copy Link'}</button>\` : ''}
+            <button class="action-btn danger" data-entry-id="\${escapeHtml(String(entry._entry_id || index))}" data-title="\${escapeHtml(title)}" onclick="handleDeleteEntry(this)">\${isChinese ? '删除' : 'Delete'}</button>
           </div>
         \`;
 
@@ -935,6 +1403,29 @@ export class LiteratureIndexViewer {
       });
     }
 
+    function handleDownloadEntry(btn) {
+      const entryId = btn.getAttribute('data-entry-id') || '';
+      vscodeApi.postMessage({
+        command: 'downloadPdfs',
+        entryIds: [entryId]
+      });
+    }
+
+    function handleCopyEntryBib(btn) {
+      const entryId = btn.getAttribute('data-entry-id') || '';
+      vscodeApi.postMessage({
+        command: 'exportBib',
+        entryIds: [entryId],
+        mode: 'copy'
+      });
+    }
+
+    function getCheckedEntryIds() {
+      return Array.from(document.querySelectorAll('.entry-checkbox:checked'))
+        .map(function(cb) { return cb.getAttribute('data-entry-id'); })
+        .filter(Boolean);
+    }
+
     function copyAtReferenceForEntry(btn) {
       const row = btn.closest('.entry');
       const atRef = row && row.getAttribute('data-at-ref');
@@ -995,6 +1486,72 @@ export class LiteratureIndexViewer {
         return title.includes(query) || authors.includes(query) || keywords.includes(query) || abstract.includes(query) || journal.includes(query) || doi.includes(query);
       });
       applySort(filtered);
+    });
+
+    function submitDoi() {
+      var input = document.getElementById('doiInput');
+      var identifier = input ? String(input.value || '').trim() : '';
+      if (!identifier) {
+        vscodeApi.postMessage({
+          command: 'copyText',
+          text: '',
+          emptyMessage: isChinese ? '请输入 DOI 或 arXiv 编号。' : 'Enter a DOI or arXiv id.'
+        });
+        return;
+      }
+      vscodeApi.postMessage({ command: 'addByIdentifier', identifier: identifier });
+    }
+
+    document.getElementById('addDoiBtn').addEventListener('click', submitDoi);
+    document.getElementById('doiInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitDoi();
+      }
+    });
+    document.getElementById('uploadBtn').addEventListener('click', function() {
+      vscodeApi.postMessage({ command: 'uploadFiles' });
+    });
+    document.getElementById('importBibBtn').addEventListener('click', function() {
+      vscodeApi.postMessage({ command: 'importBib' });
+    });
+    document.getElementById('syncBtn').addEventListener('click', function() {
+      var ids = getCheckedEntryIds();
+      vscodeApi.postMessage({
+        command: 'syncLibrary',
+        entryIds: ids.length > 0 ? ids : undefined
+      });
+    });
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+      vscodeApi.postMessage({ command: 'refresh' });
+    });
+    document.getElementById('downloadSelectedBtn').addEventListener('click', function() {
+      var ids = getCheckedEntryIds();
+      if (ids.length === 0) {
+        vscodeApi.postMessage({
+          command: 'copyText',
+          text: '',
+          emptyMessage: isChinese ? '请先勾选要下载原文的文献。' : 'Select articles before downloading PDFs.'
+        });
+        return;
+      }
+      vscodeApi.postMessage({ command: 'downloadPdfs', entryIds: ids });
+    });
+    document.getElementById('copyBibBtn').addEventListener('click', function() {
+      var ids = getCheckedEntryIds();
+      vscodeApi.postMessage({
+        command: 'exportBib',
+        entryIds: ids.length > 0 ? ids : undefined,
+        mode: 'copy'
+      });
+    });
+    document.getElementById('writeBibBtn').addEventListener('click', function() {
+      var ids = getCheckedEntryIds();
+      vscodeApi.postMessage({
+        command: 'exportBib',
+        entryIds: ids.length > 0 ? ids : undefined,
+        mode: 'file'
+      });
     });
 
     // 初始渲染（应用当前排序设置）

@@ -329,6 +329,8 @@ export function ConfigWizardStepPanel(props: ConfigWizardStepPanelProps) {
           defaultLlmApiBase={effectiveConfigValues.llmApiBase ?? ''}
           defaultLlmModel={effectiveConfigValues.llmModel ?? ''}
           onSave={props.onSaveEasyPaper}
+          showInlineSave={false}
+          showIntro={false}
         />
       </div>
     );

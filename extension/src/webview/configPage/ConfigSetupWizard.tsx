@@ -39,13 +39,16 @@ type Props = {
   canSave: boolean;
   canSaveAndStart: boolean;
   saving: boolean;
+  savingEasyPaper?: boolean;
   startingBackend: boolean;
   onStepChange: (step: number) => void;
   onExitWizard: () => void;
   onCompleteWizard: () => void;
   onSave: () => void;
   onSaveAndStart: () => void;
+  onSaveEasyPaper: () => void;
   onValidateDefault: () => void;
+  children?: React.ReactNode;
 };
 
 export function ConfigSetupWizard({
@@ -59,13 +62,16 @@ export function ConfigSetupWizard({
   canSave,
   canSaveAndStart,
   saving,
+  savingEasyPaper = false,
   startingBackend,
   onStepChange,
   onExitWizard,
   onCompleteWizard,
   onSave,
   onSaveAndStart,
+  onSaveEasyPaper,
   onValidateDefault,
+  children,
 }: Props) {
   const current = WIZARD_STEPS[step];
   const simulationReady = hasLlmKey && defaultValidation.valid === true && !defaultValidation.validating;
@@ -127,6 +133,17 @@ export function ConfigSetupWizard({
       }
       return;
     }
+    // Optional config steps: persist then continue (Skip remains a no-write path).
+    if (current.key === 'literature') {
+      if (canSave) {
+        onSave();
+      }
+      return;
+    }
+    if (current.key === 'easypaper') {
+      onSaveEasyPaper();
+      return;
+    }
     if (step >= WIZARD_STEPS.length - 1) {
       onCompleteWizard();
       return;
@@ -168,6 +185,9 @@ export function ConfigSetupWizard({
         ? t('configPage.setupGuide.actionNext')
         : t('configPage.setupGuide.actionSaveAndStart');
     }
+    if (current.key === 'literature' || current.key === 'easypaper') {
+      return t('configPage.setupGuide.actionSave');
+    }
     if (step >= WIZARD_STEPS.length - 1) {
       return t('configPage.setupGuide.actionFinish');
     }
@@ -187,8 +207,11 @@ export function ConfigSetupWizard({
       }
       return false;
     }
-    if (current.key === 'save') {
+    if (current.key === 'save' || current.key === 'literature') {
       return !canSave || saving;
+    }
+    if (current.key === 'easypaper') {
+      return savingEasyPaper;
     }
     if (current.key === 'backend') {
       if (backendReady) {
@@ -206,12 +229,14 @@ export function ConfigSetupWizard({
     hasLlmKey,
     hasWorkspace,
     saving,
+    savingEasyPaper,
     startingBackend,
   ]);
 
   const nextLoading =
     (current.key === 'simulation' && defaultValidation.validating) ||
-    (current.key === 'save' && saving) ||
+    ((current.key === 'save' || current.key === 'literature') && saving) ||
+    (current.key === 'easypaper' && savingEasyPaper) ||
     (current.key === 'backend' && startingBackend);
 
   return (
@@ -257,6 +282,8 @@ export function ConfigSetupWizard({
         message={introTitle}
         description={<span style={{ fontSize: 12 }}>{introBody}</span>}
       />
+
+      {children ? <div style={{ marginBottom: 14 }}>{children}</div> : null}
 
       <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
         <Button

@@ -1,8 +1,12 @@
+import type { AiCliAuthHeaderMode } from '../aiCli/upstreamAuthHeaders';
+
 export type AiCliGatewayUpstream = {
   baseUrl: string;
   apiKey: string;
   providerName?: string;
   apiKind?: 'anthropic' | 'openai';
+  /** Outbound auth header strategy; omitted/`auto` keeps historical host-based behavior. */
+  authHeaderMode?: AiCliAuthHeaderMode;
   model?: string;
   sonnetModel?: string;
   opusModel?: string;

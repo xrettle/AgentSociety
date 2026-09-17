@@ -5,7 +5,7 @@ import { ClaudeCodeConfigSection, type ProviderSectionCommonProps } from './Clau
 import { GatewayUsagePanel } from './GatewayUsagePanel';
 import { tabBodyStyle } from './configPageStyles';
 import type { TokenUsageRecord } from './gatewayUsageTypes';
-import { providerHasApiUpstream } from './providerAuth';
+import { countApiUpstreamsForRole, providerEligibleForRoleUpstream } from './providerAuth';
 import type { ModelPricingMap } from './modelPricing';
 
 const { Text } = Typography;
@@ -92,8 +92,8 @@ export function AiCliConfigSection(props: AiCliConfigSectionProps) {
     setProxyDraft(gatewayStatus.outboundProxyUrl ?? '');
   }, [gatewayStatus.outboundProxyUrl]);
   const failoverHealth = gatewayStatus.failoverHealth ?? {};
-  const claudeUpstreamCount = providers.filter((p) => providerHasApiUpstream(p)).length;
-  const codexUpstreamCount = providers.filter((p) => providerHasApiUpstream(p)).length;
+  const claudeUpstreamCount = countApiUpstreamsForRole(providers, 'claude');
+  const codexUpstreamCount = countApiUpstreamsForRole(providers, 'codex');
   const showFailoverToggle =
     (routeClaude && claudeUpstreamCount >= 2) || (routeCodex && codexUpstreamCount >= 2);
   const anyRouteEnabled = routeClaude || routeCodex;
@@ -381,7 +381,7 @@ export function AiCliConfigSection(props: AiCliConfigSectionProps) {
                     <Text strong style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
                       {t('claudeCodeConfig.failoverBackupsFor', { role: 'Claude' })}
                     </Text>
-                    {providers.filter((p) => !p.activeClaude && providerHasApiUpstream(p)).map((p) => (
+                    {providers.filter((p) => !p.activeClaude && providerEligibleForRoleUpstream(p, 'claude')).map((p) => (
                       <div
                         key={p.id}
                         onClick={() => onToggleFailoverProvider(p.id, 'claude')}
@@ -403,7 +403,7 @@ export function AiCliConfigSection(props: AiCliConfigSectionProps) {
                         {p.name || p.baseUrl || t('claudeCodeConfig.providerUnnamed')}
                       </div>
                     ))}
-                    {providers.filter((p) => !p.activeClaude && providerHasApiUpstream(p)).length === 0 ? (
+                    {providers.filter((p) => !p.activeClaude && providerEligibleForRoleUpstream(p, 'claude')).length === 0 ? (
                       <Text type="secondary" style={{ fontSize: 10 }}>{t('claudeCodeConfig.failoverNoBackups')}</Text>
                     ) : null}
                   </div>
@@ -413,7 +413,7 @@ export function AiCliConfigSection(props: AiCliConfigSectionProps) {
                     <Text strong style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
                       {t('claudeCodeConfig.failoverBackupsFor', { role: 'Codex' })}
                     </Text>
-                    {providers.filter((p) => !p.activeCodex && providerHasApiUpstream(p)).map((p) => (
+                    {providers.filter((p) => !p.activeCodex && providerEligibleForRoleUpstream(p, 'codex')).map((p) => (
                       <div
                         key={p.id}
                         onClick={() => onToggleFailoverProvider(p.id, 'codex')}
@@ -435,7 +435,7 @@ export function AiCliConfigSection(props: AiCliConfigSectionProps) {
                         {p.name || p.baseUrl || t('claudeCodeConfig.providerUnnamed')}
                       </div>
                     ))}
-                    {providers.filter((p) => !p.activeCodex && providerHasApiUpstream(p)).length === 0 ? (
+                    {providers.filter((p) => !p.activeCodex && providerEligibleForRoleUpstream(p, 'codex')).length === 0 ? (
                       <Text type="secondary" style={{ fontSize: 10 }}>{t('claudeCodeConfig.failoverNoBackups')}</Text>
                     ) : null}
                   </div>

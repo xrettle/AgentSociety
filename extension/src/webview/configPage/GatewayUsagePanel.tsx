@@ -36,9 +36,9 @@ import {
   formatChartCost,
   formatTokenCount,
   hasChatUsageRecords,
-  inferRecordApp,
   isProbeUsageRecord,
   localDateKey,
+  recordApp,
   resolveRecordProvider,
   selectAccountingRecords,
   type UsageAppFilter,
@@ -130,7 +130,7 @@ export function GatewayUsagePanel({
     if (visibleApps.length === 0) {
       return chatRangeRecords;
     }
-    return chatRangeRecords.filter((record) => visibleApps.includes(inferRecordApp(record)));
+    return chatRangeRecords.filter((record) => visibleApps.includes(recordApp(record)));
   }, [chatRangeRecords, visibleApps]);
   const totalAggregation = React.useMemo(
     () => aggregateGatewayUsage(scopedRecords) ?? (hasAnyRecords ? emptyAggregation() : null),
@@ -174,7 +174,7 @@ export function GatewayUsagePanel({
           r.cacheReadTokens,
           r.cacheCreationTokens,
           customPricing,
-          { app: inferRecordApp(r) }
+          { app: recordApp(r) }
         );
         return sum + (cost?.total ?? 0);
       }, 0),
@@ -223,7 +223,7 @@ export function GatewayUsagePanel({
         r.cacheReadTokens,
         r.cacheCreationTokens,
         customPricing,
-        { app: inferRecordApp(r) }
+        { app: recordApp(r) }
       );
       map.set(matchKey, (map.get(matchKey) ?? 0) + (cost?.total ?? 0));
     }
@@ -428,7 +428,7 @@ export function GatewayUsagePanel({
               record.cacheReadTokens,
               record.cacheCreationTokens,
               customPricing,
-              { app: inferRecordApp(record) }
+              { app: recordApp(record) }
             );
             return sum + (itemCost?.total ?? 0);
           }, 0);
@@ -833,7 +833,7 @@ export function GatewayUsagePanel({
                   row.cacheReadTokens,
                   row.cacheCreationTokens,
                   customPricing,
-                  { app: inferRecordApp(row) }
+                  { app: recordApp(row) }
                 );
                 return <Text style={{ fontSize: 11 }}>{cost ? formatCost(cost.total) : '—'}</Text>;
               },

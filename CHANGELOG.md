@@ -18,6 +18,7 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ### Added
 
+- **extension**：工作区导出 / 导入。侧边栏可将研究项目打包发给同事，对方用同一入口打开；密钥不会进入压缩包，导入后需自行配置模型密钥。
 - **extension** `1.7.0`：配置页适配推理（thinking）开关——默认 LLM 卡片与「代码生成」tab 各新增一个
   「跟随网关默认 / 开启 / 关闭」下拉，中英双语文案与 `.env` 模板注释同步。`AGENTSOCIETY_LLM_THINKING`
   等变量此前插件完全无感知（手写在 `.env` 里的值只能靠后端 `load_dotenv()` 再加载一遍才生效），
@@ -36,6 +37,7 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ### Changed
 
+- **extension**：导出、导入和入门文档改为面向研究者的说明，去掉清单、哈希、输出通道等开发用语。
 - **agentsociety2**：prompt 分节按变化频率重排——system 去掉 agent 名、ask 规则移入 user 消息，
   `<recent_observations>` 从 user 消息开头移到末尾。同一 run 内所有 agent 共享同一段 system 前缀
   （实测命中率 43.2% → 69.1%）。

@@ -21,7 +21,6 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
 from agentsociety2.contrib.env.commons_tragedy import CommonsTragedyEnv
-from agentsociety2.contrib.agent.commons_tragedy_agent import CommonsTragedyAgent
 
 # Ensure results directory exists
 os.makedirs("result_commons_tragedy", exist_ok=True)
@@ -158,13 +157,12 @@ async def main():
 
         # Create environment router
         env_router = CodeGenRouter(env_modules=[env_module])
-
-        # Create agents
-        agents = []
+        # Create agent specs (workspace-bound; no direct Agent(...))
         agent_names = [f"Agent {i + 1}" for i in range(NUM_AGENTS)]
-        for i, name in enumerate(agent_names):
-            agent = CommonsTragedyAgent(id=i + 1, name=name)
-            agents.append(agent)
+        agent_specs = [
+            {"id": i + 1, "profile": {"id": i + 1, "name": name}, "config": {}}
+            for i, name in enumerate(agent_names)
+        ]
 
         # Create AgentSociety
         start_time = datetime.now()
@@ -179,7 +177,7 @@ async def main():
             await replay_writer.init()
             
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=agent_specs,
                 agent_class_name="CommonsTragedyAgent",
                 env_router=env_router,
                 start_t=start_time,

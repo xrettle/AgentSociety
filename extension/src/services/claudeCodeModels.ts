@@ -319,9 +319,9 @@ export function suggestClaudeModelMappings(
   const fallback = sonnet ?? opus ?? ids[0];
   return {
     model: fallback,
-    sonnetModel: sonnet,
-    opusModel: opus,
-    fableModel: fable,
-    haikuModel: haiku,
+    sonnetModel: sonnet ?? fallback,
+    opusModel: opus ?? fallback,
+    fableModel: fable ?? opus ?? fallback,
+    haikuModel: haiku ?? fallback,
   };
 }

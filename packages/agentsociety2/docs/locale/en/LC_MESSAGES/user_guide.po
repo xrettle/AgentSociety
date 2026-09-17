@@ -692,6 +692,47 @@ msgstr ""
 "As research progresses, the workspace will gradually form the following "
 "structure (no manual creation needed):"
 
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "分享工作区"
+msgstr "Share a Workspace"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "研究进行到可交接时，可在扩展侧边栏使用 **导出工作区**，把当前项目打包成压缩包发给同事："
+msgstr ""
+"When a project is ready to hand off, use **Export Workspace** in the "
+"extension sidebar to pack it and send it to a colleague:"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "导出列表会展示研究问题、假设与实验、文献、数据、分析报告、项目设置和技能；已有的关键内容默认勾选"
+msgstr ""
+"The export picker shows the research question, hypotheses and experiments, "
+"literature, data, analysis reports, project settings, and skills; existing "
+"key content is selected by default"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "``hypothesis_*`` 会完整包含实验配置（``init/``）和运行结果（``run/``），体积较大时可取消勾选"
+msgstr ""
+"Each ``hypothesis_*`` directory includes its experiment configuration "
+"(``init/``) and run outputs (``run/``); deselect it when the payload is too large"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "**不会带上密钥、虚拟环境和 Git 历史**"
+msgstr "Secrets, virtual environments, and Git history are **not** included"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "发出去之前，请确认你有权分享其中的论文、数据和第三方技能"
+msgstr ""
+"Before sending it, confirm you may share any papers, data, and third-"
+"party skills"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "对方在扩展中选择 **导入工作区** 后，依次选择分享包和保存位置，再输入新项目文件夹名。扩展会显示最终路径并新建目录，不会覆盖已有项目；导入后需要在配置页填写自己的模型密钥，才能继续运行。"
+msgstr ""
+"With **Import Workspace**, the recipient selects the share package and "
+"parent directory, then enters a new project folder name. The extension "
+"shows the final path and creates the directory without overwriting an "
+"existing project. They must enter their own model keys before continuing."
+
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:430
 msgid "常见问题"
 msgstr "FAQ"
@@ -757,6 +798,16 @@ msgstr ""
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:461
 msgid "**内存不足**：减少智能体数量或仿真步数"
 msgstr "**Insufficient memory**: Reduce the number of agents or simulation steps"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "导入别人的工作区后无法运行"
+msgstr "An imported workspace will not run"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "分享包不含密钥。请打开配置页，填写你自己的模型 API Key 后再启动后端或运行实验。"
+msgstr ""
+"Share packages do not include secrets. Open the configuration page, enter"
+" your own model API key, then start the backend or run experiments."
 
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:463
 msgid "更多 CLI 使用方法见 :doc:`cli`，研究技能详见 :doc:`skills`。"

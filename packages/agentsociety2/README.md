@@ -338,17 +338,15 @@ cp .env.example .env
 
 The `examples/` directory contains ready-to-run examples:
 
-- `basics/`: Basic agent and environment usage
+- `basics/`: Basic agent and environment usage (workspace `agent_specs` + `run_dir`)
 - `games/`: Classic game theory simulations
-  - Prisoner's Dilemma
-  - Public Goods Game
-  - Trust Game
-  - Volunteer's Dilemma
-  - Commons Tragedy
-- `advanced/`: Advanced usage patterns
-  - Custom environment modules
-  - Multi-router setups
-  - Experiment replay and analysis
+  - Prisoner's Dilemma (`01_prisoners_dilemma.py`)
+  - Public Goods Game (`02_public_goods.py`)
+  - Reputation Game (`reputation_game.py`)
+- `advanced/`: Custom agents and multi-router setups
+
+Longer batch scripts (Trust Game, Volunteer's Dilemma, Commons Tragedy, etc.) live under
+`experiments/env_main_*_v2.py`.
 
 ## Documentation
 

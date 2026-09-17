@@ -21,7 +21,6 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
 from agentsociety2.contrib.env.public_goods import PublicGoodsEnv
-from agentsociety2.contrib.agent.public_goods_agent import PublicGoodsAgent
 
 # Ensure results directory exists
 os.makedirs("result_public_goods", exist_ok=True)
@@ -192,26 +191,28 @@ async def main():
         # Create environment router
         env_router = CodeGenRouter(env_modules=[env_module])
 
-        # Create agents
-        agents = []
+        # Create agent specs
         agent_names = [f"Agent {chr(65 + i)}" for i in range(NUM_AGENTS)]
-        for i, name in enumerate(agent_names):
-            agent = PublicGoodsAgent(
-                id=i + 1,
-                name=name,
-                num_rounds=NUM_ROUNDS,
-                num_agents=NUM_AGENTS,
-                initial_endowment=INITIAL_ENDOWMENT,
-                public_pool_multiplier=PUBLIC_POOL_MULTIPLIER,
-            )
-            agents.append(agent)
+        agent_specs = [
+            {
+                "id": i + 1,
+                "profile": {"id": i + 1, "name": name},
+                "config": {
+                    "num_rounds": NUM_ROUNDS,
+                    "num_agents": NUM_AGENTS,
+                    "initial_endowment": INITIAL_ENDOWMENT,
+                    "public_pool_multiplier": PUBLIC_POOL_MULTIPLIER,
+                },
+            }
+            for i, name in enumerate(agent_names)
+        ]
 
         # Create AgentSociety
         start_time = datetime.now()
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=agent_specs,
                 agent_class_name="PublicGoodsAgent",
                 env_router=env_router,
                 start_t=start_time

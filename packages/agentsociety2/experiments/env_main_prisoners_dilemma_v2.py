@@ -20,7 +20,6 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
 from agentsociety2.contrib.env.prisoners_dilemma import PrisonersDilemmaEnv
-from agentsociety2.contrib.agent.prisoners_dilemma_agent import PrisonersDilemmaAgent
 
 # Ensure results directory exists
 os.makedirs("result_prisoners_dilemma", exist_ok=True)
@@ -210,20 +209,19 @@ async def main():
 
         # Create environment router
         env_router = CodeGenRouter(env_modules=[env_module])
-
-        # Create agents
-        agents = []
+        # Create agent specs (workspace-bound; no direct Agent(...))
         agent_names = ["Agent A", "Agent B"]
-        for i, name in enumerate(agent_names):
-            agent = PrisonersDilemmaAgent(id=i + 1, name=name)
-            agents.append(agent)
+        agent_specs = [
+            {"id": i + 1, "profile": {"id": i + 1, "name": name}, "config": {}}
+            for i, name in enumerate(agent_names)
+        ]
 
         # Create AgentSociety
         start_time = datetime.now()
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=agent_specs,
                 agent_class_name="PrisonersDilemmaAgent",
                 env_router=env_router,
                 start_t=start_time

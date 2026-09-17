@@ -79,7 +79,7 @@ create-agent 技能
    $PYTHON_PATH .agentsociety/bin/ags.py create-agent --file custom/agents/my_agent.py
    $PYTHON_PATH .agentsociety/bin/ags.py create-agent --file custom/agents/my_agent.py --json
 
-校验器会检查：目标文件为 Python 文件、至少有一个直接继承 ``AgentBase`` 或 ``PersonAgent`` 的类、``ask`` / ``step`` / ``dump`` / ``load`` 均为 ``async def``、模块可动态导入、目标类不是 abstract class。创建完成后，在 VS Code 扩展中执行 **Scan Custom Modules** 让后端重新发现模块。
+校验器会检查：目标文件为 Python 文件、至少有一个直接继承 ``AgentBase`` 或 ``PersonAgent`` 的类、``ask`` / ``step`` / ``to_workspace`` 均为 ``async def``（另需实现 ``create`` / ``from_workspace`` 工作区契约）、模块可动态导入、目标类不是 abstract class。创建完成后，在 VS Code 扩展中执行 **Scan Custom Modules** 让后端重新发现模块。
 
 
 实验工作流

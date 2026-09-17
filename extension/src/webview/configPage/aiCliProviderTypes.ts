@@ -1,5 +1,6 @@
 import type { AiCliApiKind } from '../../aiCli/officialEndpoints';
 import type { AiCliAuthMode } from './providerAuth';
+import type { AiCliAuthHeaderMode } from '../../aiCli/upstreamAuthHeaders';
 import type { ClaudeModelOption } from './claudeCodeTypes';
 
 export type AiCliProviderRecord = {
@@ -9,6 +10,7 @@ export type AiCliProviderRecord = {
   apiKey: string;
   apiKind?: AiCliApiKind;
   authMode?: AiCliAuthMode;
+  authHeaderMode?: AiCliAuthHeaderMode;
   activeClaude: boolean;
   activeCodex: boolean;
   failoverClaude: boolean;
@@ -38,6 +40,7 @@ export const EMPTY_PROVIDER_DRAFT: Omit<AiCliProviderRecord, 'id' | 'activeClaud
   apiKey: '',
   apiKind: undefined,
   authMode: 'api',
+  authHeaderMode: 'auto',
   model: '',
   codexModel: '',
   sonnetModel: '',
@@ -54,7 +57,7 @@ export const EMPTY_PROVIDER_DRAFT: Omit<AiCliProviderRecord, 'id' | 'activeClaud
   codexEnable1m: false,
   codexContextWindow: undefined,
   codexAutoCompactLimit: undefined,
-  permissionMode: '',
+  permissionMode: 'bypassPermissions',
 };
 
 export function isAnthropicProvider(provider: Pick<AiCliProviderRecord, 'apiKind' | 'baseUrl'>): boolean {
@@ -102,9 +105,11 @@ export function autoMapClaudeRoleModels(
   const fallback = sonnet ?? opus ?? models[0]?.id ?? '';
   return {
     model: current.model?.trim() ? current.model : fallback,
-    sonnetModel: current.sonnetModel?.trim() ? current.sonnetModel : (sonnet ?? ''),
-    opusModel: current.opusModel?.trim() ? current.opusModel : (opus ?? ''),
-    fableModel: current.fableModel?.trim() ? current.fableModel : (fable ?? ''),
-    haikuModel: current.haikuModel?.trim() ? current.haikuModel : (haiku ?? ''),
+    sonnetModel: current.sonnetModel?.trim() ? current.sonnetModel : (sonnet ?? fallback),
+    opusModel: current.opusModel?.trim() ? current.opusModel : (opus ?? fallback),
+    fableModel: current.fableModel?.trim()
+      ? current.fableModel
+      : (fable ?? opus ?? fallback),
+    haikuModel: current.haikuModel?.trim() ? current.haikuModel : (haiku ?? fallback),
   };
 }

@@ -7,17 +7,18 @@ Downloads PDFs into ``papers/full_texts/`` and records paths under
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import re
 import shutil
+import socket
 import sys
-import ipaddress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from agentsociety2.logger import get_logger
 
@@ -215,10 +216,15 @@ def looks_like_pdf(url: str, content_type: str, content: bytes) -> bool:
     )
 
 
+def _is_restricted_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return not ip.is_global
+
+
 def _validate_public_url(url: str) -> None:
     """Validate that a URL is safe to fetch (SSRF protection).
 
-    Only allows http/https schemes and blocks private/reserved IP ranges.
+    Allows only http/https. Blocks literal private IPs, localhost aliases,
+    and hostnames whose DNS answers include non-global addresses.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -228,18 +234,41 @@ def _validate_public_url(url: str) -> None:
     if not hostname:
         raise FullTextDownloadError(f"URL has no hostname: {url}")
 
-    # Block raw IP addresses in private/reserved ranges
-    try:
-        ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            raise FullTextDownloadError(f"URL targets restricted IP range: {hostname}")
-    except ValueError:
-        # Not an IP address — resolve hostname and check
-        pass
+    if hostname.lower() in ("localhost", "metadata.google.internal"):
+        raise FullTextDownloadError(f"URL targets restricted host: {hostname}")
 
-    # Block localhost aliases
-    if hostname.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-        raise FullTextDownloadError(f"URL targets localhost: {hostname}")
+    try:
+        literal_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        literal_ip = None
+
+    if literal_ip is not None:
+        if _is_restricted_ip(literal_ip):
+            raise FullTextDownloadError(f"URL targets restricted IP range: {hostname}")
+        return
+
+    try:
+        addr_infos = socket.getaddrinfo(hostname, parsed.port or 0, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise FullTextDownloadError(f"DNS resolution failed for {hostname}: {exc}") from exc
+
+    if not addr_infos:
+        raise FullTextDownloadError(f"DNS resolution returned no addresses for {hostname}")
+
+    for info in addr_infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if _is_restricted_ip(ip):
+            raise FullTextDownloadError(
+                f"URL hostname resolves to restricted address: {hostname} -> {ip}"
+            )
+
+
+class _SafeRedirectHandler(HTTPRedirectHandler):
+    """Re-validate every redirect hop before following it."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        _validate_public_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def download_pdf_bytes(url: str, *, timeout: int = 60) -> tuple[bytes, str]:
@@ -252,10 +281,12 @@ def download_pdf_bytes(url: str, *, timeout: int = 60) -> tuple[bytes, str]:
     """
     _validate_public_url(url)
     request = Request(url, headers={"User-Agent": USER_AGENT})
+    opener = build_opener(_SafeRedirectHandler())
     try:
-        with urlopen(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             content = response.read()
             final_url = response.geturl()
+            _validate_public_url(final_url)
             content_type = response.headers.get("content-type", "")
             if not looks_like_pdf(final_url, content_type, content):
                 raise FullTextDownloadError(

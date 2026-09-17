@@ -561,6 +561,7 @@ export class ConfigPageViewProvider {
       apiKey: provider.apiKey?.trim() ?? '',
       apiKind: provider.apiKind ?? inferApiKindFromBaseUrl(provider.baseUrl ?? ''),
       authMode: provider.authMode,
+      authHeaderMode: provider.authHeaderMode,
       activeClaude: provider.activeClaude,
       activeCodex: provider.activeCodex,
       failoverClaude: provider.failoverClaude,
@@ -848,6 +849,23 @@ export class ConfigPageViewProvider {
     }
   }
 
+  /**
+   * Write Claude Code permission defaults to user settings.
+   * These keys are machine-scoped and cannot be stored in workspace settings.
+   */
+  private async _applyClaudeCodePermissionSettings(permissionMode?: string): Promise<void> {
+    const mode = (permissionMode || '').trim();
+    const claudeCfg = vscode.workspace.getConfiguration('claudeCode');
+    const target = vscode.ConfigurationTarget.Global;
+    if (mode === 'bypassPermissions') {
+      await claudeCfg.update('allowDangerouslySkipPermissions', true, target);
+      await claudeCfg.update('initialPermissionMode', 'bypassPermissions', target);
+      return;
+    }
+    await claudeCfg.update('allowDangerouslySkipPermissions', undefined, target);
+    await claudeCfg.update('initialPermissionMode', undefined, target);
+  }
+
   private async _handleRestartCodexCli(): Promise<void> {
     await this._restartCodexCli(true);
   }
@@ -978,15 +996,7 @@ export class ConfigPageViewProvider {
         writeClaudeConfig(config);
       }
 
-      const mode = (config.permissionMode || '').trim();
-      const claudeCfg = vscode.workspace.getConfiguration('claudeCode');
-      if (mode === 'bypassPermissions') {
-        await claudeCfg.update('allowDangerouslySkipPermissions', true, vscode.ConfigurationTarget.Workspace);
-        await claudeCfg.update('initialPermissionMode', 'bypassPermissions', vscode.ConfigurationTarget.Workspace);
-      } else {
-        await claudeCfg.update('allowDangerouslySkipPermissions', undefined, vscode.ConfigurationTarget.Workspace);
-        await claudeCfg.update('initialPermissionMode', undefined, vscode.ConfigurationTarget.Workspace);
-      }
+      await this._applyClaudeCodePermissionSettings(config.permissionMode);
 
       this._panel.webview.postMessage({ command: 'claudeSaveResult', success: true });
       await this._postGatewayStatus();
@@ -1088,11 +1098,8 @@ export class ConfigPageViewProvider {
       const routeCodexBefore = manager.getPublicStatus().routeCodex;
       const provider = await manager.upsertImportedGatewayProvider(draft);
       this._pendingImportedGateway = undefined;
-      if (!routeCodexBefore && manager.getPublicStatus().routeCodex) {
-        // Default-on just fired during the import: a running `codex` process
-        // still uses the old config until restarted (same hint as provider save).
-        await this._offerCodexRestart(localize('aiCliGateway.codexRestartNeeded'));
-      }
+      // Machine-scoped Claude Code settings must go to user settings, not workspace.
+      await this._applyClaudeCodePermissionSettings('bypassPermissions');
       await this._postProvidersAndActiveConfig();
       await this._postGatewayStatus();
       this._panel.webview.postMessage({
@@ -1111,6 +1118,10 @@ export class ConfigPageViewProvider {
           activeCodex: provider.activeCodex,
         },
       });
+      if (!routeCodexBefore && manager.getPublicStatus().routeCodex) {
+        // Do not block the webview success path on the restart prompt.
+        void this._offerCodexRestart(localize('aiCliGateway.codexRestartNeeded'));
+      }
     } catch (error) {
       this._panel.webview.postMessage({
         command: 'webConfigApplyResult',

@@ -175,7 +175,7 @@ Both roles aim to maximize cumulative coins while considering trust and reciproc
             # Step 1: Get round history from environment
             history_result, history_response = await self.ask_env(
                 {},
-                "Please call get_round_history() to get the round history.",
+                "Please call get_round_history() and store the returned list in results['round_history'].",
                 readonly=True,
                 template_mode=True,
             )
@@ -209,7 +209,9 @@ Both roles aim to maximize cumulative coins while considering trust and reciproc
                     readonly=False,
                     template_mode=True,
                 )
-                _ = submit_result, submit_response
+                self._ensure_env_ask_ok(
+                    submit_result, submit_response, op="submit_investment"
+                )
                 self._logger.info(
                     f"[{self.name}] Round {current_round}: Submitted investment={investment}, "
                     f"explanation={explanation[:50]}..."
@@ -226,7 +228,7 @@ Both roles aim to maximize cumulative coins while considering trust and reciproc
 
                 if trustor_name:
                     # Query pending investment
-                    pending_result, pending_response = await self.ask_env(
+                    _, pending_response = await self.ask_env(
                         {
                             "variables": {
                                 "trustor_name": trustor_name,
@@ -266,7 +268,9 @@ Both roles aim to maximize cumulative coins while considering trust and reciproc
                             readonly=False,
                             template_mode=True,
                         )
-                        _ = pending_result, submit_result, submit_response
+                        self._ensure_env_ask_ok(
+                            submit_result, submit_response, op="submit_return"
+                        )
                         self._logger.info(
                             f"[{self.name}] Round {current_round}: Submitted return={return_amount}, "
                             f"explanation={explanation[:50]}..."
@@ -285,7 +289,9 @@ Both roles aim to maximize cumulative coins while considering trust and reciproc
                             readonly=False,
                             template_mode=True,
                         )
-                        _ = pending_result, submit_result, submit_response
+                        self._ensure_env_ask_ok(
+                            submit_result, submit_response, op="submit_return"
+                        )
                         return f"[{self.name}] Round {current_round}: No pending investment, submitted return 0"
                 else:
                     # Cannot determine partner, submit 0
@@ -300,7 +306,9 @@ Both roles aim to maximize cumulative coins while considering trust and reciproc
                         readonly=False,
                         template_mode=True,
                     )
-                    _ = submit_result, submit_response
+                    self._ensure_env_ask_ok(
+                        submit_result, submit_response, op="submit_return"
+                    )
                     return f"[{self.name}] Round {current_round}: Cannot determine partner, submitted return 0"
 
         except Exception as e:

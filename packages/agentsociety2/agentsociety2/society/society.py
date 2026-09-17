@@ -107,8 +107,9 @@ class AgentSociety:
       绝不在主进程常驻 agent 对象。
     - ``step`` 每 tick 切批提交 ``step_agent_batch`` Ray Task，跨 worker 并行；批内顺序执行
       （每个 agent 是 LLM-bound，顺序无妨）。
-    - ``ask``/``intervene``/``run_questionnaire``/``dump`` 为低频外部查询，按需在主进程
+    - ``ask``/``intervene``/``run_questionnaire`` 为低频外部查询，按需在主进程
       ``from_workspace`` 重建目标 agent（workspace 在本地磁盘）。
+      状态落盘使用 ``to_workspace`` / ``from_workspace``（society 级 checkpoint）。
 
     Example::
 

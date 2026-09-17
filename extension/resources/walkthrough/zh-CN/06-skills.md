@@ -2,7 +2,7 @@
 
 AgentSociety² 将可复用的方法、工具与行为过程封装为技能。AI Social Scientist 会按任务逐步加载研究技能，Silicon Participants 则在仿真中激活行为技能；这样不必把全部规则塞进一个超长 Prompt，也更容易审计每一步使用了什么能力。
 
-侧边栏点 **技能**，或从命令面板打开技能管理。页内分三个 Tab；详细说明在标题旁 **?** 或页头帮助中。
+侧边栏点 **技能**，或从命令面板打开技能管理。页内分四个 Tab（运行时 / Claude / 市场 / MCP）；详细说明在标题旁 **?** 或页头帮助中。市场源与 Token 在页头 **设置** 统一配置。
 
 ### 作为硅基参与者的 PersonAgent
 
@@ -18,7 +18,7 @@ AgentSociety² 将可复用的方法、工具与行为过程封装为技能。AI
 
 ![Agent 运行时技能](../images/agent-skills.png)
 
-常见内置 / 自定义技能示例：`daily-guidance`、经济推理、事件、出行、社交媒体等。它们改变的是**仿真参与者如何行动**。
+PersonAgent 内置行为技能目前主要为 `daily-guidance`；工作区还可安装自定义技能，环境模块也可提供 `env` 技能。它们改变的是**仿真参与者如何行动**。
 
 ### Claude 目录
 
@@ -34,6 +34,10 @@ AgentSociety² 将可复用的方法、工具与行为过程封装为技能。AI
 |------|------|------|
 | **Agent 运行时** | `custom/skills/` | Silicon Participants 的行为能力 |
 | **Claude / Codex 目录** | `.claude/skills/` | AI Social Scientist 的研究与工程能力 |
+
+### 技能市场
+
+**市场** Tab 从远程仓库浏览技能，可选择安装到运行时（`custom/skills/`）或 Claude 目录（`.claude/skills/`）。
 
 ### MCP
 

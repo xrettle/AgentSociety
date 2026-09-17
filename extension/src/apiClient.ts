@@ -271,7 +271,9 @@ export interface AgentSkillItem {
   skill_id: string;
   name: string;
   description: string;
-  source: string;      // "builtin" | "custom" | "env:*"
+  /** Registry source: `built-in` | `custom` | `env`. */
+  source: string;
+  source_label?: string;
   path: string;
   has_skill_md: boolean;
   script: string;

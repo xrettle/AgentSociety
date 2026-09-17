@@ -29,7 +29,8 @@ workspace-root/
 ├── custom/
 ├── .claude/skills/
 ├── hypothesis_<id>/     # created by later workflows
-├── analysis/            # created when using analysis skills
+├── presentation/        # analysis reports and assets
+├── synthesis/           # cross-hypothesis synthesis
 └── paper/               # created when using paper-toolkit
 ```
 

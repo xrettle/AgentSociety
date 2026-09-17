@@ -9,6 +9,8 @@ from fastapi import HTTPException
 from agentsociety2.backend.path_security import (
     extract_zip_under,
     require_disjoint_copy_paths,
+    require_safe_skill_name,
+    resolve_path_under_directory,
     resolve_under_root,
     resolve_workspace_root,
 )
@@ -41,6 +43,20 @@ def test_resolve_under_root_rejects_traversal(tmp_path: Path) -> None:
         resolve_under_root(workspace, "..", "outside")
     with pytest.raises(HTTPException, match="Path escapes workspace root"):
         resolve_under_root(workspace, str(similar_prefix))
+    with pytest.raises(HTTPException, match="Path escapes workspace root"):
+        resolve_under_root(workspace, "foo bar.md")
+
+
+def test_resolve_under_root_rebuilds_allowlisted_segments(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    resolved = resolve_under_root(workspace, "scripts", "run.py")
+    assert resolved == (workspace / "scripts" / "run.py").resolve()
+    hidden = resolve_under_root(workspace, ".agentsociety", "prefill_params.json")
+    assert hidden == (workspace / ".agentsociety" / "prefill_params.json").resolve()
+    for part in ("...", ".bad name", "foo bar"):
+        with pytest.raises(HTTPException, match="Path escapes workspace root"):
+            resolve_under_root(workspace, part)
 
 
 def test_resolve_under_root_handles_root_and_symlink_escape(tmp_path: Path) -> None:
@@ -54,6 +70,18 @@ def test_resolve_under_root_handles_root_and_symlink_escape(tmp_path: Path) -> N
 
     with pytest.raises(HTTPException, match="Path escapes workspace root"):
         resolve_under_root(workspace, "link", "file.txt")
+
+
+def test_resolve_path_under_directory_stays_inside_workspace(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    source = workspace / "drafts" / "my-skill"
+    source.mkdir(parents=True)
+    assert resolve_path_under_directory(workspace, str(source)) == source.resolve()
+
+    outside = tmp_path / "outside" / "evil"
+    outside.mkdir(parents=True)
+    with pytest.raises(HTTPException, match="Path escapes allowed directory"):
+        resolve_path_under_directory(workspace, str(outside))
 
 
 def test_relative_workspace_path_rejects_similar_prefix(tmp_path: Path) -> None:
@@ -93,6 +121,13 @@ def test_extract_zip_under_rejects_absolute_path(tmp_path: Path) -> None:
     with ZipFile(archive_data) as archive:
         with pytest.raises(HTTPException, match="Path escapes workspace root"):
             extract_zip_under(tmp_path / "destination", archive)
+
+
+def test_require_safe_skill_name() -> None:
+    assert require_safe_skill_name("daily-guidance") == "daily-guidance"
+    for name in ("../evil", "a/b", "my skill", ".", ""):
+        with pytest.raises(HTTPException, match="Invalid skill name"):
+            require_safe_skill_name(name)
 
 
 @pytest.mark.parametrize(

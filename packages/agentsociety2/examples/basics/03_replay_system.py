@@ -1,13 +1,13 @@
-"""
-Replay System Example
+"""Replay System Example.
 
-This example shows how to use the ReplayWriter to track
-and replay agent interactions running through AgentSociety.
+AgentSociety enables replay by default when ``run_dir`` is set. Environment
+datasets land under ``run_dir/replay/``.
 """
+
+from __future__ import annotations
 
 import os
 
-# Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
@@ -15,65 +15,49 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 
-from agentsociety2 import PersonAgent
-from agentsociety2.env import CodeGenRouter
 from agentsociety2.contrib.env import SimpleSocialSpace
-from agentsociety2.storage import ReplayWriter
+from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
 
 
-async def main():
-    # Setup replay writer
-    db_path = "example_replay.db"
-    Path(db_path).unlink(missing_ok=True)
-
-    writer = ReplayWriter(Path(db_path))
-    await writer.init()
-
-    print("=== Replay System Example ===\n")
-
-    # Create agents first (we need agent info for SimpleSocialSpace)
-    agents = [
-        PersonAgent(
-            id=i,
-            profile={
+async def main() -> None:
+    run_dir = Path("run_replay_example")
+    agent_specs = [
+        {
+            "id": i,
+            "profile": {
+                "id": i,
                 "name": f"Agent{i}",
                 "personality": "friendly" if i % 2 == 0 else "curious",
             },
-        )
+            "config": {},
+        }
         for i in range(1, 4)
     ]
+    names = [(spec["id"], spec["profile"]["name"]) for spec in agent_specs]
 
-    # Create environment module with agent info
-    social_env = SimpleSocialSpace(
-        agent_id_name_pairs=[(agent.id, agent.name) for agent in agents]
-    )
-
-    # Create environment router
+    social_env = SimpleSocialSpace(agent_id_name_pairs=names)
     env_router = CodeGenRouter(env_modules=[social_env])
-    env_router.set_replay_writer(writer)
-
-    # Create the society with replay enabled
     society = AgentSociety(
-        agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+        agent_specs=agent_specs,
         agent_class_name="PersonAgent",
         env_router=env_router,
         start_t=datetime.now(),
+        run_dir=run_dir,
         enable_replay=True,
     )
     await society.init()
 
-    # Run interactions through the society
+    print("=== Replay System Example ===\n")
     print("Running agent interactions...\n")
-    for agent in agents:
-        question = f"Hello {agent._name}! Introduce yourself."
-        response = await society.ask(question)
-        print(f"{agent._name}: {response[:100]}...")
+    for spec in agent_specs:
+        name = spec["profile"]["name"]
+        response = await society.ask(f"Hello {name}! Introduce yourself.")
+        print(f"{name}: {str(response)[:100]}...")
 
-    # Cleanup
     await society.close()
-    print("\nReplay database saved to:", db_path)
-    print("Agent replay tables are no longer written; inspect environment replay datasets instead.")
+    print(f"\nReplay data written under: {run_dir / 'replay'}")
+    print("Inspect agent workspaces under:", run_dir / "agents")
 
 
 if __name__ == "__main__":
