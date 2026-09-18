@@ -163,10 +163,11 @@ msgstr ""
 "interruption point; see :doc:`cli`."
 
 #: ../../index.rst:42
-msgid "**研究技能**: 内置文献检索、假设生成、实验设计、论文撰写等 LLM 原生工作流。"
+msgid "**研究技能**: 内置文献检索、假设生成、实验设计与数据分析等 LLM 原生工作流；论文撰写由外部 ``paper-toolkit`` 承担。"
 msgstr ""
-"**Research Skills**: Built-in LLM-native workflows for literature search,"
-" hypothesis generation, experiment design, and paper writing."
+"**Research Skills**: Built-in LLM-native workflows for literature search, "
+"hypothesis generation, experiment design, and data analysis; paper writing "
+"is handled by the external ``paper-toolkit``."
 
 #: ../../index.rst:44
 msgid "**REST API**: 基于 FastAPI 的独立后端服务，支持外部集成。"

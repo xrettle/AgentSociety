@@ -280,8 +280,11 @@ Gateway 排错
    * - LLM 模型名称
      - 使用的模型名称，默认 ``gpt-5.5``
      - 是
+   * - 推理（thinking）
+     - 配置页下拉：跟随网关默认 / 开 / 关；写入 ``AGENTSOCIETY_LLM_THINKING``（``on`` / ``off``）。留空则不发送该参数
+     - 否
 
-验证通过后会自动进入下一步。AgentSociety 支持任何 OpenAI 接口兼容的大模型 API。
+验证通过后会自动进入下一步。AgentSociety 支持任何 OpenAI 接口兼容的大模型 API。更多环境变量见 :doc:`installation`。
 
 **步骤 2：保存配置** — 查看摘要并保存到工作区 ``.env``。必须包含有效的 API Key 才会标记为「已完成初始配置」。
 
@@ -309,7 +312,7 @@ Gateway 排错
 
 在配置页切换到完整模式后，可展开 **专用与运行** 标签页，按需填写（均可留空，沿用默认 LLM）：
 
-- **专用模型**：代码生成（Coder）、Embedding
+- **专用模型**：代码生成（Coder）、Embedding；Coder 也可单独设置推理开关（``AGENTSOCIETY_CODER_LLM_THINKING``）
 - **Python 环境**：扫描并选择解释器
 - **文献检索**：MCP URL 与 API Key
 - **Claude / Codex 路由**：本地 AI Gateway 供应商池
@@ -399,7 +402,8 @@ Gateway 排错
    ├── .env                              # 环境配置
    ├── papers/
    │   ├── literature_index.json         # 文献索引
-   │   └── literature/                   # 文献摘要
+   │   ├── <title>_<timestamp>.md        # 文献笔记
+   │   └── full_texts/                   # 全文 PDF（如有）
    ├── user_data/                        # 用户数据
    ├── datasets/                         # 数据集
    ├── hypothesis_1/
@@ -428,10 +432,20 @@ Gateway 排错
 
 - 导出列表会展示研究问题、假设与实验、文献、数据、分析报告、项目设置和技能；已有的关键内容默认勾选
 - ``hypothesis_*`` 会完整包含实验配置（``init/``）和运行结果（``run/``），体积较大时可取消勾选
-- **不会带上密钥、虚拟环境和 Git 历史**
+- **始终排除**：密钥与 ``.env``、虚拟环境、Git 历史，以及本地 IDE 状态（``.cursor`` / ``.vscode``）等
 - 发出去之前，请确认你有权分享其中的论文、数据和第三方技能
 
 对方在扩展中选择 **导入工作区** 后，依次选择分享包和保存位置，再输入新项目文件夹名。扩展会显示最终路径并新建目录，不会覆盖已有项目；导入后需要在配置页填写自己的模型密钥，才能继续运行。
+
+文献库：上传 PDF 与标识符补全
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+侧边栏 **文献库** 用于管理本地论文资产（与 CLI ``literature-search`` 主题检索互补）：
+
+- 可 **上传 PDF**；扩展会尽量从文件内容扫描 DOI / arXiv ID，并调用公开接口补全标题、作者等元数据
+- 也可 **粘贴 DOI 或 arXiv ID** 直接入库并查找元数据
+- 索引与笔记写在 ``papers/``（如 ``literature_index.json``）；全文 PDF 通常落在 ``papers/full_texts/``
+- 按主题批量检索、开放获取下载仍走文献技能 / MCP，见 :doc:`skills`
 
 .. _user-guide-faq:
 

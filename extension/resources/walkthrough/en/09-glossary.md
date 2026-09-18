@@ -56,7 +56,7 @@ Quick index: [A](#a) · [B-C](#b-c) · [D-E](#d-e) · [F-I](#f-i) · [L-M](#l-m)
 
 | Term | Meaning |
 |------|---------|
-| **Literature Library** | The project area for paper PDFs, Markdown notes, literature indexes, and research materials. |
+| **Literature Library** | The project area for paper PDFs, Markdown notes, literature indexes, and research materials. Supports PDF upload or pasted DOI / arXiv IDs with best-effort metadata lookup. |
 | **LLM** | A large language model such as GPT, Claude, DeepSeek, or Qwen. |
 | **MCP** | Model Context Protocol, which lets coding assistants such as Claude Code connect to external tools, remote HTTP/SSE services, or local backends. |
 | **Model** | The model name used for requests. Model names differ across providers. |
@@ -80,7 +80,7 @@ Quick index: [A](#a) · [B-C](#b-c) · [D-E](#d-e) · [F-I](#f-i) · [L-M](#l-m)
 | **Silicon Participant** | A simulated participant that generates behavioral responses, receives interventions, and is measured in a configurable social environment; also called a Silicon Subject. |
 | **Skill** | An installable capability module that tells an agent or coding assistant when to use a capability, what files to read, and what outputs to produce. |
 | **Skill Marketplace** | The extension page for browsing, installing, enabling, archiving, or deleting skills. |
-| **Share package** | An archive created with Export Workspace so you can send a research project to someone else. Secrets are omitted; the recipient opens it with Import Workspace. |
+| **Share package** | An archive created with Export Workspace so you can send a research project to someone else. Secrets, `.env`, venvs, Git history, and local IDE state are omitted; the recipient opens it with Import Workspace. |
 | **Steps Config** | A configuration file that describes what an experiment should do, such as ask, intervene, run simulation steps, and save artifacts. |
 | **Theoretical paradigm** | Developing concepts, hypotheses, mechanisms, and explanatory frames. |
 | **Token** | The unit of text processed by a model, often used for pricing and context limits. |

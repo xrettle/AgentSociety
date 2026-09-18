@@ -2,13 +2,15 @@
 
 打开配置页后，首次使用可走 **配置向导**：
 
-1. **仿真 LLM** — API 地址、密钥与模型  
+1. **仿真 LLM** — API 地址、密钥与模型；可选设置推理（thinking）开/关  
 2. **保存配置** — 写入工作区 `.env`  
 3. **启动后端** — 一键保存并启动本地服务  
 4. **文献 MCP**（可选）  
 5. **CLI 网关**（可选）— Claude Code / Codex  
 
 也可点 **「全部设置」** 进入完整 Tab 视图。
+
+仿真 LLM 的推理下拉会写入 `AGENTSOCIETY_LLM_THINKING`（`on` / `off`）；留空表示不额外发送该参数，行为与旧版一致。完整模式「代码生成」tab 可另设 `AGENTSOCIETY_CODER_LLM_THINKING`。
 
 ### 必填项
 

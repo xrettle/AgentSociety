@@ -1,10 +1,19 @@
 # Dependabot version updates — AgentSociety2 scope only.
 #
 # Legacy packages (agentsociety v1, community, benchmark) are intentionally
-# excluded. Their lockfiles may still appear in GitHub Security advisories;
-# dismiss or auto-triage those alerts in repo settings if needed.
+# excluded from version updates. Dependency-graph jobs may still scan their
+# uv.lock files; keep those lockfiles patched, or dismiss leftover alerts as
+# out-of-scope in GitHub Security.
 
 version: 2
+
+# Prefer not to feed dependency-graph alerts from archived packages.
+graphs:
+  exclude-paths:
+    - packages/agentsociety/**
+    - packages/agentsociety-community/**
+    - packages/agentsociety-benchmark/**
+    - packages/agentsociety/docs/**
 
 updates:
   - package-ecosystem: pip

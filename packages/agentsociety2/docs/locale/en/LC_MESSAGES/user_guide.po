@@ -485,19 +485,30 @@ msgstr "Base URL of the API, e.g., ``https://api.openai.com/v1``"
 msgid "LLM 模型名称"
 msgstr "LLM Model Name"
 
-#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:282
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
 msgid "使用的模型名称，默认 ``gpt-5.5``"
 msgstr "Model name to use, default ``gpt-5.5``"
 
-#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:285
-msgid "配置向导 - LLM 配置"
-msgstr "Configuration wizard - LLM configuration"
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "推理（thinking）"
+msgstr "Reasoning (thinking)"
 
-#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:289
-msgid "AgentSociety 支持任何 OpenAI 接口兼容的大模型 API。环境变量的详细配置说明见 :doc:`installation`。"
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "配置页下拉：跟随网关默认 / 开 / 关；写入 ``AGENTSOCIETY_LLM_THINKING``（``on`` / ``off``）。留空则不发送该参数"
 msgstr ""
-"AgentSociety supports any OpenAI-compatible LLM API. For detailed "
-"environment variable configuration, see :doc:`installation`."
+"Config-page dropdown: follow gateway default / on / off; writes "
+"``AGENTSOCIETY_LLM_THINKING`` (``on`` / ``off``). Leave empty to omit the parameter"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "否"
+msgstr "No"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "验证通过后会自动进入下一步。AgentSociety 支持任何 OpenAI 接口兼容的大模型 API。更多环境变量见 :doc:`installation`。"
+msgstr ""
+"After validation succeeds, the wizard advances automatically. AgentSociety "
+"supports any OpenAI-compatible LLM API. See :doc:`installation` for more "
+"environment variables."
 
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:291
 msgid "**步骤 2：后端服务** — 配置后端服务地址和 Python 环境："
@@ -716,8 +727,10 @@ msgstr ""
 "(``init/``) and run outputs (``run/``); deselect it when the payload is too large"
 
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
-msgid "**不会带上密钥、虚拟环境和 Git 历史**"
-msgstr "Secrets, virtual environments, and Git history are **not** included"
+msgid "**始终排除**：密钥与 ``.env``、虚拟环境、Git 历史，以及本地 IDE 状态（``.cursor`` / ``.vscode``）等"
+msgstr ""
+"**Always excluded**: secrets and ``.env``, virtual environments, Git "
+"history, and local IDE state (``.cursor`` / ``.vscode``)"
 
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
 msgid "发出去之前，请确认你有权分享其中的论文、数据和第三方技能"
@@ -732,6 +745,38 @@ msgstr ""
 "parent directory, then enters a new project folder name. The extension "
 "shows the final path and creates the directory without overwriting an "
 "existing project. They must enter their own model keys before continuing."
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "文献库：上传 PDF 与标识符补全"
+msgstr "Literature library: upload PDFs and identifier enrichment"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "侧边栏 **文献库** 用于管理本地论文资产（与 CLI ``literature-search`` 主题检索互补）："
+msgstr ""
+"The sidebar **Literature Library** manages local paper assets (complementary "
+"to CLI ``literature-search`` topic retrieval):"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "可 **上传 PDF**；扩展会尽量从文件内容扫描 DOI / arXiv ID，并调用公开接口补全标题、作者等元数据"
+msgstr ""
+"You can **upload PDFs**; the extension best-effort scans DOI / arXiv IDs "
+"from the file and looks up title, authors, and other metadata via public APIs"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "也可 **粘贴 DOI 或 arXiv ID** 直接入库并查找元数据"
+msgstr "You can also **paste a DOI or arXiv ID** to ingest and look up metadata"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "索引与笔记写在 ``papers/``（如 ``literature_index.json``）；全文 PDF 通常落在 ``papers/full_texts/``"
+msgstr ""
+"Indexes and notes live under ``papers/`` (for example ``literature_index.json``); "
+"full-text PDFs usually land in ``papers/full_texts/``"
+
+#: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst
+msgid "按主题批量检索、开放获取下载仍走文献技能 / MCP，见 :doc:`skills`"
+msgstr ""
+"Topic search and open-access downloads still go through the literature skill / "
+"MCP; see :doc:`skills`"
 
 #: ../../data2/home/huanghaoyu/agentsociety2/agentsociety/packages/agentsociety2/docs/user_guide.rst:430
 msgid "常见问题"

@@ -59,7 +59,6 @@ msgid "**数据分析**: 分析实验数据并生成报告"
 msgstr "**Data Analysis**: Analyze experiment data and generate reports"
 
 #: ../../skills.rst:17
-#, fuzzy
 msgid ""
 "当前 Python 包内公开的 research skills 模块为 "
 "``agentsociety2.skills.literature``、``agentsociety2.skills.hypothesis``、 "
@@ -68,7 +67,7 @@ msgstr ""
 "The research skill modules publicly exposed in the current Python package"
 " are ``agentsociety2.skills.literature``, "
 "``agentsociety2.skills.hypothesis``, ``agentsociety2.skills.experiment``,"
-" ``agentsociety2.skills.analysis``, and ``agentsociety2.skills.paper``."
+" and ``agentsociety2.skills.analysis``."
 
 #: ../../skills.rst:22
 msgid "Claude Code Skills"
@@ -240,13 +239,12 @@ msgid "研究 pipeline 的主干是："
 msgstr "The backbone of the research pipeline is:"
 
 #: ../../skills.rst:90
-#, fuzzy
 msgid ""
 "``literature-search → hypothesis → experiment-config → run-experiment → "
 "analysis → paper-toolkit``"
 msgstr ""
 "``literature-search → hypothesis → experiment-config → run-experiment → "
-"analysis → paper-orchestrator``"
+"analysis → paper-toolkit``"
 
 #: ../../skills.rst:92
 msgid "实验相关的两个核心 skill 是："
@@ -378,6 +376,15 @@ msgstr ""
 "``presentation/hypothesis_{id}/``, and cross-experiment synthesis output "
 "goes to ``synthesis/``."
 
+#: ../../skills.rst
+msgid ""
+"报告与状态目录约定：用户可见报告写在 ``presentation/`` 与 ``synthesis/``；harness 机器状态在 "
+"``.agentsociety/analysis/``；不要在 ``presentation/`` 下再建旧式 ``analysis/`` 目录。"
+msgstr ""
+"Report and state paths: user-facing reports go under ``presentation/`` and "
+"``synthesis/``; harness machine state lives under ``.agentsociety/analysis/``; "
+"do not recreate a legacy ``analysis/`` tree under ``presentation/``."
+
 #: ../../skills.rst:133
 msgid "常用命令："
 msgstr "Commonly used commands:"
@@ -419,12 +426,12 @@ msgstr ""
 
 #: ../../skills.rst:169
 msgid ""
-"每篇文献保存为 ``papers/<title>_<timestamp>.md``，这是后续 hypothesis、analysis 和 "
-"paper 技能引用的主要本地笔记。"
+"每篇文献保存为 ``papers/<title>_<timestamp>.md``，这是后续 hypothesis、analysis 与外部 "
+"``paper-toolkit`` 写作流程引用的主要本地笔记。"
 msgstr ""
 "Each document is saved as ``papers/<title>_<timestamp>.md``, which is the"
-" main local note cited in subsequent hypothesis, analysis and paper "
-"skills."
+" main local note cited by subsequent hypothesis, analysis, and the "
+"external ``paper-toolkit`` writing workflow."
 
 #: ../../skills.rst:170
 msgid ""
