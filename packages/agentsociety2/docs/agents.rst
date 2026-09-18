@@ -169,9 +169,8 @@ TODO 条目用 UUID 标识，自动归档，可通过 ``dispatch_todo_tool`` 分
    │   ├── emotion.json
    │   ├── intention.json
    │   ├── needs.json
-   │   ├── plan_state.json
-   │   └── memory.jsonl       # memory skill 写入的长期事件记忆
-   ├── memory/                # 记忆相关文件
+   │   └── plan_state.json
+   ├── AGENT_MEMORY.md        # 跨 step 运行时记忆摘要
    ├── custom/skills/         # 自定义技能目录（热加载）
    └── .runtime/logs/
        ├── session_state.json
@@ -181,6 +180,7 @@ TODO 条目用 UUID 标识，自动归档，可通过 ``dispatch_todo_tool`` 分
 
 ``config.json`` 是静态的；``AGENT.json`` 由 ``persist_agent_json``（调 ``build_agent_json``）在
 ``to_workspace`` 时写回，是 agent 对自己的自描述快照。线程与工具日志位于 ``.runtime/logs/``。
+跨 step 的运行时摘要见 ``AGENT_MEMORY.md``。
 
 
 .. _agent-config:

@@ -2,7 +2,7 @@
 
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.95%2B-blue)](https://code.visualstudio.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.6.5-informational)](package.json)
+[![Version](https://img.shields.io/badge/version-1.7.0-informational)](package.json)
 
 VS Code / Cursor 扩展：面向社会科学研究的 LLM 工作台，对接 [AgentSociety2](https://github.com/tsinghua-fib-lab/agentsociety) 模拟框架，并统一管理 Claude Code / Codex 的本地路由与供应商。
 
@@ -36,8 +36,9 @@ AI Social Scientist 将社会科学研究组织成七个可检查、可回退的
 ## 功能概览
 
 - **研究工作区**：项目树、文献索引、假设与实验目录、技能管理
-- **分享工作区**：选择研究问题、实验、数据、报告和技能生成分享包；导入时新建项目目录且不覆盖已有内容（不含密钥）
-- **配置向导**：仿真 LLM、工作区 `.env`、后端、文献 MCP、CLI 网关
+- **分享工作区**：选择研究问题、实验、数据、报告和技能生成分享包；导入时新建项目目录且不覆盖已有内容（不含密钥、`.env`、本地 IDE 状态）
+- **配置向导**：仿真 LLM（含可选 thinking 开关）、工作区 `.env`、后端、文献 MCP、CLI 网关
+- **文献库**：上传 PDF 或粘贴 DOI / arXiv ID，尽量补全元数据；主题检索仍走文献技能 / MCP
 - **本地 AI Gateway**：Anthropic Messages / OpenAI Chat / Responses 协议转换、用量统计、故障转移、请求整流
 - **Claude Code / Codex**：共享供应商池；官方订阅保持 CLI 登录直连；Codex 模型目录自动写入 `~/.codex/agentsociety-model-catalog.json`
 - **回放与分析**：实验回放 Webview、分析 harness 状态
@@ -58,7 +59,7 @@ Cursor / VS Code Remote（含 **Coder**）请将扩展安装到 **Workspace（�
 同一机器上只保留一个版本。若升级后侧边栏仍异常，先删除旧目录再强制安装：
 
 ```bash
-rm -rf ~/.local/share/code-server/extensions/tsinghua-fib-lab.ai-social-scientist-1.6.*
+rm -rf ~/.local/share/code-server/extensions/tsinghua-fib-lab.ai-social-scientist-1.7.*
 code-server --install-extension ai-social-scientist.vsix --force
 ```
 
@@ -89,9 +90,10 @@ npm run build            # 或 npm run dev（watch）
 
 1. **打开工作区文件夹**（不要只打开单个文件；Coder 上请打开项目根目录，而不是整个 `$HOME`）
 2. 命令面板运行 **「AI Social Scientist: 打开配置」**
-3. 按向导完成：仿真 LLM → 保存 `.env` → 启动后端 →（可选）文献 / CLI 网关
+3. 按向导完成：仿真 LLM（可设 thinking）→ 保存 `.env` → 启动后端 →（可选）文献 / CLI 网关
 4. 也可运行 **「AI Social Scientist: 打开快速入门」** 查看入门指南（标题与正文随界面语言切换）
 5. 需要把项目交给同事时，用侧边栏 **导出工作区** 选择关键研究内容；对方用 **导入工作区** 选择上级目录并新建项目，打开后再填写自己的密钥
+6. 侧边栏 **文献库** 可上传 PDF 或粘贴 DOI / arXiv ID；主题检索仍用文献技能 / MCP
 
 ### 前置要求
 

@@ -2,13 +2,15 @@
 
 Open the config page and follow the **setup wizard** on first use:
 
-1. **Simulation LLM** — API base, key, and model  
+1. **Simulation LLM** — API base, key, and model; optional reasoning (thinking) on/off  
 2. **Save** — write workspace `.env`  
 3. **Start backend** — save and start the local service  
 4. **Literature MCP** (optional)  
 5. **CLI gateway** (optional) — Claude Code / Codex  
 
 Use **All settings** for the full tabbed view.
+
+The simulation LLM reasoning dropdown writes `AGENTSOCIETY_LLM_THINKING` (`on` / `off`); leave it empty to omit that parameter (same behavior as older builds). In full settings, the **Coder** tab can set `AGENTSOCIETY_CODER_LLM_THINKING` separately.
 
 ### Required fields
 

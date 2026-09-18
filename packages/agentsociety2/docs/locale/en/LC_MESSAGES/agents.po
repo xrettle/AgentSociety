@@ -120,12 +120,11 @@ msgid "构造模型（workspace 绑定的无状态 record）"
 msgstr "Construction Model: Workspace-Bound Stateless Records"
 
 #: ../../agents.rst:37
-#, fuzzy
+#: ../../agents.rst
 msgid "智能体通过 workspace 入口构造。``AgentBase`` 提供两个类方法入口 + 一个无参 ``__init__``："
 msgstr ""
-"Agents are **no longer constructed by passing parameters to "
-"``__init__(...)``**. ``AgentBase`` provides two classmethod entry points "
-"plus an argument-free ``__init__``:"
+"Agents are constructed through workspace entry points. ``AgentBase`` "
+"provides two classmethod factories plus an argument-free ``__init__``:"
 
 #: ../../agents.rst:44
 msgid "入口"

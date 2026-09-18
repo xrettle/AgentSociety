@@ -130,6 +130,8 @@ create-agent 技能
 5. **生成图表**：单实验默认最多 5 张图；每张图在报告中必须有一句说明。
 6. **写报告**：单实验输出到 ``presentation/hypothesis_{id}/``，跨实验综合输出到 ``synthesis/``。
 
+报告与状态目录约定：用户可见报告写在 ``presentation/`` 与 ``synthesis/``；harness 机器状态在 ``.agentsociety/analysis/``；不要在 ``presentation/`` 下再建旧式 ``analysis/`` 目录。
+
 常用命令：
 
 .. code-block:: bash
@@ -166,7 +168,7 @@ create-agent 技能
 输出约定：
 
 - ``papers/literature_index.json`` 是稳定索引，记录标题、作者、年份、来源、query、分数和本地 ``file_path``。
-- 每篇文献保存为 ``papers/<title>_<timestamp>.md``，这是后续 hypothesis、analysis 和 paper 技能引用的主要本地笔记。
+- 每篇文献保存为 ``papers/<title>_<timestamp>.md``，这是后续 hypothesis、analysis 与外部 ``paper-toolkit`` 写作流程引用的主要本地笔记。
 - 检索完成后会自动尝试下载开放获取 PDF 到 ``papers/full_texts/``，路径写入 ``extra_fields.full_text.file_path``；不要把索引中的 ``file_path`` 从 Markdown 笔记替换成 PDF。
 - 文献检索不会自动绕过出版商权限。PDF 下载只处理开放获取或用户授权的文件；没有开放 PDF 时，可以补充本地 Markdown 笔记并记录来源。
 

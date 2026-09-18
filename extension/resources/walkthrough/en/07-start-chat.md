@@ -36,4 +36,8 @@ You can also enter from **AI Chat** in the sidebar, the title-bar chat control, 
 
 ### Share with a colleague
 
-When a project is ready to hand off, use **Export Workspace** in the sidebar. The picker shows the research question, hypotheses and experiments, literature, data, reports, project settings, and skills; existing key content is selected by default. Secrets, virtual environments, and Git history are not exported. With **Import Workspace**, the recipient chooses a parent folder and a new project name; the extension creates the directory without overwriting an existing project. They then enter their own model keys.
+When a project is ready to hand off, use **Export Workspace** in the sidebar. The picker shows the research question, hypotheses and experiments, literature, data, reports, project settings, and skills; existing key content is selected by default. Secrets, `.env`, virtual environments, Git history, and local IDE state (`.cursor` / `.vscode`) are not exported. With **Import Workspace**, the recipient chooses a parent folder and a new project name; the extension creates the directory without overwriting an existing project. They then enter their own model keys.
+
+### Literature library tip
+
+The sidebar **Literature Library** can upload PDFs or ingest a pasted DOI / arXiv ID, with best-effort metadata lookup. Topic-wide search still goes through the literature skill / MCP.
