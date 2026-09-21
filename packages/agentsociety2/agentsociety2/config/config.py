@@ -18,6 +18,9 @@ import json
 import os
 import re
 from typing import Any, Literal, Optional
+
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
+
 from litellm.router import Router
 
 from agentsociety2.logger import get_logger, setup_litellm_logging

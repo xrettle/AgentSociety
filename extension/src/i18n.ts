@@ -244,10 +244,23 @@ const translations: Record<string, Record<string, string>> = {
     'extension.viewPaperArtifact.reviewRevisions': '修订意见',
     'extension.noLiteratureIndexPath': '请先在项目树中选中「文献索引」',
     'extension.literature.noWorkspace': '未找到工作区文件夹',
-    'extension.configEntryTitleBarHint': '欢迎使用 AI Social Scientist。打开配置页，按向导完成「仿真 LLM → 保存 → 启动后端」即可运行实验。',
+    'extension.configEntryTitleBarHint': '配置入口在侧栏标题栏齿轮。建议顺序：配置并保存 API Key → 初始化工作区 → 启动后端。',
     'extension.configEntryTitleBarHint.open': '打开配置',
     'extension.configEntryTitleBarHint.walkthrough': '入门指南',
     'extension.configEntryTitleBarHint.dismiss': '不再提示',
+    'extension.onboarding.openFolderFirst': '请先打开一个项目文件夹。API Key 会写入该文件夹的 .env；未打开文件夹时无法保存配置。',
+    'extension.onboarding.openFolder': '打开文件夹',
+    'extension.onboarding.walkthrough': '入门指南',
+    'extension.onboarding.dismiss': '知道了',
+    'extension.onboarding.setupSteps': '开始研究前请按顺序：① 在配置页填写并保存仿真 LLM → ② 侧栏「初始化工作区」→ ③ 启动后端。密钥保存在当前文件夹的 .env。',
+    'extension.onboarding.afterSaveInit': 'API Key 已保存。下一步请初始化工作区（创建 TOPIC.md 与研究目录）。',
+    'extension.onboarding.initNow': '立即初始化',
+    'extension.onboarding.later': '稍后',
+
+    'language.toggle.tooltip': '切换 AI Social Scientist 界面语言（中/EN）',
+    'language.toggle.switched': '界面语言已切换为 {0}',
+    'language.label.zh': '中文',
+    'language.label.en': 'English',
     'extension.skill.noName': '无法获取 Skill 名称',
     'extension.skill.noDirPath': '无法获取 Skill 目录路径',
     'extension.skill.deleteFailed': '删除 Skill 失败: {0}',
@@ -390,8 +403,13 @@ const translations: Record<string, Record<string, string>> = {
     // projectStructureProvider.ts - settings
     'projectStructure.settings': '配置设置',
     'projectStructure.settings.tooltip': '打开本工作区的插件配置页',
+    'projectStructure.loading': '正在加载项目结构…',
+    'projectStructure.repairing': '正在补全工作区文件，侧栏可先使用…',
+    'projectStructure.repairing.progress': '正在补全工作区目录与技能资源…',
     'projectStructure.apiKeyRequired.label': '需要配置 API 密钥',
     'projectStructure.apiKeyRequired.tooltip': '请先打开配置页填写 LLM API Key（配置将写入当前工作区的 .env）',
+    'projectStructure.apiKeyRequired.message': '第 1 步：打开配置页，填写并保存 LLM API Key（写入当前文件夹 .env）',
+    'projectStructure.initRequired.message': '第 2 步：点击「初始化工作区」创建研究话题与目录，然后可启动后端',
     'projectStructure.skillManagement.label': '技能管理',
     'projectStructure.skillManagement.description': 'Agent · Claude · 市场',
     'projectStructure.skillManagement.commandTitle': '打开技能管理',
@@ -460,6 +478,7 @@ const translations: Record<string, Record<string, string>> = {
 
     // configPageViewProvider.ts
     'configPage.title': 'AI Social Scientist 配置',
+    'skillMarketplace.title': '技能管理',
     'configPage.noWorkspace': '请先打开一个工作区文件夹。配置将保存在当前工作区中。',
     'configPage.openWorkspace': '打开工作区',
     'configPage.validation.literatureAuthRequired': '需要输入 API Key',
@@ -910,10 +929,23 @@ const translations: Record<string, Record<string, string>> = {
     'extension.viewPaperArtifact.reviewRevisions': 'Revisions',
     'extension.noLiteratureIndexPath': 'Select the literature index in the project tree first',
     'extension.literature.noWorkspace': 'Workspace folder not found',
-    'extension.configEntryTitleBarHint': 'Welcome to AI Social Scientist. Open the config page and follow the wizard: Simulation LLM → Save → Start backend.',
+    'extension.configEntryTitleBarHint': 'Config is in the sidebar title bar (gear). Suggested order: save API key → initialize workspace → start backend.',
     'extension.configEntryTitleBarHint.open': 'Open config',
     'extension.configEntryTitleBarHint.walkthrough': 'Getting started',
     'extension.configEntryTitleBarHint.dismiss': 'Dismiss',
+    'extension.onboarding.openFolderFirst': 'Open a project folder first. API keys are written to that folder’s .env; settings cannot be saved without a folder.',
+    'extension.onboarding.openFolder': 'Open folder',
+    'extension.onboarding.walkthrough': 'Getting started',
+    'extension.onboarding.dismiss': 'Got it',
+    'extension.onboarding.setupSteps': 'Before research: ① save Simulation LLM in Config → ② Initialize Workspace in the sidebar → ③ start the backend. Keys live in the folder’s .env.',
+    'extension.onboarding.afterSaveInit': 'API key saved. Next: initialize the workspace (TOPIC.md and research folders).',
+    'extension.onboarding.initNow': 'Initialize now',
+    'extension.onboarding.later': 'Later',
+
+    'language.toggle.tooltip': 'Toggle AI Social Scientist UI language (中/EN)',
+    'language.toggle.switched': 'UI language switched to {0}',
+    'language.label.zh': '中文',
+    'language.label.en': 'English',
     'extension.skill.noName': 'Cannot get Skill name',
     'extension.skill.noDirPath': 'Cannot get Skill directory path',
     'extension.skill.deleteFailed': 'Failed to delete Skill: {0}',
@@ -1065,8 +1097,13 @@ const translations: Record<string, Record<string, string>> = {
     // projectStructureProvider.ts - settings
     'projectStructure.settings': 'Settings',
     'projectStructure.settings.tooltip': 'Open this workspace’s plugin configuration page',
+    'projectStructure.loading': 'Loading project structure…',
+    'projectStructure.repairing': 'Repairing workspace files; the sidebar is ready to use…',
+    'projectStructure.repairing.progress': 'Repairing workspace folders and skill resources…',
     'projectStructure.apiKeyRequired.label': 'API key required',
     'projectStructure.apiKeyRequired.tooltip': 'Add your LLM API key in .env or the environment',
+    'projectStructure.apiKeyRequired.message': 'Step 1: open Settings, enter and save your LLM API key (written to this folder’s .env)',
+    'projectStructure.initRequired.message': 'Step 2: click “Initialize Workspace” to create the research topic and folders, then start the backend',
     'projectStructure.skillManagement.label': 'Skills',
     'projectStructure.skillManagement.description': 'Agent · Claude · Marketplace',
     'projectStructure.skillManagement.commandTitle': 'Open skill management',
@@ -1135,6 +1172,7 @@ const translations: Record<string, Record<string, string>> = {
 
     // configPageViewProvider.ts
     'configPage.title': 'AI Social Scientist Configuration',
+    'skillMarketplace.title': 'Skill Management',
     'configPage.noWorkspace': 'Please open a workspace folder first. Configuration will be saved in the current workspace.',
     'configPage.openWorkspace': 'Open Workspace',
     'configPage.validation.literatureAuthRequired': 'API key is required',
@@ -1354,27 +1392,44 @@ const translations: Record<string, Record<string, string>> = {
   },
 };
 
-/**
- * 获取当前语言设置
- * VSCode 的语言设置可以通过 vscode.env.language 获取
- */
-function getCurrentLanguage(): string {
-  // 尝试从 VSCode 配置获取语言，如果没有则使用系统语言
-  const config = vscode.workspace.getConfiguration('aiSocialScientist');
-  const language = config.get<string>('language') || vscode.env.language || 'zh-CN';
+export type ExtensionLanguage = 'zh-CN' | 'en-US';
 
-  // 如果语言是 zh 或 zh-CN，返回 zh-CN
+const LANGUAGE_SETTING_KEY = 'language';
+
+/**
+ * 解析扩展 UI 语言：优先 `aiSocialScientist.language`，否则跟随 `vscode.env.language`。
+ */
+function getCurrentLanguage(): ExtensionLanguage {
+  const config = vscode.workspace.getConfiguration('aiSocialScientist');
+  const language = config.get<string>(LANGUAGE_SETTING_KEY) || vscode.env.language || 'zh-CN';
+
   if (language.startsWith('zh')) {
     return 'zh-CN';
   }
-
-  // 如果语言是 en 或 en-US，返回 en-US
   if (language.startsWith('en')) {
     return 'en-US';
   }
-
-  // 默认返回中文
   return 'zh-CN';
+}
+
+/**
+ * 写入扩展 UI 语言（全局设置），不等待整机 Display Language。
+ */
+export async function setExtensionLanguage(language: ExtensionLanguage): Promise<ExtensionLanguage> {
+  await vscode.workspace.getConfiguration('aiSocialScientist').update(
+    LANGUAGE_SETTING_KEY,
+    language,
+    vscode.ConfigurationTarget.Global
+  );
+  return language;
+}
+
+/**
+ * 在中文 / 英文之间切换扩展 UI 语言。
+ */
+export async function toggleExtensionLanguage(): Promise<ExtensionLanguage> {
+  const next: ExtensionLanguage = getCurrentLanguage() === 'zh-CN' ? 'en-US' : 'zh-CN';
+  return setExtensionLanguage(next);
 }
 
 /**
@@ -1402,6 +1457,6 @@ export function localize(key: string, ...args: (string | number)[]): string {
 /**
  * 获取当前语言代码
  */
-export function getCurrentLanguageCode(): string {
+export function getCurrentLanguageCode(): ExtensionLanguage {
   return getCurrentLanguage();
 }

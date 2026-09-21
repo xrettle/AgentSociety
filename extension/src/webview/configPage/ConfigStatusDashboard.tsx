@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Space, Tag, Typography } from 'antd';
 import {
+  ApiOutlined,
   CheckCircleOutlined,
   KeyOutlined,
   LinkOutlined,
@@ -98,7 +99,12 @@ export function ConfigStatusDashboard({
 
   const gatewayLine = React.useMemo(() => {
     if (!gatewayStatus.enabled) {
-      return null;
+      return {
+        title: t('configPage.metrics.gatewayDisabled'),
+        sub: t('configPage.metrics.gatewayDisabledHint'),
+        accent: palette.descriptionForeground,
+        icon: <ApiOutlined />,
+      };
     }
     if (gatewayStatus.running) {
       const uptime =
@@ -118,12 +124,14 @@ export function ConfigStatusDashboard({
         title: t('configPage.readiness.gatewayOn', { port: gatewayStatus.port ?? '' }),
         sub: [uptime, requests, tokens].filter(Boolean).join(' · '),
         accent: palette.successForeground,
+        icon: <CheckCircleOutlined />,
       };
     }
     return {
       title: t('configPage.metrics.gatewayStopped'),
       sub: gatewayStatus.error ?? t('configPage.metrics.gatewayStoppedHint'),
       accent: palette.warningForeground,
+      icon: <ApiOutlined />,
     };
   }, [gatewayStatus, gatewayUsageRecords, palette, t]);
 
@@ -139,19 +147,12 @@ export function ConfigStatusDashboard({
         <StatusTile
           palette={palette}
           background={panelBg}
-          label={t('configPage.readiness.metricModel')}
-          title={llmLine.title}
-          subtitle={llmLine.sub}
-          accent={llmLine.accent}
-          icon={<KeyOutlined />}
-          onClick={onOpenSimulation}
-          footer={
-            hasLlmKey && defaultValidation.valid === true ? (
-              <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>
-                {t('configPage.metrics.validationPass')}
-              </Tag>
-            ) : null
-          }
+          label={t('configPage.readiness.metricGateway')}
+          title={gatewayLine.title}
+          subtitle={gatewayLine.sub}
+          accent={gatewayLine.accent}
+          icon={gatewayLine.icon}
+          onClick={onOpenCli}
         />
         <StatusTile
           palette={palette}
@@ -197,18 +198,23 @@ export function ConfigStatusDashboard({
             ) : null
           }
         />
-        {gatewayLine ? (
-          <StatusTile
-            palette={palette}
-            background={panelBg}
-            label={t('configPage.readiness.metricGateway')}
-            title={gatewayLine.title}
-            subtitle={gatewayLine.sub}
-            accent={gatewayLine.accent}
-            icon={<CheckCircleOutlined />}
-            onClick={onOpenCli}
-          />
-        ) : null}
+        <StatusTile
+          palette={palette}
+          background={panelBg}
+          label={t('configPage.readiness.metricModel')}
+          title={llmLine.title}
+          subtitle={llmLine.sub}
+          accent={llmLine.accent}
+          icon={<KeyOutlined />}
+          onClick={onOpenSimulation}
+          footer={
+            hasLlmKey && defaultValidation.valid === true ? (
+              <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>
+                {t('configPage.metrics.validationPass')}
+              </Tag>
+            ) : null
+          }
+        />
       </div>
 
       {showUsageChart && gatewayStatus.enabled ? (

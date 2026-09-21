@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Alert, Button, Checkbox, Modal, Space, Tag, Tooltip, Typography } from 'antd';
-import { CloudDownloadOutlined, CopyOutlined, LinkOutlined } from '@ant-design/icons';
+import { Alert, Button, Checkbox, Modal, Space, Tooltip, Typography } from 'antd';
+import { CloudDownloadOutlined, CopyOutlined, LinkOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import type { VscodeThemePalette } from '../theme';
 import { formatGatewayClaudeModels } from '../../services/webConfigGatewayImport';
@@ -237,32 +237,33 @@ export function WebConfigImportPanel({
 
       <div style={{ marginBottom: compact ? 0 : 14, display: compact ? 'inline-flex' : undefined, alignItems: compact ? 'center' : undefined }}>
         <Space wrap={!compact} align="center" size={compact ? 8 : undefined}>
-          <Button
-            type={prominent && !compact ? 'primary' : 'default'}
-            size="middle"
-            icon={<CloudDownloadOutlined />}
-            loading={importBusy}
-            onClick={onStart}
+          <Tooltip
+            title={
+              deviceAuth.authPath
+                ? t('configPage.webImport.cachedTooltip', { path: deviceAuth.authPath })
+                : undefined
+            }
           >
-            {t('configPage.webImport.button')}
-          </Button>
-          {deviceAuth.authPath ? (
-            compact ? (
-              <Tooltip title={deviceAuth.authPath}>
-                <Tag style={{ margin: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {t('configPage.webImport.cachedShort')}
-                </Tag>
-              </Tooltip>
-            ) : (
-              <Text
-                type="secondary"
-                ellipsis={{ tooltip: deviceAuth.authPath }}
-                style={{ fontSize: 12, maxWidth: 420, display: 'inline-block', verticalAlign: 'middle' }}
-              >
-                {t('configPage.webImport.cachedAt', { path: deviceAuth.authPath })}
-              </Text>
-            )
-          ) : null}
+            <Button
+              type={prominent && !compact ? 'primary' : 'default'}
+              size="middle"
+              icon={deviceAuth.authPath ? <CheckCircleOutlined /> : <CloudDownloadOutlined />}
+              loading={importBusy}
+              onClick={onStart}
+              style={
+                deviceAuth.authPath
+                  ? {
+                      borderColor: 'var(--vscode-charts-green, #3fb950)',
+                      color: 'var(--vscode-charts-green, #3fb950)',
+                    }
+                  : undefined
+              }
+            >
+              {deviceAuth.authPath
+                ? t('configPage.webImport.buttonSignedIn')
+                : t('configPage.webImport.button')}
+            </Button>
+          </Tooltip>
         </Space>
       </div>
 

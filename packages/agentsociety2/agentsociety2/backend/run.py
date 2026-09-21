@@ -33,6 +33,7 @@ if __name__ == "__main__":
 
     # 加载环境变量文件
     load_dotenv()
+    os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
     # 从环境变量读取配置，命令行参数优先
     host = os.getenv("BACKEND_HOST", "0.0.0.0")

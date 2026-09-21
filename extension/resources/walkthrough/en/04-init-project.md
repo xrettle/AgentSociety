@@ -1,5 +1,7 @@
 ## Initialize a Research Project
 
+**Save the Simulation LLM settings first** (API key in `.env`). The sidebar only offers **Initialize Workspace** after a key is detected.
+
 You need a research workspace folder before you start.
 
 ### Create a folder

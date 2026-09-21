@@ -35,6 +35,7 @@ import { localize } from './i18n';
 import { BackendManager } from './services/backendManager';
 import { AiCliGatewayManager } from './services/aiCliGatewayManager';
 import { ConfigHealthStatusBar } from './services/configHealthStatus';
+import { LanguageStatusBar } from './services/languageStatusBar';
 import { formatDurationMs } from './shared/formatDuration';
 import { disposeAllSharedOutputChannels } from './shared/outputChannels';
 import { WorkspaceExportManager } from './services/workspaceExportManager';
@@ -108,17 +109,52 @@ function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(workspaceExportManager);
   context.subscriptions.push(workspaceImportManager);
 
-  // 首次启动或配置未完成时，打开配置页；否则按设置决定是否自动启动后端
+  // 首次引导：开文件夹 → 配 API Key → 初始化工作区 → 启动后端
   const config = vscode.workspace.getConfiguration('aiSocialScientist');
   const autoStart = config.get<boolean>('backend.autoStart', false);
   const hasCompletedInitialSetup = context.globalState.get<boolean>(ONBOARDING_KEYS.hasCompletedInitialSetup);
   const hasLlmApiKey = hasConfiguredLlmApiKey();
   const needsFirstSetup = !hasCompletedInitialSetup || !hasLlmApiKey;
+  const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+  const firstSetupGuideKey = ONBOARDING_KEYS.firstSetupGuideShown;
 
-  if (needsFirstSetup) {
+  if (!hasWorkspace) {
+    if (!context.globalState.get<boolean>(firstSetupGuideKey)) {
+      void vscode.window
+        .showInformationMessage(
+          localize('extension.onboarding.openFolderFirst'),
+          localize('extension.onboarding.openFolder'),
+          localize('extension.onboarding.walkthrough'),
+          localize('extension.onboarding.dismiss')
+        )
+        .then((choice) => {
+          if (choice === undefined) {
+            return;
+          }
+          void context.globalState.update(firstSetupGuideKey, true);
+          if (choice === localize('extension.onboarding.openFolder')) {
+            void vscode.commands.executeCommand('workbench.action.files.openFolder');
+          } else if (choice === localize('extension.onboarding.walkthrough')) {
+            void vscode.commands.executeCommand('aiSocialScientist.openWalkthrough');
+          }
+        });
+    }
+  } else if (needsFirstSetup) {
     setTimeout(() => {
       ConfigPageViewProvider.createOrShow(context, vscode.ViewColumn.One);
     }, 500);
+    if (!context.globalState.get<boolean>(firstSetupGuideKey)) {
+      void vscode.window
+        .showInformationMessage(
+          localize('extension.onboarding.setupSteps'),
+          localize('extension.onboarding.dismiss')
+        )
+        .then((choice) => {
+          if (choice !== undefined) {
+            void context.globalState.update(firstSetupGuideKey, true);
+          }
+        });
+    }
   } else if (autoStart) {
     backendManager.start({ silent: true }).catch((error) => {
       console.error('Failed to auto-start backend:', error);
@@ -144,6 +180,7 @@ function activateExtension(context: vscode.ExtensionContext) {
     dragAndDropController: dragAndDropController,
     showCollapseAll: true
   });
+  projectStructureProvider.attachTreeView(treeView);
 
   // Register provider disposal on deactivation
   context.subscriptions.push({
@@ -157,7 +194,12 @@ function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(treeView);
 
   const configEntryTitleBarHintKey = ONBOARDING_KEYS.configEntryTitleBarHintShown;
-  if (!needsFirstSetup && !context.globalState.get<boolean>(configEntryTitleBarHintKey)) {
+  // 已完成密钥配置后的轻量提示；首次未完成配置时改用上面的分步引导，避免重复弹窗
+  if (
+    hasWorkspace &&
+    !needsFirstSetup &&
+    !context.globalState.get<boolean>(configEntryTitleBarHintKey)
+  ) {
     void vscode.window
       .showInformationMessage(
         localize('extension.configEntryTitleBarHint'),
@@ -748,6 +790,25 @@ function activateExtension(context: vscode.ExtensionContext) {
   const gatewayStatusBarInterval = setInterval(updateGatewayStatusBar, 10_000);
   context.subscriptions.push({ dispose: () => clearInterval(gatewayStatusBarInterval) });
 
+  const applyLanguageChange = () => {
+    projectStructureProvider.refreshNow();
+    configHealthStatusBar.refresh();
+    updateGatewayStatusBar();
+    languageStatusBar.refresh();
+    ConfigPageViewProvider.reloadLanguageIfOpen();
+    SkillMarketplacePanel.reloadLanguageIfOpen();
+    HelpPageViewProvider.reloadLanguageIfOpen();
+  };
+  const languageStatusBar = new LanguageStatusBar(context, () => {
+    applyLanguageChange();
+  });
+  const toggleLanguageCommand = vscode.commands.registerCommand(
+    'aiSocialScientist.toggleLanguage',
+    async () => {
+      await languageStatusBar.toggle();
+    }
+  );
+
   // ========== Help Page ==========
   const openHelpPageCommand = vscode.commands.registerCommand(
     'aiSocialScientist.openHelpPage',
@@ -1225,6 +1286,7 @@ function activateExtension(context: vscode.ExtensionContext) {
     openSkillSourcesSettingsCommand,
     openClaudeSkillSourcesSettingsCommand,
     refreshProjectViewCommand,
+    toggleLanguageCommand,
     openAgentSkillDocCommand,
     updateExtensionSkillsCommand,
     switchSkillVersionCommand,

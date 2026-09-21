@@ -234,12 +234,14 @@
   },
   "configPage": {
     "title": "AI Social Scientist Configuration",
-    "subtitle": "Settings saved to workspace .env",
+    "subtitle": "Settings are saved to the workspace .env",
     "advancedConfig": "Advanced configuration",
     "loading": "Loading…",
     "envFileLoaded": "Config file: {{path}}",
     "webImport": {
       "button": "Import from AgentSociety Web",
+      "buttonSignedIn": "Import from AgentSociety Web (signed in)",
+      "cachedTooltip": "Login cached at {{path}}. Click to re-import or switch account.",
       "deviceTitle": "Signing in with Casdoor",
       "userCode": "Code",
       "openedLogin": "Copy the login URL into your browser and complete authorization. The extension will then read the existing API key and model list and fill the form.",
@@ -257,7 +259,7 @@
       "cachedAt": "Credential cache: {{path}}",
       "cachedShort": "Signed in",
       "confirmTitle": "Confirm import",
-      "confirmDesc": "This writes simulation LLM settings and creates or updates a Gateway provider. EasyPaper fields are filled separately (save manually). You still need to save .env in a later step.",
+      "confirmDesc": "On confirm: Gateway provider is saved immediately. Simulation LLM only pre-fills the form — write .env in the Save step. EasyPaper is form-only until you save on that step (Skip discards it).",
       "confirmApply": "Confirm import",
       "confirmCancel": "Cancel",
       "prominentTitle": "One-click import (recommended)",
@@ -268,8 +270,9 @@
       "gatewayName": "Provider name",
       "codexModel": "Codex model",
       "codex1mEnabled": "Enabled",
-      "successWithGateway": "Simulation settings applied. Gateway provider \"{{name}}\" now has its API key, models, and active Claude/Codex routes configured. Continue to save .env.",
+      "successWithGateway": "Simulation settings applied. Gateway provider \"{{name}}\" saved with API key and models. Start the local gateway later in the CLI gateway step if needed.",
       "gatewayApplyInvalid": "The Gateway provider did not retain its API key. Keep this window open and retry.",
+      "applyTimeout": "Confirm import timed out. Configuration may still have been saved — close this dialog and continue, or retry.",
       "overwriteWarningTitle": "Existing Codex / Claude Code configuration detected",
       "overwriteWarningDesc": "By default your existing configuration is kept and only simulation / EasyPaper settings are imported. Check the option below to overwrite.",
       "overwriteToggle": "Overwrite existing Codex / Claude Code configuration"
@@ -306,7 +309,7 @@
       "statusBlockedShort": "Pending",
       "notCheckedShort": "Not validated",
       "clickToValidate": "Click to validate",
-      "statusIdleShort": "Unchecked"
+      "statusIdleShort": "Not validated"
     },
     "sections": {
       "inheritHintShort": "Leave blank to reuse the default LLM API key and base URL above.",
@@ -327,6 +330,9 @@
       "wizardSubtitle": "Import in one click or configure step by step. Switch to All settings anytime.",
       "openWizard": "Setup wizard",
       "exitWizard": "All settings",
+      "rerunWizard": "Re-run setup wizard",
+      "exitWizardHint": "Open the full settings page to edit one section directly",
+      "rerunWizardHint": "From the ⋯ menu — walk through guided steps again",
       "title": "Recommended setup order",
       "subtitle": "Import in one click or complete core steps manually.",
       "stepImport": "Web import",
@@ -345,6 +351,9 @@
       "actionValidate": "Validate & continue",
       "actionManual": "Configure manually",
       "actionFinish": "Finish",
+      "actionFinishOverview": "Finish & open overview",
+      "actionSkipFinish": "Skip & finish",
+      "dontShowAgain": "Don't show this wizard again when opening config (recommended; re-run anytime from ⋯)",
       "saveReviewHint": "When everything looks correct, click Save and continue to write settings to the workspace .env file.",
       "intro": {
         "import": {
@@ -361,7 +370,7 @@
         },
         "backend": {
           "title": "Start local backend",
-          "body": "The backend powers Agent skills, experiment APIs, and replay. Start it after saving; the status bar shows the port."
+          "body": "The backend powers Agent skills, experiment APIs, and replay. Pick/validate Python, then start. If it is already running, Next still saves edits on this step (e.g. Python path)."
         },
         "literature": {
           "title": "Literature search (optional)",
@@ -369,11 +378,11 @@
         },
         "easypaper": {
           "title": "EasyPaper (optional)",
-          "body": "Configure LLM and optional VLM for /easypaper paper generation; saves to easypaper_config.yaml. Copy from simulation LLM or skip if not needed."
+          "body": "Configure LLM and optional VLM for /easypaper; saves to easypaper_config.yaml. Web import only pre-fills this form — Skip does not write the file. Copy from simulation LLM if useful."
         },
         "cli": {
           "title": "Claude / Codex (optional)",
-          "body": "Configure providers and the local gateway for Claude Code or Codex CLI. Skip if you only run experiments."
+          "body": "Configure providers and the local gateway for Claude Code or Codex CLI. Skip if you only run experiments. After finish you land on the status overview (Gateway first); with Don't show again checked, the next open goes straight there."
         }
       }
     },
@@ -402,10 +411,10 @@
       "modelUnset": "Unspecified"
     },
     "overview": {
-      "backend": "Backend",
+      "backend": "Backend service",
       "backendRunning": "Running :{{port}}",
       "backendStopped": "Stopped",
-      "backendStoppedHint": "Save config, then start with one click"
+      "backendStoppedHint": "Click to start"
     },
     "metrics": {
       "noWorkspace": "No workspace",
@@ -415,7 +424,9 @@
       "uptime": "Up {{duration}}",
       "requests": "{{count}} requests",
       "gatewayStopped": "Stopped",
-      "gatewayStoppedHint": "Enable and start gateway on CLI tab"
+      "gatewayStoppedHint": "Open the CLI tab to enable and start",
+      "gatewayDisabled": "Not enabled",
+      "gatewayDisabledHint": "Click to configure Claude / Codex local gateway"
     },
     "tabs": {
       "agent": "PersonAgent"
@@ -579,7 +590,7 @@
     "resetWorkspaceDefaults": "Reset workspace config",
     "dashboard": {
       "editConfig": "Edit configuration",
-      "editConfigHint": "Usually you only need the status cards above; expand when you need to change API keys, Python, or gateway settings.",
+      "editConfigHint": "Check Gateway / backend status above first; expand to edit providers, keys, or Python (opens on CLI gateway by default).",
       "gatewayTrend": "Gateway requests (last 7 days)",
       "requestsSeries": "Requests",
       "claudeUsageTitle": "Claude usage trend",
@@ -633,7 +644,7 @@
       "validateSuccess": "Validation Successful"
     },
     "noWorkspace": "No workspace detected",
-    "noWorkspaceHint": "Open a folder first (File → Open Folder)",
+    "noWorkspaceHint": "Open a project folder first. API keys are saved to that folder’s .env and cannot be saved without a folder. Suggested order: open folder → save LLM settings → initialize workspace → start backend.",
     "save": "Save",
     "validate": "Validate",
     "revalidate": "Re-validate",
@@ -684,7 +695,8 @@
       "llmKeyRequired": "LLM API Key Required",
       "llmKeyRequiredDesc": "Please enter LLM API key to continue",
       "apiKeyMissing": "Please enter LLM API Key",
-      "apiBaseMissing": "Please enter LLM API Base URL"
+      "apiBaseMissing": "Please enter LLM API Base URL",
+      "saveSuccessNextInit": "Saved to .env. If the workspace is not initialized yet, click “Initialize Workspace” in the sidebar."
     },
     "linkedPlaceholders": {
       "apiKey": "Leave blank to reuse the default LLM key above ({{status}})",
@@ -716,7 +728,8 @@
       "inheritCoder": "Reuse default LLM",
       "on": "On",
       "off": "Off"
-    }
+    },
+    "openWorkspace": "Open folder"
   },
   "easyPaperConfig": {
     "infoTitle": "EasyPaper (Optional)",

@@ -993,12 +993,12 @@ export class AiCliGatewayManager {
 
   async addProvider(
     provider: Omit<AiCliProviderConfig, 'id' | 'activeClaude' | 'activeCodex' | 'failoverClaude' | 'failoverCodex'> &
-      Partial<Pick<AiCliProviderConfig, 'activeClaude' | 'activeCodex' | 'failoverClaude' | 'failoverCodex'>>
+      Partial<Pick<AiCliProviderConfig, 'activeClaude' | 'activeCodex' | 'failoverClaude' | 'failoverCodex'>>,
+    options?: { liveApply?: 'full' | 'inventory' }
   ): Promise<AiCliProviderConfig> {
     await this.initialize();
     const providers = this.getProviders();
     const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    const kind = provider.apiKind ?? inferApiKindFromBaseUrl(provider.baseUrl);
     // Only activate when explicitly requested (e.g. Web import). Do not auto-pick a default vendor.
     const activeClaude = provider.activeClaude === true;
     const activeCodex = provider.activeCodex === true;
@@ -1024,12 +1024,7 @@ export class AiCliGatewayManager {
       }
     }
     await this.saveProviders(providers);
-    if (entry.activeClaude) {
-      await this.applyActiveClaudeProvider(entry);
-    }
-    if (entry.activeCodex) {
-      await this.applyActiveCodexProvider(entry);
-    }
+    await this.applyProviderAfterSave(entry, options?.liveApply ?? 'full');
     return entry;
   }
 
@@ -1069,27 +1064,30 @@ export class AiCliGatewayManager {
     }
   }
 
-  async upsertImportedGatewayProvider(draft: {
-    name: string;
-    baseUrl: string;
-    apiKey: string;
-    apiKind?: AiCliApiKind;
-    model?: string;
-    codexModel?: string;
-    sonnetModel?: string;
-    opusModel?: string;
-    fableModel?: string;
-    haikuModel?: string;
-    sonnetDisplayName?: string;
-    opusDisplayName?: string;
-    fableDisplayName?: string;
-    haikuDisplayName?: string;
-    declareSonnet1m?: boolean;
-    declareOpus1m?: boolean;
-    declareFable1m?: boolean;
-    codexEnable1m?: boolean;
-    permissionMode?: string;
-  }): Promise<AiCliProviderConfig> {
+  async upsertImportedGatewayProvider(
+    draft: {
+      name: string;
+      baseUrl: string;
+      apiKey: string;
+      apiKind?: AiCliApiKind;
+      model?: string;
+      codexModel?: string;
+      sonnetModel?: string;
+      opusModel?: string;
+      fableModel?: string;
+      haikuModel?: string;
+      sonnetDisplayName?: string;
+      opusDisplayName?: string;
+      fableDisplayName?: string;
+      haikuDisplayName?: string;
+      declareSonnet1m?: boolean;
+      declareOpus1m?: boolean;
+      declareFable1m?: boolean;
+      codexEnable1m?: boolean;
+      permissionMode?: string;
+    },
+    options?: { liveApply?: 'full' | 'inventory' }
+  ): Promise<AiCliProviderConfig> {
     await this.initialize();
     const providers = this.getProviders();
     const apiKind = draft.apiKind ?? inferApiKindFromBaseUrl(draft.baseUrl);
@@ -1124,12 +1122,16 @@ export class AiCliGatewayManager {
     };
     if (existing) {
       const apiKey = draft.apiKey.trim() || existing.apiKey.trim();
-      return this.updateProvider(existing.id, { ...payload, apiKey });
+      return this.updateProvider(existing.id, { ...payload, apiKey }, options);
     }
-    return this.addProvider(payload);
+    return this.addProvider(payload, options);
   }
 
-  async updateProvider(id: string, patch: Partial<AiCliProviderConfig>): Promise<AiCliProviderConfig> {
+  async updateProvider(
+    id: string,
+    patch: Partial<AiCliProviderConfig>,
+    options?: { liveApply?: 'full' | 'inventory' }
+  ): Promise<AiCliProviderConfig> {
     await this.initialize();
     const providers = this.getProviders();
     const index = providers.findIndex((p) => p.id === id);
@@ -1149,13 +1151,39 @@ export class AiCliGatewayManager {
       }
     }
     await this.saveProviders(providers);
-    if (next.activeClaude) {
-      await this.applyActiveClaudeProvider(next);
-    }
-    if (next.activeCodex) {
-      await this.applyActiveCodexProvider(next);
-    }
+    await this.applyProviderAfterSave(next, options?.liveApply ?? 'full');
     return next;
+  }
+
+  /**
+   * Persist inventory + write CLI config files.
+   * `inventory` skips starting/reconciling the local gateway (used by Web import so Confirm cannot hang).
+   */
+  private async applyProviderAfterSave(
+    provider: AiCliProviderConfig,
+    liveApply: 'full' | 'inventory'
+  ): Promise<void> {
+    if (liveApply === 'inventory') {
+      await this.applyProviderInventoryOnly(provider);
+      return;
+    }
+    if (provider.activeClaude) {
+      await this.applyActiveClaudeProvider(provider);
+    }
+    if (provider.activeCodex) {
+      await this.applyActiveCodexProvider(provider);
+    }
+  }
+
+  private async applyProviderInventoryOnly(provider: AiCliProviderConfig): Promise<void> {
+    const normalized = this.normalizeProvider(provider);
+    if (provider.activeClaude) {
+      writeClaudeConfig(this.providerToClaudeConfig(normalized));
+      await this.persistUpstream(this.providerToGatewayUpstream(normalized));
+    }
+    if (provider.activeCodex) {
+      await this.projectCodexProviderLive(normalized, undefined);
+    }
   }
 
   private async applyActiveClaudeProvider(provider: AiCliProviderConfig): Promise<AiCliGatewayPublicStatus> {

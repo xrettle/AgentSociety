@@ -48,6 +48,8 @@ export interface WorkspaceInfo {
   workspacePath?: string;
   /** Relative path to the loaded .env file, e.g. agentsociety/.env */
   envFilePath?: string;
+  /** True after first successful LLM save (or wizard finish). Skip forced wizard. */
+  hasCompletedInitialSetup?: boolean;
 }
 
 export interface BackendStatus {

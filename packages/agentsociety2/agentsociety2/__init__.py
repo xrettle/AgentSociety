@@ -45,6 +45,12 @@
         # ... 其他抽象方法
 """
 
+from __future__ import annotations
+
+import os
+
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
+
 __version__ = "2.8.3"
 
 # Import main components for easy access

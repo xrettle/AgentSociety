@@ -24,17 +24,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
+
 from litellm import AllMessageValues
 from litellm.exceptions import RateLimitError
+from litellm.types.router import RouterRateLimitError
 from litellm.types.utils import ModelResponse
 
 from agentsociety2.config.config import Config
 from agentsociety2.logger import get_logger
-
-try:
-    from litellm.types.router import RouterRateLimitError
-except Exception:  # pragma: no cover - compatibility across litellm versions
-    RouterRateLimitError = None
 
 __all__ = [
     "AdaptiveSemaphore",

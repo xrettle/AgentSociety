@@ -1240,8 +1240,8 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
   // 防抖定时器 - 用于限制刷新频率
   private refreshTimer: NodeJS.Timeout | undefined;
 
-  // 防抖延迟时间（毫秒）- 200ms内多次刷新请求会被合并为一次
-  private readonly DEBOUNCE_DELAY = 2000;  // 2秒防抖延迟，避免实验运行时频繁刷新
+  // 防抖延迟时间（毫秒）- 文件监听触发的刷新合并窗口
+  private readonly DEBOUNCE_DELAY = 800;
 
   // 输出通道 - 用于显示调试日志
   // 用户可以在"输出"面板中查看这些日志
@@ -1261,6 +1261,9 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
 
   // Workspace Manager - 本地文件操作
   private workspaceManager: WorkspaceManager;
+
+  private treeView: vscode.TreeView<ProjectItem> | undefined;
+  private autoFixInProgress = false;
 
   /**
    * 构造函数
@@ -1290,6 +1293,16 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
       this.setupFileWatchers();  // 重新设置监听器
       this.refresh();  // 刷新视图
     });
+  }
+
+  attachTreeView(treeView: vscode.TreeView<ProjectItem>): void {
+    this.treeView = treeView;
+  }
+
+  private setTreeMessage(message: string | undefined): void {
+    if (this.treeView) {
+      this.treeView.message = message;
+    }
   }
 
   /**
@@ -1523,16 +1536,7 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
   }
 
   /**
-   * 刷新树形视图
-   *
-   * 使用防抖（debounce）机制：
-   * - 如果200ms内多次调用refresh()，只会在最后一次调用后200ms执行刷新
-   * - 这样可以避免频繁刷新，提升性能
-   *
-   * 工作原理：
-   * 1. 第一次调用：启动200ms定时器
-   * 2. 200ms内再次调用：清除旧定时器，启动新定时器
-   * 3. 200ms内没有新调用：执行刷新（调用fire()）
+   * 刷新树形视图（文件监听等频繁触发时防抖合并）
    */
   refresh(): void {
     // 如果正在进行批量操作，跳过自动刷新
@@ -1562,6 +1566,41 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
       // 清除定时器引用
       this.refreshTimer = undefined;
     }, this.DEBOUNCE_DELAY);
+  }
+
+  /** 立即刷新（跳过防抖），用于后台修复完成后的可见更新 */
+  refreshNow(): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
+    this.clearCache();
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  private async runAutoFixInBackground(): Promise<void> {
+    this.autoFixInProgress = true;
+    this.setTreeMessage(localize('projectStructure.repairing'));
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: localize('projectStructure.repairing.progress'),
+        },
+        async () => {
+          const result = await this.workspaceManager.init({ topic: 'Fix Workspace' });
+          if (result.success && result.filesCreated && result.filesCreated.length > 0) {
+            this.log(`Auto-fixed workspace: created ${result.filesCreated.length} items`);
+          }
+        }
+      );
+    } catch (error: any) {
+      this.log(`Auto-fix workspace failed: ${error}`);
+    } finally {
+      this.autoFixInProgress = false;
+      this.setTreeMessage(undefined);
+      this.refreshNow();
+    }
   }
 
   /**
@@ -1617,34 +1656,42 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
    * @returns 子节点数组
    */
   async getChildren(element?: ProjectItem): Promise<ProjectItem[]> {
+    const cached = this.getCachedChildren(element);
+    if (cached) {
+      return cached;
+    }
+
     // 获取工作区文件夹
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
+      this.setTreeMessage(localize('projectStructure.noWorkspace'));
       return [];  // 没有工作区，返回空数组
     }
 
     const workspacePath = workspaceFolder.uri.fsPath;
-    const isChinese = vscode.env.language === 'zh-CN' || vscode.env.language.startsWith('zh');
-
-    // 检查工作区状态
-    const topicFile = path.join(workspacePath, 'TOPIC.md');
-    const envFile = path.join(workspacePath, '.env');
-    const hasEnv = fs.existsSync(envFile);
-    const hasTopic = fs.existsSync(topicFile);
-
-    // 检查.env是否已配置（有API key）
-    const { EnvManager } = await import('./envManager');
-    const envManager = new EnvManager();
-    const envConfig = envManager.readEnv();
-    const hasApiKey = !!(envConfig.llmApiKey?.trim());
-
-    // 检查工作区目录结构是否完整
-    const workspaceHealth = this.checkWorkspaceHealth(workspacePath);
-    const needsFix = !workspaceHealth.isHealthy;
 
     // 根节点：显示研究话题
     // element为undefined表示这是根节点
     if (!element) {
+      this.setTreeMessage(
+        this.autoFixInProgress
+          ? localize('projectStructure.repairing')
+          : localize('projectStructure.loading')
+      );
+
+      const topicFile = path.join(workspacePath, 'TOPIC.md');
+      const envFile = path.join(workspacePath, '.env');
+      const hasEnv = fs.existsSync(envFile);
+      const hasTopic = fs.existsSync(topicFile);
+
+      const { EnvManager } = await import('./envManager');
+      const envManager = new EnvManager();
+      const envConfig = envManager.readEnv();
+      const hasApiKey = !!(envConfig.llmApiKey?.trim());
+
+      const workspaceHealth = this.checkWorkspaceHealth(workspacePath);
+      const needsFix = !workspaceHealth.isHealthy;
+
       const items: ProjectItem[] = [];
 
       // 阶段1: 没有.env文件 -> 自动创建模板后继续
@@ -1674,6 +1721,7 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
           };
           infoItem.tooltip = localize('projectStructure.apiKeyRequired.tooltip');
           items.push(infoItem);
+          this.setTreeMessage(localize('projectStructure.apiKeyRequired.message'));
           return items;
         }
       }
@@ -1702,6 +1750,7 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
         };
         infoItem.tooltip = localize('projectStructure.apiKeyRequired.tooltip');
         items.push(infoItem);
+        this.setTreeMessage(localize('projectStructure.apiKeyRequired.message'));
         return items;
       }
 
@@ -1730,6 +1779,7 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
         initItem.tooltip = localize('extension.initProject.tooltip');
         items.push(initItem);
 
+        this.setTreeMessage(localize('projectStructure.initRequired.message'));
         return items;
       }
 
@@ -1749,16 +1799,9 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
       aiChatItem.tooltip = localize('extension.aiChat.tooltip');
       items.push(aiChatItem);
 
-      // 如果工作区目录结构不完整，自动修复（无需用户点击）
-      if (needsFix) {
-        try {
-          const result = await this.workspaceManager.init({ topic: 'Fix Workspace' });
-          if (result.success && result.filesCreated && result.filesCreated.length > 0) {
-            this.log(`Auto-fixed workspace: created ${result.filesCreated.length} items`);
-          }
-        } catch (error: any) {
-          this.log(`Auto-fix workspace failed: ${error}`);
-        }
+      // 工作区目录不完整时后台补全，不阻塞侧栏首屏
+      if (needsFix && !this.autoFixInProgress) {
+        void this.runAutoFixInBackground();
       }
 
       // 添加项目状态概览（统计信息）
@@ -1815,12 +1858,21 @@ export class ProjectStructureProvider implements vscode.TreeDataProvider<Project
       topicItem.tooltip = localize('projectStructure.researchTopic.tooltip');
       items.push(topicItem);
 
+      if (this.autoFixInProgress) {
+        this.setTreeMessage(localize('projectStructure.repairing'));
+      } else {
+        this.setTreeMessage(undefined);
+      }
+      this.setCachedChildren(undefined, items);
       return items;
     }
 
     if (element.type === 'skillManagement') {
       return [];
     }
+
+    const isChinese = vscode.env.language === 'zh-CN' || vscode.env.language.startsWith('zh');
+    const topicFile = path.join(workspacePath, 'TOPIC.md');
 
     if (element.type === 'projectStats') {
       return this.buildProjectStatsMetricItems(workspacePath);
