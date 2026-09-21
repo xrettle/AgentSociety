@@ -240,6 +240,8 @@
     "envFileLoaded": "配置文件：{{path}}",
     "webImport": {
       "button": "从 AgentSociety Web 导入",
+      "buttonSignedIn": "从 AgentSociety Web 导入（已登录）",
+      "cachedTooltip": "已缓存登录凭据：{{path}}。点击可重新导入或换账号。",
       "deviceTitle": "正在通过 Casdoor 登录",
       "userCode": "验证码",
       "openedLogin": "请复制登录地址到浏览器打开，并按页面提示完成授权。授权后插件会自动读取现有 API Key 和模型列表并填入表单。",
@@ -257,7 +259,7 @@
       "cachedAt": "登录凭据：{{path}}",
       "cachedShort": "已缓存登录",
       "confirmTitle": "确认导入配置",
-      "confirmDesc": "确认后将写入仿真 LLM 配置，并创建或更新 Gateway 供应商；EasyPaper 配置填入表单（需单独保存）。仿真配置仍需在后续步骤保存到 .env。",
+      "confirmDesc": "确认后：Gateway 供应商立即写入；仿真 LLM 只预填表单，需在「保存配置」步写入 .env；EasyPaper 仅填入表单，请在 EasyPaper 步保存（跳过则不会落盘）。",
       "confirmApply": "确认导入",
       "confirmCancel": "取消",
       "prominentTitle": "一键导入（推荐）",
@@ -268,8 +270,9 @@
       "gatewayName": "供应商名称",
       "codexModel": "Codex 模型",
       "codex1mEnabled": "已启用",
-      "successWithGateway": "已填入仿真配置，并完成 Gateway 供应商「{{name}}」的 API Key、模型和 Claude/Codex 激活配置。请继续保存 .env。",
+      "successWithGateway": "已填入仿真配置，并保存 Gateway 供应商「{{name}}」的 API Key 与模型。本地 Gateway 可在后续「CLI gateway」步骤再启动。",
       "gatewayApplyInvalid": "Gateway 供应商未正确保存 API Key，请保留当前窗口并重试。",
+      "applyTimeout": "确认导入超时。配置可能已写入——可关闭对话框继续，或重试一次。",
       "overwriteWarningTitle": "检测到已有的 Codex / Claude Code 配置",
       "overwriteWarningDesc": "默认保留你现有的配置，仅导入仿真与 EasyPaper 设置；如需用导入数据覆盖，请勾选下方选项。",
       "overwriteToggle": "覆盖现有的 Codex / Claude Code 配置"
@@ -327,6 +330,9 @@
       "wizardSubtitle": "可先一键导入，或逐步手动完成；可随时切换「全部设置」。",
       "openWizard": "配置向导",
       "exitWizard": "全部设置",
+      "rerunWizard": "重新运行配置向导",
+      "exitWizardHint": "进入完整配置页，可直接改某一项",
+      "rerunWizardHint": "从「⋯」菜单进入；适合新同事或想再走一遍引导时",
       "title": "推荐配置顺序",
       "subtitle": "可先一键导入，或逐步手动完成核心配置。",
       "stepImport": "一键导入",
@@ -345,6 +351,9 @@
       "actionValidate": "验证并继续",
       "actionManual": "手动配置",
       "actionFinish": "完成",
+      "actionFinishOverview": "完成并进入总览",
+      "actionSkipFinish": "跳过并完成",
+      "dontShowAgain": "下次打开配置页时不再显示向导（推荐；可随时从 ⋯ 重新运行）",
       "saveReviewHint": "确认无误后点击「保存并继续」，配置将写入工作区 .env。",
       "intro": {
         "import": {
@@ -361,7 +370,7 @@
         },
         "backend": {
           "title": "启动本地后端",
-          "body": "后端提供 Agent 技能、实验 API 与回放等服务。保存成功后可一键启动；状态栏也会显示运行端口。"
+          "body": "后端提供 Agent 技能、实验 API 与回放等服务。可先选择/验证 Python，再启动。若后端已在运行，点「下一步」仍会保存对本步的修改（如 Python 路径）。"
         },
         "literature": {
           "title": "文献检索（可选）",
@@ -369,11 +378,11 @@
         },
         "easypaper": {
           "title": "EasyPaper（可选）",
-          "body": "使用 /easypaper 生成论文时需配置 LLM 与可选 VLM，保存后写入 easypaper_config.yaml。可从仿真 LLM 一键复制，不需要可点「跳过」。"
+          "body": "使用 /easypaper 生成论文时需配置 LLM 与可选 VLM，保存后写入 easypaper_config.yaml。Web 导入只会预填此处；点「跳过」不会保存。可从仿真 LLM 一键复制。"
         },
         "cli": {
           "title": "Claude / Codex（可选）",
-          "body": "若使用 Claude Code 或 Codex CLI，可在此配置供应商与本地网关。仅跑实验可跳过。"
+          "body": "若使用 Claude Code 或 Codex CLI，可在此配置供应商与本地网关。仅跑实验可跳过。完成后默认进入状态总览（Gateway 优先）；勾选「不再显示向导」后下次将直接打开总览。"
         }
       }
     },
@@ -415,7 +424,9 @@
       "uptime": "运行 {{duration}}",
       "requests": "{{count}} 次请求",
       "gatewayStopped": "未运行",
-      "gatewayStoppedHint": "在 CLI 标签页启用并启动网关"
+      "gatewayStoppedHint": "点击打开 CLI 标签页启用并启动",
+      "gatewayDisabled": "未启用",
+      "gatewayDisabledHint": "点击配置 Claude / Codex 本地网关"
     },
     "tabs": {
       "agent": "PersonAgent"
@@ -579,7 +590,7 @@
     "resetWorkspaceDefaults": "重置工作区配置",
     "dashboard": {
       "editConfig": "修改配置",
-      "editConfigHint": "日常使用中多数情况只需查看上方状态；需要改密钥、Python 或网关时再展开。",
+      "editConfigHint": "日常先看上方 Gateway / 后端状态；改供应商、密钥或 Python 时再展开（默认打开 CLI 网关）。",
       "gatewayTrend": "近 7 日 Gateway 请求",
       "requestsSeries": "请求数",
       "claudeUsageTitle": "Claude 用量趋势",
@@ -633,7 +644,7 @@
       "validateSuccess": "验证成功"
     },
     "noWorkspace": "未检测到工作区",
-    "noWorkspaceHint": "请先使用菜单「文件 → 打开文件夹」打开一个项目文件夹",
+    "noWorkspaceHint": "请先打开项目文件夹。API Key 会保存到该文件夹的 .env；未打开文件夹时无法保存。推荐顺序：打开文件夹 → 配置并保存 LLM → 初始化工作区 → 启动后端。",
     "save": "保存",
     "validate": "验证",
     "revalidate": "重新验证",
@@ -684,7 +695,8 @@
       "llmKeyRequired": "LLM API 密钥不能为空",
       "llmKeyRequiredDesc": "请输入 LLM API 密钥以继续",
       "apiKeyMissing": "请输入 LLM API 密钥",
-      "apiBaseMissing": "请输入 LLM API 基础 URL"
+      "apiBaseMissing": "请输入 LLM API 基础 URL",
+      "saveSuccessNextInit": "已写入 .env。若尚未初始化，请到侧栏点击「初始化工作区」。"
     },
     "linkedPlaceholders": {
       "apiKey": "可留空，沿用上方默认 LLM 密钥（{{status}}）",
@@ -716,7 +728,8 @@
       "inheritCoder": "沿用默认 LLM",
       "on": "开启",
       "off": "关闭"
-    }
+    },
+    "openWorkspace": "打开文件夹"
   },
   "easyPaperConfig": {
     "infoTitle": "EasyPaper（可选功能）",

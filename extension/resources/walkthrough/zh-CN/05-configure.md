@@ -1,5 +1,9 @@
 ## 配置 LLM 与后端
 
+**请先打开项目文件夹。** API Key 写入该文件夹的 `.env`；未打开文件夹时无法保存。
+
+推荐顺序：**打开文件夹 → 配置并保存仿真 LLM → 初始化工作区 → 启动后端**。
+
 打开配置页后，首次使用可走 **配置向导**：
 
 1. **仿真 LLM** — API 地址、密钥与模型；可选设置推理（thinking）开/关  
@@ -38,6 +42,7 @@ Fiblab 用户可选用预设 **Fiblab LLM API**（`https://llmapi.fiblab.net/v1`
 | 入口 | 操作 |
 |------|------|
 | 状态栏 | 点击 AI Social Scientist 状态 → Start / Restart / Show Logs |
+| 配置页 | 向导第 3 步或「保存并启动后端」 |
 | 命令面板 | `Start Backend` |
 | 配置向导 | 第 3 步一键启动 |
 

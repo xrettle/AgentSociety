@@ -18,6 +18,9 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   CLAUDE_SETTINGS_PATH,
   detectClaudeCli,
@@ -32,7 +35,6 @@ import { inferApiKindFromBaseUrl } from './aiCli/officialEndpoints';
 import type { AiCliGatewayManager, AiCliProviderConfig } from './services/aiCliGatewayManager';
 import type { ClaudeCodeConfigValues } from './webview/configPage/claudeCodeTypes';
 import type { WebImportGatewayProviderDraft } from './services/webConfigGatewayImport';
-import * as path from 'path';
 import { getCurrentLanguageCode, localize } from './i18n';
 import type { ConfigValues, WorkspaceInfo, EasyPaperConfigValues } from './webview/configPage/types';
 import { EnvManager } from './envManager';
@@ -45,7 +47,7 @@ import {
   discoverPythonEnvironments,
   resolveAgentsocietyPython,
 } from './services/agentsocietyPythonResolver';
-import { ONBOARDING_KEYS } from './onboardingState';
+import { ONBOARDING_KEYS, type DefaultLlmValidationCache } from './onboardingState';
 import { getBackendAccessUrl } from './runtimeConfig';
 import {
   readEasyPaperConfig,
@@ -139,6 +141,7 @@ export class ConfigPageViewProvider {
         username?: string;
         password?: string;
         settings?: Record<string, boolean>;
+        fingerprint?: string;
       }) => {
         switch (message.command) {
           case 'requestConfig':
@@ -316,6 +319,25 @@ export class ConfigPageViewProvider {
           case 'dismissWebConfigImport':
             this._clearPendingImportedGateway();
             break;
+          case 'markInitialSetupCompleted':
+            await this._context.globalState.update(ONBOARDING_KEYS.hasCompletedInitialSetup, true);
+            break;
+          case 'persistDefaultLlmValidation': {
+            const fingerprint =
+              typeof message.fingerprint === 'string' ? message.fingerprint.trim() : '';
+            if (!fingerprint) {
+              break;
+            }
+            const cache: DefaultLlmValidationCache = {
+              fingerprint,
+              at: Date.now(),
+            };
+            await this._context.workspaceState.update(ONBOARDING_KEYS.defaultLlmValidation, cache);
+            break;
+          }
+          case 'clearDefaultLlmValidation':
+            await this._context.workspaceState.update(ONBOARDING_KEYS.defaultLlmValidation, undefined);
+            break;
           case 'saveEasyPaperConfig':
             await this._handleSaveEasyPaperConfig(
               message.config as EasyPaperConfigValues | undefined
@@ -344,10 +366,18 @@ export class ConfigPageViewProvider {
       envFilePath = path.relative(workspacePath, envPath) || path.basename(envPath);
     }
 
+    const hasLlmKey = Boolean(envConfig.llmApiKey?.trim());
+    const setupFlag = Boolean(
+      this._context.globalState.get<boolean>(ONBOARDING_KEYS.hasCompletedInitialSetup)
+    );
+    // Completed = flag set (wizard finish / prior save) OR workspace already has a simulation LLM key.
+    const hasCompletedInitialSetup = setupFlag || hasLlmKey;
+
     const workspaceInfo: WorkspaceInfo = {
       hasWorkspace: Boolean(workspaceFolder),
       workspacePath,
       envFilePath,
+      hasCompletedInitialSetup,
     };
 
     const configValues: Partial<ConfigValues> = {
@@ -372,9 +402,14 @@ export class ConfigPageViewProvider {
       literatureSearchApiKey: envConfig.literatureSearchApiKey || '',
     };
 
+    const defaultLlmValidation = this._context.workspaceState.get<DefaultLlmValidationCache>(
+      ONBOARDING_KEYS.defaultLlmValidation
+    );
+
     this._panel.webview.postMessage({
       command: 'initialConfig',
       config: configValues,
+      defaultLlmValidation: defaultLlmValidation ?? null,
     });
 
     this._panel.webview.postMessage({
@@ -382,10 +417,17 @@ export class ConfigPageViewProvider {
       workspaceInfo: workspaceInfo
     });
 
+    const webAuthPath = path.join(os.homedir(), '.fiblab', 'agentsociety2-auth.json');
+    if (fs.existsSync(webAuthPath)) {
+      this._panel.webview.postMessage({
+        command: 'webConfigAuthCached',
+        authPath: webAuthPath,
+      });
+    }
+
     await this._sendClaudeInitialConfig();
     await this._sendEasyPaperInitialConfig();
     await this._postOverviewStatus();
-    await this._handleDiscoverPythonEnvironments();
   }
 
   private async _handleDiscoverPythonEnvironments(): Promise<void> {
@@ -418,8 +460,18 @@ export class ConfigPageViewProvider {
     void this._postOverviewStatus();
   }
 
+  /** 语言切换后重建 webview，使 `__AS_LANG__` 与标题生效。 */
+  public reloadForLanguage(): void {
+    this._panel.title = localize('configPage.title');
+    this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
+  }
+
   public static refreshBackendStatusIfOpen(): void {
     void ConfigPageViewProvider.currentPanel?.refreshBackendStatus();
+  }
+
+  public static reloadLanguageIfOpen(): void {
+    ConfigPageViewProvider.currentPanel?.reloadForLanguage();
   }
 
   private async _sendClaudeInitialConfig(): Promise<void> {
@@ -1095,10 +1147,12 @@ export class ConfigPageViewProvider {
       return;
     }
     try {
-      const routeCodexBefore = manager.getPublicStatus().routeCodex;
-      const provider = await manager.upsertImportedGatewayProvider(draft);
+      // Web import must not start/reconcile the local gateway here — that path can hang
+      // Confirm import. Inventory + direct CLI config is enough; wizard CLI step starts it later.
+      const provider = await manager.upsertImportedGatewayProvider(draft, {
+        liveApply: 'inventory',
+      });
       this._pendingImportedGateway = undefined;
-      // Machine-scoped Claude Code settings must go to user settings, not workspace.
       await this._applyClaudeCodePermissionSettings('bypassPermissions');
       await this._postProvidersAndActiveConfig();
       await this._postGatewayStatus();
@@ -1118,10 +1172,6 @@ export class ConfigPageViewProvider {
           activeCodex: provider.activeCodex,
         },
       });
-      if (!routeCodexBefore && manager.getPublicStatus().routeCodex) {
-        // Do not block the webview success path on the restart prompt.
-        void this._offerCodexRestart(localize('aiCliGateway.codexRestartNeeded'));
-      }
     } catch (error) {
       this._panel.webview.postMessage({
         command: 'webConfigApplyResult',
@@ -1216,7 +1266,26 @@ export class ConfigPageViewProvider {
   private async _handleSaveConfig(config: Partial<ConfigValues>): Promise<void> {
     try {
       await this._saveConfigInternal(config);
-      this._panel.webview.postMessage({ command: 'saveResult', success: true });
+      const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const hasTopic = !!(workspacePath && fs.existsSync(path.join(workspacePath, 'TOPIC.md')));
+      this._panel.webview.postMessage({
+        command: 'saveResult',
+        success: true,
+        needsInit: !hasTopic,
+      });
+      if (!hasTopic && (config.llmApiKey ?? '').trim()) {
+        void vscode.window
+          .showInformationMessage(
+            localize('extension.onboarding.afterSaveInit'),
+            localize('extension.onboarding.initNow'),
+            localize('extension.onboarding.later')
+          )
+          .then((choice) => {
+            if (choice === localize('extension.onboarding.initNow')) {
+              void vscode.commands.executeCommand('aiSocialScientist.initProject');
+            }
+          });
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this._panel.webview.postMessage({

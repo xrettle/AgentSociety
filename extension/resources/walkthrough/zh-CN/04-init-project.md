@@ -1,5 +1,7 @@
 ## 初始化研究项目
 
+**请先完成配置页中的仿真 LLM 保存**（API Key 写入 `.env`）。侧栏在检测到密钥后才会提供「初始化工作区」。
+
 开始前需要一个研究工作区文件夹。
 
 ### 新建工作目录
@@ -17,7 +19,7 @@
 3. [仿真 LLM 与后续向导步骤](https://github.com/tsinghua-fib-lab/agentsociety/blob/main/extension/resources/walkthrough/images/gif/init-03-llm-wizard.gif)
 4. [CLI Gateway 与完成](https://github.com/tsinghua-fib-lab/agentsociety/blob/main/extension/resources/walkthrough/images/gif/init-04-cli-finish.gif)
 
-插件会创建基础目录并写入 `TOPIC.md`、`.env` 模板等：
+插件会创建基础目录并写入 `TOPIC.md`、完善 `.env` 相关目录等：
 
 ```text
 workspace-root/
@@ -38,6 +40,7 @@ workspace-root/
 
 ### 命令面板
 
+命令面板搜索 **AI Social Scientist: Initialize Research Project** 也可触发初始化。
 - `Ctrl+Shift+P`（Mac: `Cmd+Shift+P`）
 - 输入 `AI Social Scientist` 查看插件命令
 

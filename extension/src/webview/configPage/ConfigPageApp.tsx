@@ -268,16 +268,26 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
   const [providerCheckingUrls, setProviderCheckingUrls] = React.useState<Set<string>>(() => new Set());
   const [customPricing, setCustomPricing] = React.useState<ModelPricingMap>({});
   const [advancedTopTab, setAdvancedTopTab] = React.useState<AdvancedTopTab>('models');
-  const [pageTab, setPageTab] = React.useState<ConfigPageTab>('simulation');
+  const [pageTab, setPageTab] = React.useState<ConfigPageTab>('cli');
   const [pythonEnvironmentOptions, setPythonEnvironmentOptions] = React.useState<PythonEnvironmentOption[]>([]);
   const [pythonEnvironmentScanning, setPythonEnvironmentScanning] = React.useState(false);
   const [configCollapseKeys, setConfigCollapseKeys] = React.useState<string[]>([]);
   const [wizardMode, setWizardMode] = React.useState(false);
   const [wizardStep, setWizardStep] = React.useState(0);
   const [wizardFlowCompleted, setWizardFlowCompleted] = React.useState(false);
+  /** Host-persisted: first setup already done — prefer dashboard over forced wizard. */
+  const [setupCompleted, setSetupCompleted] = React.useState(false);
+  /** Session-only: user left wizard via「全部设置」without finishing. */
+  const [wizardDismissed, setWizardDismissed] = React.useState(false);
+  /** Session-only: user explicitly chose「重新运行配置向导」— overrides completed setup. */
+  const [wizardRequested, setWizardRequested] = React.useState(false);
+  const wizardRequestedRef = React.useRef(false);
+  wizardRequestedRef.current = wizardRequested;
   const [deviceAuth, setDeviceAuth] = React.useState<DeviceAuthState>({ status: 'idle' });
   const [pendingWebImport, setPendingWebImport] = React.useState<PendingWebImport | null>(null);
   const [webImportApplying, setWebImportApplying] = React.useState(false);
+  const webImportApplyTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const WEB_IMPORT_APPLY_TIMEOUT_MS = 30_000;
   const pageSectionRef = React.useRef<HTMLDivElement>(null);
   const pythonSectionRef = React.useRef<HTMLDivElement>(null);
   const literatureSectionRef = React.useRef<HTMLDivElement>(null);
@@ -357,6 +367,9 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
 
   const jumpToPage = (tab: ConfigPageTab, subTab?: AdvancedTopTab) => {
     setPageTab(tab);
+    if (tab === 'specialized') {
+      handleScanPythonEnvironments();
+    }
     if (tab === 'specialized' && subTab) {
       setAdvancedTopTab(subTab);
     }
@@ -383,7 +396,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
     jumpToPage('specialized', tab);
   };
 
-  const openConfigEditor = (tab: ConfigPageTab = 'simulation') => {
+  const openConfigEditor = (tab: ConfigPageTab = 'cli') => {
     jumpToPage(tab);
     setConfigCollapseKeys(['config']);
   };
@@ -423,17 +436,8 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
     hasDefaultLlmKey && hasText(effectiveConfigValues.llmApiBase);
 
   const isReadyForDashboard = React.useMemo(
-    () =>
-      workspaceInfo.hasWorkspace &&
-      hasPersistedLlmConfig &&
-      validationState.default.valid === true,
-    [
-      effectiveConfigValues.llmApiBase,
-      hasDefaultLlmKey,
-      hasPersistedLlmConfig,
-      validationState.default.valid,
-      workspaceInfo.hasWorkspace,
-    ]
+    () => workspaceInfo.hasWorkspace && hasPersistedLlmConfig,
+    [hasPersistedLlmConfig, workspaceInfo.hasWorkspace]
   );
 
   const isDashboardMode = React.useMemo(
@@ -453,28 +457,66 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
     setWizardStep(bounded);
   }, []);
 
-  const handleCompleteWizard = React.useCallback(() => {
-    setWizardFlowCompleted(true);
-    setWizardMode(false);
-    setConfigCollapseKeys([]);
-  }, []);
+  const handleCompleteWizard = React.useCallback(
+    (options?: { dismissPermanently?: boolean }) => {
+      const dismissPermanently = options?.dismissPermanently !== false;
+      setWizardRequested(false);
+      setWizardMode(false);
+      setPageTab('cli');
+      if (dismissPermanently) {
+        setWizardFlowCompleted(true);
+        setSetupCompleted(true);
+        setWizardDismissed(false);
+        setConfigCollapseKeys([]);
+        vscode.postMessage({ command: 'markInitialSetupCompleted' });
+        return;
+      }
+      // Session-only exit: keep auto-wizard for next open.
+      setWizardDismissed(true);
+    },
+    [vscode]
+  );
 
   const handleExitWizard = React.useCallback(() => {
+    setWizardRequested(false);
+    setWizardDismissed(true);
     setWizardMode(false);
   }, []);
+
+  const handleRerunWizard = React.useCallback(() => {
+    setWizardRequested(true);
+    setWizardFlowCompleted(false);
+    setWizardDismissed(false);
+    setWizardMode(true);
+    handleWizardStepChange(0);
+  }, [handleWizardStepChange]);
 
   React.useEffect(() => {
     if (!workspaceInfo.hasWorkspace) {
       return;
     }
-    if (wizardFlowCompleted) {
+    // Explicit re-run must win over persisted "setup completed".
+    if (wizardRequested) {
+      setWizardMode(true);
+      return;
+    }
+    if (setupCompleted || wizardFlowCompleted || wizardDismissed) {
       setWizardMode(false);
-      setConfigCollapseKeys([]);
+      if (setupCompleted || wizardFlowCompleted) {
+        setConfigCollapseKeys([]);
+      }
       return;
     }
     setWizardMode(true);
     handleWizardStepChange(0);
-  }, [handleWizardStepChange, wizardFlowCompleted, workspaceInfo.hasWorkspace]);
+  }, [
+    handleWizardStepChange,
+    setupCompleted,
+    wizardDismissed,
+    wizardFlowCompleted,
+    wizardRequested,
+    workspaceInfo.hasWorkspace,
+  ]);
 
   const requestBackendStatus = React.useCallback(() => {
     vscode.postMessage({ command: 'requestBackendStatus' });
@@ -499,9 +541,12 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
     vscode.postMessage({ command: 'discoverPythonEnvironments' });
   }, [vscode]);
 
+  // Lazy: only scan when the backend wizard step (or specialized/python UI) needs it.
   React.useEffect(() => {
-    handleScanPythonEnvironments();
-  }, [handleScanPythonEnvironments]);
+    if (wizardMode && WIZARD_STEPS[wizardStep]?.key === 'backend') {
+      handleScanPythonEnvironments();
+    }
+  }, [handleScanPythonEnvironments, wizardMode, wizardStep]);
 
   const resetWorkspaceValidationState = () => {
     for (const key of ADVANCED_VALIDATION_KEYS) {
@@ -521,6 +566,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
       python: { validating: false, valid: null, error: null },
       literature: { validating: false, valid: null, error: null },
     });
+    vscode.postMessage({ command: 'clearDefaultLlmValidation' });
   };
 
   const handleResetWorkspaceDefaults = () => {
@@ -550,6 +596,13 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
     (names: string[]): ClaudeModelOption[] => names.map((id) => ({ id, name: id })),
     []
   );
+
+  const clearWebImportApplyTimer = React.useCallback(() => {
+    if (webImportApplyTimerRef.current) {
+      clearTimeout(webImportApplyTimerRef.current);
+      webImportApplyTimerRef.current = null;
+    }
+  }, []);
 
   const applyImportedWebConfig = React.useCallback(
     (imported: PendingWebImport, options?: { overwriteCodexClaude?: boolean }) => {
@@ -586,6 +639,17 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
       });
       if (overwrite && imported.gatewayProvider) {
         setWebImportApplying(true);
+        clearWebImportApplyTimer();
+        webImportApplyTimerRef.current = setTimeout(() => {
+          webImportApplyTimerRef.current = null;
+          setWebImportApplying(false);
+          notification.error({
+            message: t('configPage.webImport.failed'),
+            description: t('configPage.webImport.applyTimeout'),
+            placement: 'top',
+            duration: 8,
+          });
+        }, WEB_IMPORT_APPLY_TIMEOUT_MS);
         vscode.postMessage({ command: 'gatewayUpsertWebImportProvider' });
         return;
       }
@@ -604,7 +668,18 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
         duration: 6,
       });
     },
-    [claudeForm, easyPaperForm, form, handleWizardStepChange, t, toModelOptions, vscode, wizardMode, wizardStep]
+    [
+      claudeForm,
+      clearWebImportApplyTimer,
+      easyPaperForm,
+      form,
+      handleWizardStepChange,
+      t,
+      toModelOptions,
+      vscode,
+      wizardMode,
+      wizardStep,
+    ]
   );
 
   const saveEasyPaperConfig = React.useCallback(() => {
@@ -650,6 +725,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
         onDismissConfirm={() => {
           const authPath = pendingWebImport?.authPath;
           vscode.postMessage({ command: 'dismissWebConfigImport' });
+          clearWebImportApplyTimer();
           setWebImportApplying(false);
           setPendingWebImport(null);
           setDeviceAuth({ status: 'idle', authPath });
@@ -665,6 +741,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
     ),
     [
       applyImportedWebConfig,
+      clearWebImportApplyTimer,
       deviceAuth,
       handleCancelWebConfigImport,
       handleStartWebConfigImport,
@@ -1145,6 +1222,25 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           ...DEFAULT_VALUES,
           ...config,
         });
+        const cache = message.defaultLlmValidation as { fingerprint?: string } | null | undefined;
+        const fingerprint = JSON.stringify({
+          llmApiKey: config.llmApiKey ?? DEFAULT_VALUES.llmApiKey ?? '',
+          llmApiBase: config.llmApiBase ?? DEFAULT_VALUES.llmApiBase ?? '',
+          llmModel: config.llmModel ?? DEFAULT_VALUES.llmModel ?? '',
+        });
+        if (cache?.fingerprint && cache.fingerprint === fingerprint) {
+          defaultValidFingerprintRef.current = fingerprint;
+          setValidationState((prev) => ({
+            ...prev,
+            default: { validating: false, valid: true, error: null },
+          }));
+        } else {
+          defaultValidFingerprintRef.current = null;
+          setValidationState((prev) => ({
+            ...prev,
+            default: { validating: false, valid: null, error: null },
+          }));
+        }
       } else if (message.command === 'initialClaudeConfig') {
         const msg = message as {
           config?: Partial<ClaudeCodeConfigValues>;
@@ -1267,6 +1363,11 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           placement: 'top',
           duration: 8,
         });
+      } else if (message.command === 'webConfigAuthCached') {
+        const msg = message as { authPath?: string };
+        if (msg.authPath) {
+          setDeviceAuth((prev) => ({ ...prev, status: 'idle', authPath: msg.authPath }));
+        }
       } else if (message.command === 'webConfigImported') {
         const msg = message as {
           config?: Partial<ConfigValues>;
@@ -1306,17 +1407,9 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
             activeCodex?: boolean;
           };
         };
+        clearWebImportApplyTimer();
         setWebImportApplying(false);
-        if (
-          msg.success &&
-          msg.provider?.hasApiKey &&
-          msg.provider.model &&
-          msg.provider.sonnetModel &&
-          msg.provider.opusModel &&
-          msg.provider.haikuModel &&
-          msg.provider.activeClaude &&
-          msg.provider.activeCodex
-        ) {
+        if (msg.success) {
           const authPath = pendingWebImport?.authPath;
           resetWorkspaceValidationState();
           setPendingWebImport(null);
@@ -1327,7 +1420,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           notification.success({
             message: t('configPage.webImport.success'),
             description: t('configPage.webImport.successWithGateway', {
-              name: msg.provider.name ?? 'Fiblab',
+              name: msg.provider?.name ?? 'Fiblab',
             }),
             placement: 'top',
             duration: 6,
@@ -1399,7 +1492,17 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
         const tab = (message as { tab?: AdvancedTopTab }).tab ?? 'models';
         jumpToAdvanced(tab);
       } else if (message.command === 'workspaceInfo') {
-        setWorkspaceInfo(message.workspaceInfo || { hasWorkspace: false });
+        const info = (message.workspaceInfo || { hasWorkspace: false }) as WorkspaceInfo;
+        setWorkspaceInfo(info);
+        if (info.hasCompletedInitialSetup) {
+          setSetupCompleted(true);
+          // Leave wizardMode to the effect so a user-requested re-run is not force-closed.
+          if (!wizardRequestedRef.current) {
+            setWizardFlowCompleted(true);
+            setPageTab('cli');
+            setConfigCollapseKeys([]);
+          }
+        }
       } else if (message.command === 'backendStatus') {
         setBackendStatus(message.backendStatus || { isRunning: false });
         if (typeof message.claudeCodeCustomized === 'boolean') {
@@ -1460,7 +1563,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           });
         }
       } else if (message.command === 'saveResult') {
-        const msg = message as { success?: boolean; error?: string };
+        const msg = message as { success?: boolean; error?: string; needsInit?: boolean };
         setLoading(false);
         if (msg.success) {
           setSavedEnvConfig({ ...effectiveConfigRef.current });
@@ -1468,7 +1571,8 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           if (
             wizardMode &&
             (WIZARD_STEPS[wizardStep]?.key === 'save' ||
-              WIZARD_STEPS[wizardStep]?.key === 'literature')
+              WIZARD_STEPS[wizardStep]?.key === 'literature' ||
+              WIZARD_STEPS[wizardStep]?.key === 'backend')
           ) {
             handleWizardStepChange(wizardStep + 1);
           }
@@ -1485,7 +1589,9 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           } else {
             notification.success({
               message: t('configPage.notifications.saveSuccess'),
-              description: t('configPage.notifications.saveSuccessDesc'),
+              description: msg.needsInit
+                ? t('configPage.notifications.saveSuccessNextInit')
+                : t('configPage.notifications.saveSuccessDesc'),
               placement: 'top',
             });
           }
@@ -1532,7 +1638,13 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
           markValidFingerprint(msg.llmType);
           if (msg.llmType === 'default') {
             maybeAdvanceWizardAfterDefaultValidation();
+            vscode.postMessage({
+              command: 'persistDefaultLlmValidation',
+              fingerprint: getDefaultLlmFingerprint(),
+            });
           }
+        } else if (msg.llmType === 'default') {
+          vscode.postMessage({ command: 'clearDefaultLlmValidation' });
         }
       } else if (message.command === 'literatureValidationResult') {
         const msg = message as { success?: boolean; error?: string; sources?: Record<string, unknown> };
@@ -1558,7 +1670,7 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [claudeForm, form, handleWizardStepChange, jumpToAdvanced, markValidFingerprint, maybeAdvanceWizardAfterDefaultValidation, pendingWebImport, requestBackendStatus, t, vscode, claudeProviders, handleFetchProviderModels, resolveClaudeModelsFetchError, wizardMode, wizardStep]);
+  }, [claudeForm, clearWebImportApplyTimer, form, getDefaultLlmFingerprint, handleWizardStepChange, jumpToAdvanced, markValidFingerprint, maybeAdvanceWizardAfterDefaultValidation, pendingWebImport, requestBackendStatus, t, vscode, claudeProviders, handleFetchProviderModels, resolveClaudeModelsFetchError, wizardMode, wizardStep]);
 
   const handleSave = async () => {
     if (!workspaceInfo.hasWorkspace) {
@@ -1750,6 +1862,12 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
                           onClick: () => void handleSave(),
                         },
                         {
+                          key: 'rerunWizard',
+                          label: t('configPage.setupGuide.rerunWizard'),
+                          icon: <ReloadOutlined />,
+                          onClick: handleRerunWizard,
+                        },
+                        {
                           key: 'reset',
                           label: t('configPage.resetWorkspaceDefaults'),
                           icon: <ReloadOutlined />,
@@ -1814,6 +1932,15 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
               type="warning"
               showIcon
               style={{ marginBottom: 16, borderRadius: 10 }}
+              action={
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => vscode.postMessage({ command: 'openFolder' })}
+                >
+                  {t('configPage.openWorkspace')}
+                </Button>
+              }
             />
           )}
 
@@ -1942,6 +2069,62 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
                           style={{ marginBottom: 8 }}
                           items={[
                             {
+                              key: 'cli',
+                              label: t('configPage.pageTabs.cli'),
+                              children: (
+                                <div ref={claudeSectionRef} style={advancedPanelInnerStyle(isDark, palette)}>
+                                  <AiCliConfigSection
+                                    t={t}
+                                    palette={palette}
+                                    cliStatus={claudeCliStatus}
+                                    settingsPath={claudeSettingsPath}
+                                    onResetClaude={handleResetClaudeDefaults}
+                                    gatewayStatus={aiCliGatewayStatus}
+                                    gatewayToggling={gatewayToggling}
+                                    onRouteClaudeToggle={(enabled) => handleGatewayRouteToggle('claude', enabled)}
+                                    onRouteCodexToggle={(enabled) => handleGatewayRouteToggle('codex', enabled)}
+                                    providers={claudeProviders}
+                                    providersLoading={claudeProvidersLoading}
+                                    speedtestResults={providerAvailabilityResults}
+                                    onSaveProvider={handleSaveClaudeProvider}
+                                    onAddProvider={handleAddClaudeProvider}
+                                    onRemoveProvider={handleRemoveClaudeProvider}
+                                    onActivateProvider={handleActivateClaudeProvider}
+                                    onToggleFailoverProvider={handleToggleFailoverProvider}
+                                    onSpeedtestProvider={handleCheckClaudeProvider}
+                                    isProviderChecking={isProviderChecking}
+                                    onShowGatewayLog={handleShowClaudeGatewayLog}
+                                    modelsByProvider={modelsByProvider}
+                                    modelsLoadingByProvider={modelsLoadingByProvider}
+                                    modelsErrorByProvider={modelsErrorByProvider}
+                                    onFetchProviderModels={handleFetchProviderModels}
+                                    usageRecords={gatewayUsageRecords}
+                                    usageLoading={gatewayUsageLoading}
+                                    onRefreshUsage={handleRefreshUsage}
+                                    onClearUsage={handleClearUsage}
+                                    codexRouting={codexRouting}
+                                    failoverEnabled={failoverEnabled}
+                                    onFailoverToggle={handleFailoverToggle}
+                                    customPricing={customPricing}
+                                    onGetPricing={handleGetPricing}
+                                    onRefreshPricing={handleRefreshPricing}
+                                    onSavePricing={handleSavePricing}
+                                    onClearPricing={handleClearPricing}
+                                    providerUsage={providerUsage}
+                                    onQueryProviderUsage={handleQueryProviderUsage}
+                                    onRestartCodex={handleRestartCodex}
+                                    onRestartClaude={handleRestartClaude}
+                                    onSyncClaudeConfig={handleSyncClaudeConfig}
+                                    onSyncCodexConfig={handleSyncCodexConfig}
+                                    onSaveOutboundProxy={handleSaveOutboundProxy}
+                                    onRectifierChange={handleRectifierChange}
+                                    onOptimizerChange={handleOptimizerChange}
+                                    onRefreshCodexOfficialLogin={handleRefreshCodexOfficialLogin}
+                                  />
+                                </div>
+                              ),
+                            },
+                            {
                               key: 'simulation',
                               label: t('configPage.pageTabs.simulation'),
                               children: (
@@ -2020,62 +2203,6 @@ export const ConfigPageApp: React.FC<ConfigPageAppProps> = ({ vscode }) => {
                                       <Input.Password placeholder={t('configPage.advanced.literature.apiKeyPlaceholder')} autoComplete="off" />
                                     </Form.Item>
                                   </LiteratureConfigSection>
-                                </div>
-                              ),
-                            },
-                            {
-                              key: 'cli',
-                              label: t('configPage.pageTabs.cli'),
-                              children: (
-                                <div ref={claudeSectionRef} style={advancedPanelInnerStyle(isDark, palette)}>
-                                  <AiCliConfigSection
-                                    t={t}
-                                    palette={palette}
-                                    cliStatus={claudeCliStatus}
-                                    settingsPath={claudeSettingsPath}
-                                    onResetClaude={handleResetClaudeDefaults}
-                                    gatewayStatus={aiCliGatewayStatus}
-                                    gatewayToggling={gatewayToggling}
-                                    onRouteClaudeToggle={(enabled) => handleGatewayRouteToggle('claude', enabled)}
-                                    onRouteCodexToggle={(enabled) => handleGatewayRouteToggle('codex', enabled)}
-                                    providers={claudeProviders}
-                                    providersLoading={claudeProvidersLoading}
-                                    speedtestResults={providerAvailabilityResults}
-                                    onSaveProvider={handleSaveClaudeProvider}
-                                    onAddProvider={handleAddClaudeProvider}
-                                    onRemoveProvider={handleRemoveClaudeProvider}
-                                    onActivateProvider={handleActivateClaudeProvider}
-                                    onToggleFailoverProvider={handleToggleFailoverProvider}
-                                    onSpeedtestProvider={handleCheckClaudeProvider}
-                                    isProviderChecking={isProviderChecking}
-                                    onShowGatewayLog={handleShowClaudeGatewayLog}
-                                    modelsByProvider={modelsByProvider}
-                                    modelsLoadingByProvider={modelsLoadingByProvider}
-                                    modelsErrorByProvider={modelsErrorByProvider}
-                                    onFetchProviderModels={handleFetchProviderModels}
-                                    usageRecords={gatewayUsageRecords}
-                                    usageLoading={gatewayUsageLoading}
-                                    onRefreshUsage={handleRefreshUsage}
-                                    onClearUsage={handleClearUsage}
-                                    codexRouting={codexRouting}
-                                    failoverEnabled={failoverEnabled}
-                                    onFailoverToggle={handleFailoverToggle}
-                                    customPricing={customPricing}
-                                    onGetPricing={handleGetPricing}
-                                    onRefreshPricing={handleRefreshPricing}
-                                    onSavePricing={handleSavePricing}
-                                    onClearPricing={handleClearPricing}
-                                    providerUsage={providerUsage}
-                                    onQueryProviderUsage={handleQueryProviderUsage}
-                                    onRestartCodex={handleRestartCodex}
-                                    onRestartClaude={handleRestartClaude}
-                                    onSyncClaudeConfig={handleSyncClaudeConfig}
-                                    onSyncCodexConfig={handleSyncCodexConfig}
-                                    onSaveOutboundProxy={handleSaveOutboundProxy}
-                                    onRectifierChange={handleRectifierChange}
-                                    onOptimizerChange={handleOptimizerChange}
-                                    onRefreshCodexOfficialLogin={handleRefreshCodexOfficialLogin}
-                                  />
                                 </div>
                               ),
                             },

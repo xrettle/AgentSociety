@@ -7,6 +7,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { getCurrentLanguageCode } from './i18n';
 
 const RTD_BASE_URL = 'https://agentsociety2.readthedocs.io';
 
@@ -26,8 +27,8 @@ export class HelpPageViewProvider {
       return HelpPageViewProvider.currentPanel;
     }
 
-    const locale = vscode.env.language;
-    const title = locale.startsWith('zh') ? '使用指南 - AI Social Scientist' : 'User Guide - AI Social Scientist';
+    const isZh = getCurrentLanguageCode() === 'zh-CN';
+    const title = isZh ? '使用指南 - AI Social Scientist' : 'User Guide - AI Social Scientist';
 
     const panel = vscode.window.createWebviewPanel(
       'aiSocialScientistHelp',
@@ -72,8 +73,18 @@ export class HelpPageViewProvider {
     );
   }
 
+  public reloadForLanguage(): void {
+    const isZh = getCurrentLanguageCode() === 'zh-CN';
+    this.panel.title = isZh ? '使用指南 - AI Social Scientist' : 'User Guide - AI Social Scientist';
+    this.updateWebviewContent();
+  }
+
+  public static reloadLanguageIfOpen(): void {
+    HelpPageViewProvider.currentPanel?.reloadForLanguage();
+  }
+
   private offlineHelpContent(): string {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = getCurrentLanguageCode() === 'zh-CN';
     const rtdUrl = this.getRtdUrl();
     if (isZh) {
       return `# AI Social Scientist 使用指南
@@ -103,27 +114,17 @@ Online documentation is unavailable. See the full guide on [ReadTheDocs](${rtdUr
 `;
   }
 
-  /**
-   * Get ReadTheDocs URL based on locale
-   */
   private getRtdUrl(): string {
-    const locale = vscode.env.language;
-    const isZh = locale.startsWith('zh');
+    const isZh = getCurrentLanguageCode() === 'zh-CN';
     return isZh ? `${RTD_BASE_URL}/zh_CN/latest/` : `${RTD_BASE_URL}/en/latest/`;
   }
 
-  /**
-   * Update webview content
-   */
   private updateWebviewContent(): void {
     const helpContent = this.offlineHelpContent();
     const rtdUrl = this.getRtdUrl();
     this.panel.webview.html = this.getHtmlForWebview(helpContent, rtdUrl);
   }
 
-  /**
-   * Generate HTML for webview
-   */
   private getHtmlForWebview(helpContent: string, rtdUrl: string): string {
     const scriptUri = this.panel.webview.asWebviewUri(
       vscode.Uri.file(path.join(this.extensionUri.fsPath, 'out', 'webview', 'helpPage.js'))
@@ -140,9 +141,8 @@ Online documentation is unavailable. See the full guide on [ReadTheDocs](${rtdUr
       `connect-src ${RTD_BASE_URL} https://assets.readthedocs.org`,
     ].join('; ');
 
-    const locale = vscode.env.language;
-    const htmlLang = locale.startsWith('zh') ? 'zh-CN' : 'en-US';
-    const title = locale.startsWith('zh') ? '使用指南 - AI Social Scientist' : 'User Guide - AI Social Scientist';
+    const htmlLang = getCurrentLanguageCode();
+    const title = htmlLang === 'zh-CN' ? '使用指南 - AI Social Scientist' : 'User Guide - AI Social Scientist';
 
     const jsonHelpContent = JSON.stringify(helpContent);
     const jsonRtdUrl = JSON.stringify(rtdUrl);
@@ -189,12 +189,13 @@ Online documentation is unavailable. See the full guide on [ReadTheDocs](${rtdUr
 </html>`;
   }
 
-  /**
-   * Dispose the webview panel and resources
-   */
   public dispose(): void {
     HelpPageViewProvider.currentPanel = undefined;
-    this.disposables.forEach((d) => d.dispose());
-    this.disposables = [];
+    while (this.disposables.length) {
+      const d = this.disposables.pop();
+      if (d) {
+        d.dispose();
+      }
+    }
   }
 }

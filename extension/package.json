@@ -79,7 +79,8 @@
     "onCommand:aiSocialScientist.viewCsvFile",
     "onCommand:aiSocialScientist.openInExplorer",
     "onCommand:aiSocialScientist.exportWorkspaceZip",
-    "onCommand:aiSocialScientist.importWorkspaceZip"
+    "onCommand:aiSocialScientist.importWorkspaceZip",
+    "onCommand:aiSocialScientist.toggleLanguage"
   ],
   "icon": "resources/icon128.png",
   "main": "./out/extension.js",
@@ -118,17 +119,6 @@
             ]
           },
           {
-            "id": "initProject",
-            "title": "%walkthrough.step.initProject.title%",
-            "description": "%walkthrough.step.initProject.description%",
-            "media": {
-              "markdown": "%walkthrough.step.initProject.media%"
-            },
-            "completionEvents": [
-              "onCommand:aiSocialScientist.initProject"
-            ]
-          },
-          {
             "id": "configure",
             "title": "%walkthrough.step.configure.title%",
             "description": "%walkthrough.step.configure.description%",
@@ -138,6 +128,17 @@
             "completionEvents": [
               "onCommand:aiSocialScientist.openConfigPage",
               "onCommand:aiSocialScientist.startBackend"
+            ]
+          },
+          {
+            "id": "initProject",
+            "title": "%walkthrough.step.initProject.title%",
+            "description": "%walkthrough.step.initProject.description%",
+            "media": {
+              "markdown": "%walkthrough.step.initProject.media%"
+            },
+            "completionEvents": [
+              "onCommand:aiSocialScientist.initProject"
             ]
           },
           {
@@ -393,6 +394,11 @@
         "command": "aiSocialScientist.importWorkspaceZip",
         "title": "从 .zip 分享包导入工作区",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "aiSocialScientist.toggleLanguage",
+        "title": "AI Social Scientist: 切换中英文",
+        "icon": "$(globe)"
       }
     ],
     "menus": {
@@ -491,6 +497,11 @@
           "command": "aiSocialScientist.importWorkspaceZip",
           "when": "view == projectStructureView",
           "group": "navigation@4"
+        },
+        {
+          "command": "aiSocialScientist.toggleLanguage",
+          "when": "view == projectStructureView",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -647,6 +658,21 @@
             "VSCode 内置 Chat"
           ],
           "description": "默认 AI Chat 提供商。留空时自动检测；检测到多个时弹出选择。"
+        },
+        "aiSocialScientist.language": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "zh-CN",
+            "en-US"
+          ],
+          "enumDescriptions": [
+            "跟随 VS Code / code-server 显示语言",
+            "中文",
+            "English"
+          ],
+          "description": "AI Social Scientist 扩展界面语言。留空则跟随 VS Code 显示语言；可通过状态栏或侧栏地球图标一键切换。"
         },
         "aiSocialScientist.webConfigImport.webBaseUrl": {
           "type": "string",

@@ -1,11 +1,16 @@
 import * as React from 'react';
-import { Alert, Button, Card, Space, Steps, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Space, Steps, Typography } from 'antd';
 import { LeftOutlined, RightOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import type { VscodeThemePalette } from '../theme';
 import type { BackendStatus, ValidationState } from './types';
 
 const { Text, Title } = Typography;
+
+export type CompleteWizardOptions = {
+  /** When true (default), persist “setup done” so the wizard does not auto-open next time. */
+  dismissPermanently?: boolean;
+};
 
 export type WizardStepKey = 'import' | 'simulation' | 'save' | 'backend' | 'literature' | 'easypaper' | 'cli';
 
@@ -43,7 +48,7 @@ type Props = {
   startingBackend: boolean;
   onStepChange: (step: number) => void;
   onExitWizard: () => void;
-  onCompleteWizard: () => void;
+  onCompleteWizard: (options?: CompleteWizardOptions) => void;
   onSave: () => void;
   onSaveAndStart: () => void;
   onSaveEasyPaper: () => void;
@@ -74,12 +79,18 @@ export function ConfigSetupWizard({
   children,
 }: Props) {
   const current = WIZARD_STEPS[step];
+  const isLastStep = step >= WIZARD_STEPS.length - 1;
+  const [dontShowWizardAgain, setDontShowWizardAgain] = React.useState(true);
   const simulationReady = hasLlmKey && defaultValidation.valid === true && !defaultValidation.validating;
   const backendReady = backendStatus.isRunning;
   const simulationNeedsValidate =
     hasLlmKey &&
     !defaultValidation.validating &&
     defaultValidation.valid !== true;
+
+  const completeWizard = () => {
+    onCompleteWizard({ dismissPermanently: dontShowWizardAgain });
+  };
 
   const stepFinished = (index: number): boolean => {
     const key = WIZARD_STEPS[index]?.key;
@@ -125,10 +136,13 @@ export function ConfigSetupWizard({
       if (!backendReady && canSaveAndStart) {
         onSaveAndStart();
       } else if (backendReady) {
-        if (step < WIZARD_STEPS.length - 1) {
+        // Persist Python/.env edits even when the backend is already running.
+        if (canSave) {
+          onSave();
+        } else if (step < WIZARD_STEPS.length - 1) {
           onStepChange(step + 1);
         } else {
-          onCompleteWizard();
+          completeWizard();
         }
       }
       return;
@@ -144,16 +158,16 @@ export function ConfigSetupWizard({
       onSaveEasyPaper();
       return;
     }
-    if (step >= WIZARD_STEPS.length - 1) {
-      onCompleteWizard();
+    if (isLastStep) {
+      completeWizard();
       return;
     }
     onStepChange(step + 1);
   };
 
   const handleSkip = () => {
-    if (step >= WIZARD_STEPS.length - 1) {
-      onCompleteWizard();
+    if (isLastStep) {
+      completeWizard();
       return;
     }
     onStepChange(step + 1);
@@ -188,11 +202,21 @@ export function ConfigSetupWizard({
     if (current.key === 'literature' || current.key === 'easypaper') {
       return t('configPage.setupGuide.actionSave');
     }
-    if (step >= WIZARD_STEPS.length - 1) {
-      return t('configPage.setupGuide.actionFinish');
+    if (isLastStep) {
+      return dontShowWizardAgain
+        ? t('configPage.setupGuide.actionFinishOverview')
+        : t('configPage.setupGuide.actionFinish');
     }
     return t('configPage.setupGuide.actionNext');
-  }, [backendReady, current.key, hasLlmKey, simulationNeedsValidate, step, t]);
+  }, [
+    backendReady,
+    current.key,
+    dontShowWizardAgain,
+    hasLlmKey,
+    isLastStep,
+    simulationNeedsValidate,
+    t,
+  ]);
 
   const nextDisabled = React.useMemo(() => {
     if (current.key === 'import') {
@@ -285,6 +309,16 @@ export function ConfigSetupWizard({
 
       {children ? <div style={{ marginBottom: 14 }}>{children}</div> : null}
 
+      {isLastStep ? (
+        <Checkbox
+          checked={dontShowWizardAgain}
+          onChange={(e) => setDontShowWizardAgain(e.target.checked)}
+          style={{ marginBottom: 14, fontSize: 12 }}
+        >
+          {t('configPage.setupGuide.dontShowAgain')}
+        </Checkbox>
+      ) : null}
+
       <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
         <Button
           icon={<LeftOutlined />}
@@ -295,7 +329,11 @@ export function ConfigSetupWizard({
         </Button>
         <Space wrap>
           {current.optional ? (
-            <Button onClick={handleSkip}>{t('configPage.setupGuide.actionSkip')}</Button>
+            <Button onClick={handleSkip}>
+              {isLastStep
+                ? t('configPage.setupGuide.actionSkipFinish')
+                : t('configPage.setupGuide.actionSkip')}
+            </Button>
           ) : null}
           <Button
             type="primary"

@@ -25,6 +25,7 @@ import { ApiClient } from './apiClient';
 import type { ProjectStructureProvider } from './projectStructureProvider';
 import { SkillVersionManager } from './skillVersionManager';
 import { getPlatformAdapter, type SkillSource } from './platforms';
+import { getCurrentLanguageCode, localize } from './i18n';
 import {
   CLAUDE_DISABLED_VAULT,
   CATEGORY_MAP,
@@ -385,7 +386,7 @@ export class SkillMarketplacePanel {
 
     const panel = vscode.window.createWebviewPanel(
       PANEL_VIEW_TYPE,
-      'Skill Management',
+      localize('skillMarketplace.title'),
       column,
       {
         enableScripts: true,
@@ -402,6 +403,15 @@ export class SkillMarketplacePanel {
       apiClient,
       projectStructureProvider
     );
+  }
+
+  public reloadForLanguage(): void {
+    this._panel.title = localize('skillMarketplace.title');
+    this._webview.html = this._getHtmlForWebview(this._webview);
+  }
+
+  public static reloadLanguageIfOpen(): void {
+    SkillMarketplacePanel.current?.reloadForLanguage();
   }
 
   private _log(message: string): void {
@@ -1985,13 +1995,14 @@ export class SkillMarketplacePanel {
   private _getHtmlForWebview(webview: vscode.Webview): string {
     const scriptPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'skillMarketplace.js');
     const scriptUri = webview.asWebviewUri(vscode.Uri.file(scriptPath));
+    const lang = getCurrentLanguageCode();
 
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Skill Marketplace</title>
+  <title>${localize('skillMarketplace.title')}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { height: 100vh; overflow: auto; }
@@ -2000,6 +2011,7 @@ export class SkillMarketplacePanel {
 </head>
 <body>
   <div id="root"></div>
+  <script>window.__AS_LANG__=${JSON.stringify(lang)};</script>
   <script src="${scriptUri}"></script>
 </body>
 </html>`;

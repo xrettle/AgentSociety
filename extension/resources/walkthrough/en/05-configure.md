@@ -1,5 +1,9 @@
 ## Configure LLM and Backend
 
+**Open a project folder first.** API keys are written to that folder’s `.env`; settings cannot be saved without a folder.
+
+Suggested order: **open folder → save Simulation LLM → initialize workspace → start backend**.
+
 Open the config page and follow the **setup wizard** on first use:
 
 1. **Simulation LLM** — API base, key, and model; optional reasoning (thinking) on/off  

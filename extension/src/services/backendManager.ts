@@ -592,6 +592,7 @@ export class BackendManager {
         ...process.env,
         ...this.config.env,
         BACKEND_PORT: String(port),
+        LITELLM_LOCAL_MODEL_COST_MAP: 'True',
       };
 
       // 启动后端进程
