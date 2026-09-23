@@ -136,7 +136,8 @@ jobs:
           grep -q '^extension/out/webview/prefillParams.js$' vsix-contents.txt
           grep -q '^extension/out/webview/replay.js$' vsix-contents.txt
           grep -q '^extension/out/webview/simSettings.js$' vsix-contents.txt
-          grep -q '^extension/node_modules/js-yaml/index.js$' vsix-contents.txt
+          # js-yaml >= 5 ships its CJS entry as dist/js-yaml.cjs.js (no root index.js)
+          grep -q '^extension/node_modules/js-yaml/dist/js-yaml.cjs.js$' vsix-contents.txt
 
       - name: Store the VSIX package
         uses: actions/upload-artifact@v7
