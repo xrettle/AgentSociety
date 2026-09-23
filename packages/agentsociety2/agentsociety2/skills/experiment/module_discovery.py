@@ -7,18 +7,18 @@ available modules for validation and selection guidance.
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any
 
 from agentsociety2.logger import get_logger
 from agentsociety2.registry import (
-    get_registered_env_modules,
     get_registered_agent_modules,
+    get_registered_env_modules,
 )
 
 logger = get_logger()
 
 
-def get_available_env_modules() -> Dict[str, str]:
+def get_available_env_modules() -> dict[str, str]:
     """Get available environment modules with their descriptions
 
     :returns: Dictionary mapping module_type to description
@@ -29,8 +29,12 @@ def get_available_env_modules() -> Dict[str, str]:
             try:
                 env_modules_info[module_type] = module_class.description()
             except Exception as e:
-                logger.warning(f"Failed to get description for env module {module_type}: {e}")
-                env_modules_info[module_type] = f"Module type: {module_type}, Class: {module_class.__name__}"
+                logger.warning(
+                    f"Failed to get description for env module {module_type}: {e}"
+                )
+                env_modules_info[module_type] = (
+                    f"Module type: {module_type}, Class: {module_class.__name__}"
+                )
 
         return env_modules_info
     except Exception as e:
@@ -38,7 +42,7 @@ def get_available_env_modules() -> Dict[str, str]:
         return {}
 
 
-def get_available_agent_modules() -> Dict[str, str]:
+def get_available_agent_modules() -> dict[str, str]:
     """Get available agent modules with their descriptions
 
     :returns: Dictionary mapping agent_type to description
@@ -50,7 +54,9 @@ def get_available_agent_modules() -> Dict[str, str]:
                 agents_info[agent_type] = agent_class.description()
             except Exception as e:
                 logger.warning(f"Failed to get description for agent {agent_type}: {e}")
-                agents_info[agent_type] = f"Agent type: {agent_type}, Class: {agent_class.__name__}"
+                agents_info[agent_type] = (
+                    f"Agent type: {agent_type}, Class: {agent_class.__name__}"
+                )
 
         return agents_info
     except Exception as e:
@@ -87,9 +93,9 @@ def get_modules_summary() -> str:
 
 
 def validate_module_selection(
-    agent_classes: Optional[List[str]] = None,
-    env_modules: Optional[List[str]] = None,
-) -> Tuple[bool, List[str]]:
+    agent_classes: list[str] | None = None,
+    env_modules: list[str] | None = None,
+) -> tuple[bool, list[str]]:
     """Validate that at least one agent and one environment module are selected
 
     :param agent_classes: List of agent class types
@@ -104,29 +110,37 @@ def validate_module_selection(
 
     # Check if at least one agent is specified
     if not agent_classes:
-        errors.append("No agent classes selected. Please select at least one agent type.")
+        errors.append(
+            "No agent classes selected. Please select at least one agent type."
+        )
     else:
         # Validate that selected agents exist
         for agent_class in agent_classes:
             if agent_class not in available_agents:
-                errors.append(f"Agent class '{agent_class}' not found in available agents: {list(available_agents.keys())}")
+                errors.append(
+                    f"Agent class '{agent_class}' not found in available agents: {list(available_agents.keys())}"
+                )
 
     # Check if at least one environment module is specified
     if not env_modules:
-        errors.append("No environment modules selected. Please select at least one environment module.")
+        errors.append(
+            "No environment modules selected. Please select at least one environment module."
+        )
     else:
         # Validate that selected env modules exist
         for env_module in env_modules:
             if env_module not in available_envs:
-                errors.append(f"Environment module '{env_module}' not found in available modules: {list(available_envs.keys())}")
+                errors.append(
+                    f"Environment module '{env_module}' not found in available modules: {list(available_envs.keys())}"
+                )
 
     return len(errors) == 0, errors
 
 
 def get_module_selection_guidance(
     topic: str,
-    agent_classes: Optional[List[str]] = None,
-    env_modules: Optional[List[str]] = None,
+    agent_classes: list[str] | None = None,
+    env_modules: list[str] | None = None,
 ) -> str:
     """Generate guidance text for module selection
 
@@ -173,12 +187,16 @@ def get_module_selection_guidance(
     lines.append("2. Using `simple_social_space` for basic social interactions")
     lines.append("3. Using `global_information` for information dissemination studies")
     lines.append("4. Using `economy_space` for economic behavior experiments")
-    lines.append("5. Using specific game environments (prisoners_dilemma, public_goods, etc.) for game theory experiments")
+    lines.append(
+        "5. Using specific game environments (prisoners_dilemma, public_goods, etc.) for game theory experiments"
+    )
 
     return "\n".join(lines)
 
 
-def validate_hypothesis_modules(hypothesis_data: Dict[str, Any]) -> Tuple[bool, List[str], Optional[Dict[str, Any]]]:
+def validate_hypothesis_modules(
+    hypothesis_data: dict[str, Any],
+) -> tuple[bool, list[str], dict[str, Any] | None]:
     """Validate that a hypothesis has required modules
 
     :param hypothesis_data: Hypothesis data dictionary

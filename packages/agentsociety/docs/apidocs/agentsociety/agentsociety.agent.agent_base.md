@@ -543,4 +543,12 @@ Bases: {py:obj}`abc.ABC`
 
 ````
 
+````{py:method} _is_output_type_compatible(block_output_type) -> bool
+:canonical: agentsociety.agent.agent_base.Agent._is_output_type_compatible
+
+```{autodoc2-docstring} agentsociety.agent.agent_base.Agent._is_output_type_compatible
+```
+
+````
+
 `````

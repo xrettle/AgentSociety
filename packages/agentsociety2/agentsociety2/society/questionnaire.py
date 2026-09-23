@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any
 
 import json_repair
 from pydantic import BaseModel, Field

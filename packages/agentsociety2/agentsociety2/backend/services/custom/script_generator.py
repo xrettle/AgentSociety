@@ -13,7 +13,7 @@ import io
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Optional, Type
+from typing import Any, ClassVar
 
 from agentsociety2.backend.path_security import (
     resolve_workspace_relative,
@@ -36,7 +36,7 @@ class TestResult:
     name: str
     success: bool
     output: str
-    error: Optional[str] = None
+    error: str | None = None
     checks: list[ValidationCheck] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     module_kind: str = "env_module"
@@ -76,7 +76,7 @@ class SafeModuleTester:
             clean_path.startswith(prefix) for prefix in self.ALLOWED_PATH_PREFIXES
         )
 
-    def _safe_import_class(self, module_path: str, class_name: str) -> Optional[Type]:
+    def _safe_import_class(self, module_path: str, class_name: str) -> type | None:
         if not self._validate_module_path(module_path):
             raise ValueError(
                 f"模块路径不在白名单内: {module_path}. "
@@ -139,7 +139,7 @@ class SafeModuleTester:
             metadata=metadata or {},
         )
 
-    def _test_agent_class(self, cls: Type, class_name: str) -> TestResult:
+    def _test_agent_class(self, cls: type, class_name: str) -> TestResult:
         output_lines = [f"--- 测试 {class_name} ---"]
         checks: list[ValidationCheck] = []
 
@@ -246,7 +246,7 @@ class SafeModuleTester:
             checks=checks,
         )
 
-    def _test_env_class(self, cls: Type, class_name: str) -> TestResult:
+    def _test_env_class(self, cls: type, class_name: str) -> TestResult:
         output_lines = [f"--- 测试 {class_name} ---"]
         checks: list[ValidationCheck] = []
         metadata: dict[str, Any] = {}
@@ -366,9 +366,9 @@ class SafeModuleTester:
 
     def _test_integration(
         self,
-        agent_cls: Type,
+        agent_cls: type,
         agent_name: str,
-        env_cls: Type,
+        env_cls: type,
         env_name: str,
     ) -> TestResult:
         output_lines = ["--- 集成测试 ---"]
@@ -635,5 +635,3 @@ class SafeModuleTester:
                 "passed_tests": 0,
                 "failed_tests": 0,
             }
-
-

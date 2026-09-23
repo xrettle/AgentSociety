@@ -15,19 +15,34 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-# 加载环境变量
-workspace_root = Path(__file__).resolve().parents[4]
+
+def _workspace_root() -> Path:
+    """解析工作区根目录（优先 AGENTSOCIETY_WORKSPACE）。"""
+    raw = os.environ.get("AGENTSOCIETY_WORKSPACE")
+    if raw:
+        return Path(raw).expanduser().resolve()
+    # 源码树：.../extension/skills/<skill>/vX/scripts → parents[5]
+    # 工作区扁平：.../.claude/skills/<skill>/scripts → parents[4]
+    here = Path(__file__).resolve()
+    for candidate in (here.parents[4], here.parents[5]):
+        if (candidate / ".env").exists() or (candidate / ".agentsociety").exists():
+            return candidate
+    return here.parents[4]
+
+
+workspace_root = _workspace_root()
 env_file = workspace_root / ".env"
 if env_file.exists():
     from dotenv import load_dotenv
-    load_dotenv(env_file)
 
-# 添加 Python 路径
+    load_dotenv(env_file, override=True)
+
 sys.path.insert(0, str(workspace_root / "packages" / "agentsociety2"))
 
 get_registered_env_modules: Any = None
@@ -35,16 +50,13 @@ get_registered_agent_modules: Any = None
 get_registry: Any = None
 InitConfig: Any = None
 StepsConfig: Any = None
+_AGENTSOCIETY2_LOADED = False
 
 
 def _ensure_agentsociety2() -> None:
-    """Lazy-import agentsociety2 names into this module's globals.
-
-    Kept inside a function so this script's --help and argument parsing
-    work even if agentsociety2 is not installed; the import error is only
-    raised when the command actually needs to call into the framework.
-    """
-    if "InitConfig" in globals():
+    """按需导入 agentsociety2，保证未安装时仍能解析 --help。"""
+    global _AGENTSOCIETY2_LOADED
+    if _AGENTSOCIETY2_LOADED:
         return
     try:
         from agentsociety2.registry import (
@@ -66,6 +78,7 @@ def _ensure_agentsociety2() -> None:
         "InitConfig": InitConfig,
         "StepsConfig": StepsConfig,
     })
+    _AGENTSOCIETY2_LOADED = True
 
 
 def get_experiment_paths(

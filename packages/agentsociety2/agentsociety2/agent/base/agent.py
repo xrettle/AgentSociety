@@ -21,31 +21,36 @@ Construction model (no meaningful ``__init__``):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
+from typing import TYPE_CHECKING, Any
 
 from agentsociety2.agent.base.react import (
     ReactDecision,
     ReactToolResult,
     ReactTurn,
 )
-from agentsociety2.agent.base.tool_schema import react_tool_schemas
-from agentsociety2.agent.base.todo import TodoStateStore
-from agentsociety2.agent.person_prompt import (
-    json_block as _json_block,
-    short_text as _short_text,
-    xml_block as _xml_block,
-)
 from agentsociety2.agent.base.skill_registry import get_skill_registry
 from agentsociety2.agent.base.skill_runtime import AgentSkillRuntime
+from agentsociety2.agent.base.todo import TodoStateStore
+from agentsociety2.agent.base.tool_schema import react_tool_schemas
 from agentsociety2.agent.base.workspace_fs import WorkspaceFS
+from agentsociety2.agent.person_prompt import (
+    json_block as _json_block,
+)
+from agentsociety2.agent.person_prompt import (
+    short_text as _short_text,
+)
+from agentsociety2.agent.person_prompt import (
+    xml_block as _xml_block,
+)
 from agentsociety2.env.router_base import RouterBase
 from agentsociety2.logger import get_logger
 from agentsociety2.trace import (
@@ -252,11 +257,11 @@ class AgentBase(ABC):
         # Identity slots — populated by restore.
         self._id: int | None = None
         self._profile: Any = None
-        self._name: Optional[str] = None
+        self._name: str | None = None
         self._config: dict[str, Any] = {}
 
         # Runtime service slots — injected by _bind_services.
-        self._service_proxy: "ServiceProxy | None" = None
+        self._service_proxy: ServiceProxy | None = None
         self._dispatcher = None
         self._model_name: str | None = None
         self._env: RouterBase | None = None
@@ -311,7 +316,7 @@ class AgentBase(ABC):
     # Service binding
     # ------------------------------------------------------------------
 
-    def _bind_services(self, service_proxy: "ServiceProxy") -> None:
+    def _bind_services(self, service_proxy: ServiceProxy) -> None:
         """Inject runtime shared services (called by ``from_workspace``).
 
         Binds ``service_proxy`` and its env + default-LLM dispatcher to
@@ -384,8 +389,8 @@ class AgentBase(ABC):
 
     @classmethod
     async def from_workspace(
-        cls, workspace_path: Path, service_proxy: "ServiceProxy"
-    ) -> "AgentBase":
+        cls, workspace_path: Path, service_proxy: ServiceProxy
+    ) -> AgentBase:
         """Reconstruct a ready agent from its workspace.
 
         ``agent = cls()`` (arg-less); ``await agent.restore(ws, proxy)``;
@@ -405,7 +410,7 @@ class AgentBase(ABC):
     async def restore(
         self,
         workspace_path: Path,
-        service_proxy: "ServiceProxy",
+        service_proxy: ServiceProxy,
     ) -> None:
         """The real initialization (called by ``from_workspace``).
 
@@ -706,9 +711,8 @@ class AgentBase(ABC):
 
     async def close(self):
         """Close the agent and release resources. Subclasses may override."""
-        pass
 
-    def get_profile(self) -> Dict[str, Any]:
+    def get_profile(self) -> dict[str, Any]:
         """Return the agent profile as a dict.
 
         :returns: Profile dict (raw dict, model_dump, or ``{"raw": str}``).
@@ -1056,7 +1060,7 @@ The constructor ``__init__`` is arg-less.
         data = self.build_agent_json(tick=tick, t=t)
         self._workspace.write_text(
             AGENT_JSON_PATH,
-            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str),
         )
         return data
 
@@ -1338,6 +1342,59 @@ The constructor ``__init__`` is arg-less.
     # Tool execution (trace-span wrapper)
     # ------------------------------------------------------------------
 
+    # Read-only tools that are safe to run concurrently within one assistant
+    # turn. Mutation / env tools stay serial to preserve side-effect order.
+    _REACT_PARALLEL_SAFE_ACTIONS = frozenset(
+        {
+            "read",
+            "list",
+            "grep",
+            "read_skill_file",
+            "todo_list",
+        }
+    )
+
+    async def _execute_react_tools(
+        self,
+        decisions: list[ReactDecision],
+        *,
+        readonly: bool = False,
+    ) -> list[ReactToolResult]:
+        """Execute one assistant turn's tools, parallelizing read-only actions.
+
+        Args:
+            decisions: Parsed ReAct decisions in assistant order.
+            readonly: Whether mutation tools should be blocked.
+
+        Returns:
+            Results aligned with ``decisions`` order.
+        """
+
+        async def _one(decision: ReactDecision) -> ReactToolResult:
+            try:
+                return await self._execute_react_tool(decision, readonly=readonly)
+            except Exception as exc:
+                # Every id in the assistant turn must be answered before the
+                # next assistant/user message, so a throwing tool becomes a
+                # failed result rather than a stranded tool_call id.
+                return ReactToolResult(
+                    False,
+                    f"tool execution failed: {exc}",
+                    {"error": str(exc)},
+                )
+
+        if len(decisions) > 1 and all(
+            decision.action in self._REACT_PARALLEL_SAFE_ACTIONS
+            for decision in decisions
+        ):
+            return list(
+                await asyncio.gather(*[_one(decision) for decision in decisions])
+            )
+        results: list[ReactToolResult] = []
+        for decision in decisions:
+            results.append(await _one(decision))
+        return results
+
     async def _execute_react_tool(
         self,
         decision: ReactDecision,
@@ -1420,7 +1477,7 @@ The constructor ``__init__`` is arg-less.
                 ) as workspace_span:
                     try:
                         content = self._workspace.read_text(path)
-                    except ValueError as read_err:
+                    except ValueError:
                         # The path escapes the agent workspace. If it points at
                         # a file bundled inside a visible skill (a common
                         # mistake — e.g. trying to ``read`` a skill's
@@ -1440,7 +1497,7 @@ The constructor ``__init__`` is arg-less.
                                     "redirected_from": requested_path,
                                 },
                             )
-                        raise read_err
+                        raise
                     workspace_span.attributes["result.size"] = len(content)
                 return ReactToolResult(True, content, {"path": path})
             if action == "write":
@@ -1498,7 +1555,9 @@ The constructor ``__init__`` is arg-less.
                     if not item.is_dir
                 ]
                 return ReactToolResult(
-                    True, json.dumps(files, ensure_ascii=False, default=str), {"files": files}
+                    True,
+                    json.dumps(files, ensure_ascii=False, default=str),
+                    {"files": files},
                 )
             if action == "grep":
                 pattern = str(args.get("pattern") or "")
@@ -1702,9 +1761,8 @@ The constructor ``__init__`` is arg-less.
         return (
             normalized == "AGENT.json"
             or normalized == "MEMORY.md"
-            or normalized.startswith("memory/")
+            or normalized.startswith(("memory/", "state/daily_guidance/"))
             or normalized == "state/todos.json"
-            or normalized.startswith("state/daily_guidance/")
         )
 
     def _normalize_workspace_read_path(self, path: str) -> str:
@@ -1951,22 +2009,11 @@ The constructor ``__init__`` is arg-less.
                     if react_turn.assistant_message is not None:
                         messages.append(react_turn.assistant_message)
                     entries: list[dict[str, Any]] = []
-                    for decision in decisions:
-                        try:
-                            result = await self._execute_react_tool(
-                                decision,
-                                readonly=readonly,
-                            )
-                        except Exception as exc:
-                            # Every id in the assistant turn must be answered
-                            # before the next assistant/user message, so a
-                            # throwing tool becomes a failed result rather than
-                            # a stranded tool_call id.
-                            result = ReactToolResult(
-                                False,
-                                f"tool execution failed: {exc}",
-                                {"error": str(exc)},
-                            )
+                    results = await self._execute_react_tools(
+                        decisions,
+                        readonly=readonly,
+                    )
+                    for decision, result in zip(decisions, results):
                         if not result.ok:
                             logger.warning(
                                 "Agent %s: ReAct tool failed: action=%s observation=%s",
@@ -2057,7 +2104,9 @@ The constructor ``__init__`` is arg-less.
             if turn.error:
                 self._last_react_error = turn.error
                 span.attributes["schema.error"] = turn.error
-                logger.warning("Agent %s: invalid ReAct decision: %s", self.id, turn.error)
+                logger.warning(
+                    "Agent %s: invalid ReAct decision: %s", self.id, turn.error
+                )
             if not turn.decisions and not appended:
                 # Guarantee the next request differs from this one. The thread
                 # is no longer rebuilt per turn, so an un-appended empty turn
@@ -2275,9 +2324,7 @@ The constructor ``__init__`` is arg-less.
         turn = self._parse_react_turn(response, readonly=readonly)
         return turn.decisions, turn.error
 
-    def _parse_react_turn(
-        self, response: Any, *, readonly: bool = False
-    ) -> ReactTurn:
+    def _parse_react_turn(self, response: Any, *, readonly: bool = False) -> ReactTurn:
         """Parse one LLM response into decisions plus the assistant turn to append.
 
         Some OpenAI-compatible endpoints never emit native ``tool_calls`` and
@@ -2499,18 +2546,18 @@ The constructor ``__init__`` is arg-less.
         """
         decisions: list[ReactDecision] = []
         for index, (name, args) in enumerate(calls):
-            call_id = (
-                call_ids[index] if call_ids and index < len(call_ids) else ""
-            )
+            call_id = call_ids[index] if call_ids and index < len(call_ids) else ""
             if name == "finish":
                 if readonly:
                     answer = str(args.get("answer") or "").strip()
                     if not answer:
                         return (
                             [],
-                            "In ask mode `finish` requires a non-empty `answer` "
-                            "with your complete answer to the question. Re-issue "
-                            "your answer as a single finish(answer=...) tool call.",
+                            (
+                                "In ask mode `finish` requires a non-empty `answer` "
+                                "with your complete answer to the question. Re-issue "
+                                "your answer as a single finish(answer=...) tool call."
+                            ),
                         )
                     decisions.append(ReactDecision("", name, args, answer, call_id))
                 else:
@@ -2518,11 +2565,13 @@ The constructor ``__init__`` is arg-less.
                     if not isinstance(memories, list) or not memories:
                         return (
                             [],
-                            "`finish` requires `memories` with at least one "
-                            "memory item from this step (an empty list is not "
-                            "accepted). Record at least one episode (key "
-                            "decision/event/observation/intention) and call "
-                            "finish again.",
+                            (
+                                "`finish` requires `memories` with at least one "
+                                "memory item from this step (an empty list is not "
+                                "accepted). Record at least one episode (key "
+                                "decision/event/observation/intention) and call "
+                                "finish again."
+                            ),
                         )
                     decisions.append(ReactDecision("", name, args, "", call_id))
             else:
@@ -3010,26 +3059,44 @@ The constructor ``__init__`` is arg-less.
                 status=str(args.get("status") or "").strip() or None,
                 limit=limit,
             )
-            return ReactToolResult(True, json.dumps(data, ensure_ascii=False, indent=2, default=str), data)
+            return ReactToolResult(
+                True, json.dumps(data, ensure_ascii=False, indent=2, default=str), data
+            )
         if action == "todo_add":
             data = store.add(dict(args))
-            return ReactToolResult(True, json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str), data)
+            return ReactToolResult(
+                True,
+                json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "todo_update":
             patch = args.get("patch")
             data = store.update(
                 str(args.get("todo_id") or ""),
                 dict(patch) if isinstance(patch, Mapping) else {},
             )
-            return ReactToolResult(True, json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str), data)
+            return ReactToolResult(
+                True,
+                json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "todo_start":
             data = store.start(str(args.get("todo_id") or ""))
-            return ReactToolResult(True, json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str), data)
+            return ReactToolResult(
+                True,
+                json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "todo_complete":
             data = store.complete(
                 str(args.get("todo_id") or ""),
                 outcome=str(args.get("outcome") or ""),
             )
-            return ReactToolResult(True, json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str), data)
+            return ReactToolResult(
+                True,
+                json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "todo_defer":
             data = store.defer(
                 str(args.get("todo_id") or ""),
@@ -3038,7 +3105,11 @@ The constructor ``__init__`` is arg-less.
                 else None,
                 reason=str(args.get("reason") or ""),
             )
-            return ReactToolResult(True, json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str), data)
+            return ReactToolResult(
+                True,
+                json.dumps(data["todo"], ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "todo_clear_completed":
             keep_raw = args.get("keep_recent")
             keep_recent = int(keep_raw) if keep_raw is not None else 2

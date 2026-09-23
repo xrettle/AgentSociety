@@ -135,7 +135,7 @@ digraph analysis_flow {
 ## Pipeline Position
 
 **Predecessors:** run-experiment (completed run with `run/replay/_schema.json`)
-**Optional inputs:** web-research (supplementary context for interpretation), use-dataset (external datasets for comparison)
+**Optional inputs:** use-dataset (external datasets for comparison)
 **Successors:** paper-toolkit
 **Also feeds:** hypothesis (refinement cycle when analysis informs hypothesis revision)
 

@@ -82,7 +82,9 @@ class GlobalInformationEnv(EnvBase):
         if not state_path.is_file():
             return False
         d = json.loads(state_path.read_text(encoding="utf-8"))
-        self._global_information = str(d.get("global_information", self._default_global_information))
+        self._global_information = str(
+            d.get("global_information", self._default_global_information)
+        )
         self._step_counter = int(d.get("step_counter", 0))
         return True
 

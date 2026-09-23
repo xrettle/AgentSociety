@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { isExtensionZh } from './i18n';
 
 interface RunStep {
   type: 'run';
@@ -109,7 +110,7 @@ export class StepsViewer {
     context: vscode.ExtensionContext
   ): void {
     const steps = data.steps || [];
-    const isChinese = vscode.env.language.startsWith('zh');
+    const isChinese = isExtensionZh();
     const serializedYaml = this.serializeStepsConfig(data);
 
     const runCount = steps.filter(s => s.type === 'run').length;

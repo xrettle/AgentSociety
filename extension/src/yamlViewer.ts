@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
+import { isExtensionZh } from './i18n';
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_DUMP_RENDER_BYTES = 2 * 1024 * 1024;
@@ -21,7 +22,7 @@ export class YamlViewer {
     let data: any = {};
     let error: string | null = null;
     let yamlDumped = '';
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
 
     try {
       const stat = fs.statSync(filePath);
@@ -74,7 +75,7 @@ export class YamlViewer {
     filePath: string,
     yamlDumped: string
   ): void {
-    const isChinese = vscode.env.language.startsWith('zh');
+    const isChinese = isExtensionZh();
     panel.webview.html = this.getHtml(data, error, filePath, isChinese, yamlDumped);
   }
 

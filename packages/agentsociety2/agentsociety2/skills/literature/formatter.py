@@ -6,8 +6,8 @@ Functions for formatting literature entries as markdown and managing filenames.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Dict, Any
+from datetime import UTC, datetime
+from typing import Any
 
 
 def sanitize_filename(filename: str) -> str:
@@ -24,7 +24,7 @@ def sanitize_filename(filename: str) -> str:
     return sanitized[:100]  # Limit length
 
 
-def format_article_as_markdown(article: Dict[str, Any], query: str) -> str:
+def format_article_as_markdown(article: dict[str, Any], query: str) -> str:
     """Format a single literature article as markdown
 
     :param article: Article data dictionary
@@ -37,7 +37,7 @@ def format_article_as_markdown(article: Dict[str, Any], query: str) -> str:
     lines.append("")
     lines.append(f"**Search Query:** {query}")
     lines.append("")
-    lines.append(f"**Saved At:** {datetime.now(timezone.utc).isoformat()}")
+    lines.append(f"**Saved At:** {datetime.now(UTC).isoformat()}")
     lines.append("")
 
     if article.get("year"):
@@ -100,7 +100,19 @@ def format_article_as_markdown(article: Dict[str, Any], query: str) -> str:
             lines.append("")
 
     # Add other fields
-    exclude_fields = {"title", "journal", "doi", "abstract", "avg_similarity", "year", "url", "source", "source_name", "authors", "chunks"}
+    exclude_fields = {
+        "title",
+        "journal",
+        "doi",
+        "abstract",
+        "avg_similarity",
+        "year",
+        "url",
+        "source",
+        "source_name",
+        "authors",
+        "chunks",
+    }
     first_extra = True
     for key, value in article.items():
         if key not in exclude_fields and value is not None:

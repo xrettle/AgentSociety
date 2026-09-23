@@ -146,7 +146,7 @@ class ShardedAppendSink:
 
     def flush(self) -> None:
         """No-op: writes are unbuffered (raw ``os.write`` to the page cache)."""
-        return None
+        return
 
     def close(self) -> None:
         """Close all open shard file descriptors."""
@@ -155,8 +155,10 @@ class ShardedAppendSink:
                 os.close(fd)
             except OSError:
                 import logging
-                logging.getLogger(__name__).debug("Failed to close shard fd", exc_info=True)
-                pass
+
+                logging.getLogger(__name__).debug(
+                    "Failed to close shard fd", exc_info=True
+                )
         self._fds.clear()
 
 

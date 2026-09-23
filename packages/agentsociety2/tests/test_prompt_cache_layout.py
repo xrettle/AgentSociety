@@ -18,7 +18,6 @@ from agentsociety2.agent.person_prompt import (
     build_react_messages,
 )
 
-
 # ------------------------ fixtures -------------------------
 
 
@@ -119,9 +118,7 @@ def test_system_message_is_identical_between_step_and_ask_mode():
 
 def test_system_message_does_not_contain_the_agent_name():
     """A per-agent name early in the system message would break sharing."""
-    messages = build_react_messages(
-        agent_json={"name": "Alice"}, **_base_kwargs()  # noqa: E501
-    )
+    messages = build_react_messages(agent_json={"name": "Alice"}, **_base_kwargs())
     assert "Alice" not in _system_of(messages)
     assert "Alice" in _user_of(messages)
 
@@ -171,7 +168,9 @@ def test_user_section_order_puts_observations_last():
         turn_state={"tick": 60, "step_count": 3},
         memory_context={"memory_md": "m"},
         todo_context={"counts": {"pending": 1}},
-        skill_hooks=[{"skill": "daily-guidance", "hook": "pre_step", "ok": True, "output": "x"}],
+        skill_hooks=[
+            {"skill": "daily-guidance", "hook": "pre_step", "ok": True, "output": "x"}
+        ],
         **_base_kwargs(),
     )
     assert _section_tags(_user_of(messages)) == [

@@ -8,12 +8,11 @@ Recommendation Module for SocialMediaSpace
 - IncrementalTrainer: 增量训练器 (可选)
 """
 
-from .models import Item, Rating, UserPreference, FeedCache, RecommendationHistory
-from .storage import RecommendationStorageManager
-
-from .algorithms.core import RecommenderAlgorithm, RatingMatrix
-from .algorithms.mf import MFRecommender, MFConfig
+from .algorithms.core import RatingMatrix, RecommenderAlgorithm
+from .algorithms.mf import MFConfig, MFRecommender
+from .models import FeedCache, Item, Rating, RecommendationHistory, UserPreference
 from .service import RecommendationService, ServiceConfig
+from .storage import RecommendationStorageManager
 from .trainer import IncrementalTrainer, TrainerConfig
 
 __all__ = [

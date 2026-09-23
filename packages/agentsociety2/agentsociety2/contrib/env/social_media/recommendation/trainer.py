@@ -3,13 +3,13 @@
 """
 
 import asyncio
-from datetime import datetime
-from typing import List, Optional
 from dataclasses import dataclass
+from datetime import datetime
 
 from agentsociety2.logger import get_logger
-from .models import Rating
+
 from .algorithms.core import RatingMatrix
+from .models import Rating
 from .service import RecommendationService
 
 
@@ -22,6 +22,7 @@ class TrainerConfig:
     :param retrain_threshold_time: 触发重训练的时间阈值 (秒)
     :param enable_auto_retrain: 是否启用自动重训练
     """
+
     retrain_threshold_ratings: int = 100
     retrain_threshold_time: int = 300
     enable_auto_retrain: bool = True
@@ -33,9 +34,7 @@ class IncrementalTrainer:
     """
 
     def __init__(
-        self,
-        service: RecommendationService,
-        config: TrainerConfig = TrainerConfig()
+        self, service: RecommendationService, config: TrainerConfig = TrainerConfig()
     ):
         """
         初始化增量训练器
@@ -47,13 +46,13 @@ class IncrementalTrainer:
         self._config = config
 
         # 数据管理
-        self._all_ratings: List[Rating] = []
-        self._pending_ratings: List[Rating] = []
+        self._all_ratings: list[Rating] = []
+        self._pending_ratings: list[Rating] = []
 
         # 训练状态
         self._is_training = False
-        self._last_train_time: Optional[datetime] = None
-        self._training_task: Optional[asyncio.Task] = None
+        self._last_train_time: datetime | None = None
+        self._training_task: asyncio.Task | None = None
 
         get_logger().info(
             f"IncrementalTrainer 初始化: "
@@ -62,7 +61,7 @@ class IncrementalTrainer:
             f"auto_retrain={config.enable_auto_retrain}"
         )
 
-    async def load_initial_data(self, ratings: List[Rating]) -> None:
+    async def load_initial_data(self, ratings: list[Rating]) -> None:
         """
         加载初始数据并训练
 
@@ -85,7 +84,7 @@ class IncrementalTrainer:
 
         get_logger().info("初始数据加载和训练完成")
 
-    async def add_ratings(self, new_ratings: List[Rating]) -> None:
+    async def add_ratings(self, new_ratings: list[Rating]) -> None:
         """
         添加新评分
 
@@ -123,9 +122,7 @@ class IncrementalTrainer:
                 get_logger().error(f"现有训练任务失败: {e}")
 
         # 启动新的后台训练任务
-        self._training_task = asyncio.create_task(
-            self._retrain_async()
-        )
+        self._training_task = asyncio.create_task(self._retrain_async())
 
         get_logger().info("已启动后台重训练任务")
 
@@ -136,15 +133,17 @@ class IncrementalTrainer:
         :returns: 训练器信息字典
         """
         return {
-            'is_training': self._is_training,
-            'last_train_time': self._last_train_time.isoformat() if self._last_train_time else None,
-            'total_ratings': len(self._all_ratings),
-            'pending_ratings': len(self._pending_ratings),
-            'config': {
-                'threshold_ratings': self._config.retrain_threshold_ratings,
-                'threshold_time': self._config.retrain_threshold_time,
-                'auto_retrain': self._config.enable_auto_retrain
-            }
+            "is_training": self._is_training,
+            "last_train_time": self._last_train_time.isoformat()
+            if self._last_train_time
+            else None,
+            "total_ratings": len(self._all_ratings),
+            "pending_ratings": len(self._pending_ratings),
+            "config": {
+                "threshold_ratings": self._config.retrain_threshold_ratings,
+                "threshold_time": self._config.retrain_threshold_time,
+                "auto_retrain": self._config.enable_auto_retrain,
+            },
         }
 
     def _should_retrain(self) -> bool:

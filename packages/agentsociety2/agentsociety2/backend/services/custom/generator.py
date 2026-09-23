@@ -5,7 +5,7 @@ JSON 配置文件生成器
 """
 
 import json
-from typing import Dict, Any
+from typing import Any
 
 from agentsociety2.backend.path_security import (
     resolve_under_root,
@@ -30,7 +30,7 @@ class CustomModuleJsonGenerator:
             self.workspace_path, ".agentsociety", "env_modules"
         )
 
-    def generate_all(self, scan_result: Dict[str, Any]) -> Dict[str, int]:
+    def generate_all(self, scan_result: dict[str, Any]) -> dict[str, int]:
         """
         生成所有发现的模块的 JSON 文件
 
@@ -60,7 +60,7 @@ class CustomModuleJsonGenerator:
 
         return counts
 
-    def _generate_agent_json(self, agent_info: Dict[str, Any]) -> bool:
+    def _generate_agent_json(self, agent_info: dict[str, Any]) -> bool:
         """
         生成单个 Agent 的 JSON 文件
 
@@ -95,7 +95,7 @@ class CustomModuleJsonGenerator:
         except Exception:
             return False
 
-    def _generate_env_json(self, env_info: Dict[str, Any]) -> bool:
+    def _generate_env_json(self, env_info: dict[str, Any]) -> bool:
         """
         生成单个环境模块的 JSON 文件
 
@@ -148,7 +148,10 @@ class CustomModuleJsonGenerator:
                             count += 1
                 except Exception:
                     import logging
-                    logging.getLogger(__name__).debug("Failed to clean custom agent JSON", exc_info=True)
+
+                    logging.getLogger(__name__).debug(
+                        "Failed to clean custom agent JSON", exc_info=True
+                    )
 
         # 清理环境模块 JSON
         if self.env_modules_dir.exists():
@@ -161,6 +164,9 @@ class CustomModuleJsonGenerator:
                             count += 1
                 except Exception:
                     import logging
-                    logging.getLogger(__name__).debug("Failed to clean custom env module JSON", exc_info=True)
+
+                    logging.getLogger(__name__).debug(
+                        "Failed to clean custom env module JSON", exc_info=True
+                    )
 
         return count

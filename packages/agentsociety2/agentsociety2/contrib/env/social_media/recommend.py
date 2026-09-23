@@ -1,12 +1,11 @@
-import random
 import math
+import random
 from datetime import datetime
-from typing import List, Dict, Optional, Set
 
 from .models import Post
 
 
-def _get_pretrained_algorithm(algorithm_name: str, model_path: Optional[str]):
+def _get_pretrained_algorithm(algorithm_name: str, model_path: str | None):
     """
     根据算法名和模型路径加载预训练推荐模型。
     预训练方式：使用 recommendation 子模块训练后 save(path)，此处 load(path) 即可接入。
@@ -20,7 +19,8 @@ def _get_pretrained_algorithm(algorithm_name: str, model_path: Optional[str]):
         return None
     algo = None
     if algorithm_name == "mf":
-        from .recommendation.algorithms.mf import MFRecommender, MFConfig
+        from .recommendation.algorithms.mf import MFConfig, MFRecommender
+
         algo = MFRecommender(config=MFConfig())
     # 可在此扩展: "ncf" -> NCFRecommender, "lightgcn" -> LightGCNRecommender 等
     if algo is None:
@@ -40,27 +40,31 @@ class RecommendationEngine:
 
     def __init__(
         self,
-        model_path: Optional[str] = None,
+        model_path: str | None = None,
         recommendation_algorithm: str = "mf",
     ):
         """
         :param model_path: 预训练模型路径。非空时加载对应算法并可在 refresh_feed 中通过 algorithm="mf" 使用。
         :param recommendation_algorithm: 算法名，如 "mf"。需与 recommendation.algorithms 中实现一致。
         """
-        self._model_algorithm = _get_pretrained_algorithm(recommendation_algorithm, model_path)
-        self._model_algorithm_name = recommendation_algorithm if self._model_algorithm else None
+        self._model_algorithm = _get_pretrained_algorithm(
+            recommendation_algorithm, model_path
+        )
+        self._model_algorithm_name = (
+            recommendation_algorithm if self._model_algorithm else None
+        )
 
-    def get_model_algorithm_name(self) -> Optional[str]:
+    def get_model_algorithm_name(self) -> str | None:
         """若已加载预训练模型，返回算法名（如 'mf'），否则返回 None。"""
         return self._model_algorithm_name
 
     def model_recommend(
         self,
-        posts: List[Post],
+        posts: list[Post],
         user_id: int,
         limit: int = 20,
-        exclude_post_ids: Optional[Set[int]] = None,
-    ) -> List[Post]:
+        exclude_post_ids: set[int] | None = None,
+    ) -> list[Post]:
         """
         使用预训练模型对候选帖子排序。未加载模型时回退为时间序。
 
@@ -85,10 +89,14 @@ class RecommendationEngine:
         except Exception:
             return self.chronological(posts, user_id, limit)
 
-        out: List[Post] = []
-        added_ids: Set[int] = set()
+        out: list[Post] = []
+        added_ids: set[int] = set()
         for item_id, _score in rec_list:
-            if item_id in post_by_id and item_id not in exclude and item_id not in added_ids:
+            if (
+                item_id in post_by_id
+                and item_id not in exclude
+                and item_id not in added_ids
+            ):
                 out.append(post_by_id[item_id])
                 added_ids.add(item_id)
             if len(out) >= limit:
@@ -103,11 +111,7 @@ class RecommendationEngine:
         return out[:limit]
 
     @staticmethod
-    def chronological(
-        posts: List[Post],
-        user_id: int,
-        limit: int = 20
-    ) -> List[Post]:
+    def chronological(posts: list[Post], user_id: int, limit: int = 20) -> list[Post]:
         """
         时间序列排序算法（基线）
 
@@ -122,11 +126,7 @@ class RecommendationEngine:
         return sorted_posts[:limit]
 
     @staticmethod
-    def reddit_hot(
-        posts: List[Post],
-        user_id: int,
-        limit: int = 20
-    ) -> List[Post]:
+    def reddit_hot(posts: list[Post], user_id: int, limit: int = 20) -> list[Post]:
         """
         Reddit热度算法
 
@@ -141,6 +141,7 @@ class RecommendationEngine:
 
         :returns: 按热度分数排序的帖子列表
         """
+
         def calculate_hot_score(post: Post) -> float:
             """
             计算帖子的Reddit热度分数
@@ -180,13 +181,13 @@ class RecommendationEngine:
 
     @staticmethod
     def twitter_ranking(
-        posts: List[Post],
+        posts: list[Post],
         user_id: int,
         limit: int = 20,
-        follows: Dict[int, List[int]] | None = None,
-        likes: Dict[int, List[int]] | None = None,
-        weights: Dict[str, float] | None = None
-    ) -> List[Post]:
+        follows: dict[int, list[int]] | None = None,
+        likes: dict[int, list[int]] | None = None,
+        weights: dict[str, float] | None = None,
+    ) -> list[Post]:
         """
         Twitter排序算法
 
@@ -207,10 +208,10 @@ class RecommendationEngine:
         """
         # 默认权重
         default_weights = {
-            "following": 0.4,      # 关注权重
-            "engagement": 0.3,     # 互动数权重
-            "recency": 0.2,        # 新鲜度权重
-            "engagement_rate": 0.1 # 互动率权重
+            "following": 0.4,  # 关注权重
+            "engagement": 0.3,  # 互动数权重
+            "recency": 0.2,  # 新鲜度权重
+            "engagement_rate": 0.1,  # 互动率权重
         }
 
         if weights:
@@ -234,7 +235,9 @@ class RecommendationEngine:
                 score += default_weights["following"]
 
             # 2. 互动数因素（归一化到0-1）
-            total_engagement = post.likes_count + post.reposts_count + post.comments_count
+            total_engagement = (
+                post.likes_count + post.reposts_count + post.comments_count
+            )
             # 假设最大互动数为100
             engagement_normalized = min(total_engagement / 100.0, 1.0)
             score += default_weights["engagement"] * engagement_normalized
@@ -264,10 +267,8 @@ class RecommendationEngine:
 
     @staticmethod
     def random_recommend(
-        posts: List[Post],
-        user_id: int,
-        limit: int = 20
-    ) -> List[Post]:
+        posts: list[Post], user_id: int, limit: int = 20
+    ) -> list[Post]:
         """
         随机推荐算法（基线/对照组）
 
@@ -284,4 +285,3 @@ class RecommendationEngine:
 
 
 __all__ = ["RecommendationEngine"]
-

@@ -14,13 +14,13 @@
 :maxdepth: 1
 
 agentsociety.cityagent.blocks.economy_block
-agentsociety.cityagent.blocks.mobility_block
-agentsociety.cityagent.blocks.cognition_block
-agentsociety.cityagent.blocks.other_block
-agentsociety.cityagent.blocks.needs_block
-agentsociety.cityagent.blocks.utils
-agentsociety.cityagent.blocks.plan_block
 agentsociety.cityagent.blocks.social_block
+agentsociety.cityagent.blocks.mobility_block
+agentsociety.cityagent.blocks.plan_block
+agentsociety.cityagent.blocks.utils
+agentsociety.cityagent.blocks.other_block
+agentsociety.cityagent.blocks.cognition_block
+agentsociety.cityagent.blocks.needs_block
 ```
 
 ## Package Contents

@@ -27,14 +27,11 @@ _cached_env_actor_classes: dict[int, Any] = {}
 def get_env_router_actor_class(max_concurrency: int = 1) -> Any:
     """Return (creating once per max_concurrency) the Ray env-router actor class.
 
-    Args:
-        max_concurrency: Ray actor concurrency. 1 = serialize ask calls (default
-            when any env module is not concurrency-safe); >1 = allow parallel
-            async ask calls (only safe when all env modules declare
-            is_concurrency_safe()).
-
-    Returns:
-        A Ray actor class (``@ray.remote(max_concurrency=...)``).
+    :param max_concurrency: Ray actor concurrency. ``1`` serializes ask calls
+        (default when any env module is not concurrency-safe); ``>1`` allows
+        parallel async ask calls only when all env modules declare
+        ``is_concurrency_safe()``.
+    :returns: A Ray actor class (``@ray.remote(max_concurrency=...)``).
     """
     if max_concurrency in _cached_env_actor_classes:
         return _cached_env_actor_classes[max_concurrency]
@@ -56,27 +53,26 @@ def get_env_router_actor_class(max_concurrency: int = 1) -> Any:
         ) -> None:
             """Create the env router inside the actor process.
 
-            Args:
-                env_module_types / env_kwargs: serializable env-module specs.
-                run_dir: run directory (assigned to ``router.run_dir``).
-                codegen_kwargs: CodeGenRouter kwargs (e.g. final_summary_enabled).
-                llm_clients_spec: optional dict with ``coder`` / ``default``
-                    keys, each an already-serialized :class:`LLMClient` (carrying
-                    serializable connection settings). When provided, the router is
-                    constructed with these injected clients instead of
-                    building local clients from config. When ``None`` the router
-                    falls back to the per-process dispatcher client factory.
-                replay_proxy: optional serializable :class:`ReplayProxy` carrying
-                    the shared replay directory. When provided, env modules and
-                    agents append to the same sharded JSONL replay dataset. When
-                    ``None`` / disabled, env replay is off.
-                trace_proxy: optional serializable :class:`TraceProxy` (handle to
-                    the distributed trace sink). When provided, env-side LLM calls
-                    emit ``llm.completion`` spans to the SAME trace store the
-                    agents use. When ``None``, env LLM calls are untraced.
+            :param env_module_types: Serializable env-module type keys.
+            :param env_kwargs: Per-type constructor kwargs.
+            :param run_dir: Run directory (assigned to ``router.run_dir``).
+            :param codegen_kwargs: CodeGenRouter kwargs
+                (e.g. ``final_summary_enabled``).
+            :param llm_clients_spec: Optional dict with ``coder`` / ``default``
+                keys, each a serialized :class:`LLMClient`. When ``None``, the
+                router falls back to the per-process dispatcher client factory.
+            :param replay_proxy: Optional :class:`ReplayProxy` for shared
+                sharded JSONL replay. When ``None`` / disabled, env replay is off.
+            :param trace_proxy: Optional :class:`TraceProxy` for env-side
+                ``llm.completion`` spans. When ``None``, env LLM calls are untraced.
             """
             from agentsociety2.env.router_codegen import CodeGenRouter
-            from agentsociety2.registry import get_registered_env_modules
+            from agentsociety2.registry import get_registered_env_modules, get_registry
+
+            if run_dir is not None:
+                custom_root = Path(run_dir)
+                if (custom_root / "custom").is_dir():
+                    get_registry().set_workspace(custom_root)
 
             env_type_map = dict(get_registered_env_modules())
             env_modules = []
@@ -148,10 +144,7 @@ def get_env_router_actor_class(max_concurrency: int = 1) -> Any:
             trace_id: str | None = None,
             parent_span_id: str | None = None,
         ):
-            import time as _time
-
-            t0 = _time.monotonic()
-            result = await self._router.ask(
+            return await self._router.ask(
                 ctx,
                 instruction,
                 readonly=readonly,
@@ -159,13 +152,15 @@ def get_env_router_actor_class(max_concurrency: int = 1) -> Any:
                 trace_id=trace_id,
                 parent_span_id=parent_span_id,
             )
-            dt = _time.monotonic() - t0
-            if dt > 1.0:
-                print(f"[EnvActor] ask instruction={instruction[:30]!r} took {dt:.2f}s", flush=True)
-            return result
 
         async def get_world_description(self) -> str:
             return await self._router.get_world_description()
+
+        def get_token_usages(self) -> dict[str, Any]:
+            getter = getattr(self._router, "get_token_usages", None)
+            if getter is None:
+                return {}
+            return getter()
 
         async def step(self, tick: int, t: datetime) -> None:
             await self._router.step(tick, t)

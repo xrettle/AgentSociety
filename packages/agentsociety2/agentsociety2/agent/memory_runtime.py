@@ -10,7 +10,7 @@ import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +21,6 @@ from agentsociety2.agent.memory import (
     MemoryExtractionResult,
 )
 from agentsociety2.agent.person_prompt import xml_block
-
 
 MEMORY_CONSOLIDATION_SYSTEM_PROMPT = """
 Rewrite MEMORY.md for a simulated person.
@@ -100,7 +99,9 @@ class MemoryRuntimeConfig:
     enabled: bool = True
     context_max_chars: int = 4000
     recent_limit: int = 8
-    consolidation: MemoryConsolidationConfig = MemoryConsolidationConfig()
+    consolidation: MemoryConsolidationConfig = field(
+        default_factory=MemoryConsolidationConfig
+    )
 
 
 class PersonMemoryRuntime:
@@ -253,7 +254,11 @@ class PersonMemoryRuntime:
             )
         if action == "memory_recent":
             data = {"episodes": store.recent(limit=int(args.get("limit") or 8))}
-            return True, json.dumps(data, ensure_ascii=False, indent=2, default=str), data
+            return (
+                True,
+                json.dumps(data, ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "memory_search":
             data = {
                 "episodes": store.search(
@@ -261,7 +266,11 @@ class PersonMemoryRuntime:
                     limit=int(args.get("limit") or 20),
                 )
             }
-            return True, json.dumps(data, ensure_ascii=False, indent=2, default=str), data
+            return (
+                True,
+                json.dumps(data, ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "memory_range":
             start_step = args.get("start_step")
             end_step = args.get("end_step")
@@ -278,12 +287,20 @@ class PersonMemoryRuntime:
                     limit=int(args.get("limit") or 50),
                 )
             }
-            return True, json.dumps(data, ensure_ascii=False, indent=2, default=str), data
+            return (
+                True,
+                json.dumps(data, ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         if action == "memory_read":
             ids = args.get("ids")
             id_list = [str(item) for item in ids] if isinstance(ids, list) else []
             data = {"episodes": store.read_ids(id_list)}
-            return True, json.dumps(data, ensure_ascii=False, indent=2, default=str), data
+            return (
+                True,
+                json.dumps(data, ensure_ascii=False, indent=2, default=str),
+                data,
+            )
         return False, f"unknown action: {action}", {"action": action}
 
     async def after_step(
@@ -382,9 +399,7 @@ class PersonMemoryRuntime:
         parsed = MemoryExtractionResult.model_validate({"memories": raw})
         return [item.model_dump() for item in parsed.memories]
 
-    def _validate_finish_memories_lenient(
-        self, raw: Any
-    ) -> list[dict[str, Any]]:
+    def _validate_finish_memories_lenient(self, raw: Any) -> list[dict[str, Any]]:
         """Best-effort fallback validation for finish memories.
 
         Used when strict :meth:`_validate_finish_memories` raises (one bad
@@ -412,8 +427,9 @@ class PersonMemoryRuntime:
                 coerced.append(episode.model_dump())
                 continue
             except Exception:
-                self._logger.debug("Skipping malformed memory episode during validation", exc_info=True)
-                pass
+                self._logger.debug(
+                    "Skipping malformed memory episode during validation", exc_info=True
+                )
             # Coerce: salvage any text-like field from the raw item.
             text = ""
             if isinstance(item, Mapping):

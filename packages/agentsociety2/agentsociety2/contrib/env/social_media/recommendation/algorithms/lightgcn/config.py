@@ -40,4 +40,3 @@ class LightGCNConfig:
             raise ValueError("n_epochs 必须 > 0")
         if self.batch_size <= 0:
             raise ValueError("batch_size 必须 > 0")
-

@@ -191,9 +191,7 @@ Players aim to maximize cumulative coins while balancing personal gain and colle
                 readonly=False,
                 template_mode=True,
             )
-            self._ensure_env_ask_ok(
-                submit_result, submit_response, op="submit_choice"
-            )
+            self._ensure_env_ask_ok(submit_result, submit_response, op="submit_choice")
             self._logger.info(
                 f"[{self.name}] Round {current_round}: Submitted choice={choice}, "
                 f"explanation={explanation[:50]}..."
@@ -321,7 +319,7 @@ Players aim to maximize cumulative coins while balancing personal gain and colle
         if not agent_names:
             agent_names = {f"Agent {chr(65 + i)}" for i in range(self.num_agents)}
 
-        return sorted(list(agent_names))
+        return sorted(agent_names)
 
     def _build_profile_string(self) -> str:
         """Build profile string from profile dict with complete game rules"""

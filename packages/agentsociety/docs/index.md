@@ -39,7 +39,7 @@
 
 - 🌟 **大规模社会模拟引擎**: 通过采用异步模拟架构和 [Ray](https://www.ray.io/) 分布式计算框架实现了智能体之间的高效、可扩展的互动和社会行为模拟。
 
-- 🌟 **社会科学研究工具包**: 它全面支持一系列社会学研究方法，包括各类[干预](02-development-guide/01-experiment.md#exp-intervene)手段、[数据收集](02-development-guide/01-experiment.md#message-interception)和[数据分析](02-development-guide/05-data-analysis.md)能力，促进从定性研究到定量分析的深入社会科学研究。
+- 🌟 **社会科学研究工具包**: 它全面支持一系列社会学研究方法，包括各类{ref}`干预 <exp-intervene>`手段、{ref}`数据收集 <message-interception>`和[数据分析](02-development-guide/05-data-analysis.md)能力，促进从定性研究到定量分析的深入社会科学研究。
 
 ## 在线平台
 

@@ -40,24 +40,24 @@ class SASRecConfig:
     """
 
     # 模型超参数
-    hidden_units: int = 64          # 嵌入维度
-    maxlen: int = 25                # 最大序列长度
-    num_blocks: int = 2             # Transformer块数量
-    num_heads: int = 1              # 注意力头数
-    dropout_rate: float = 0.2       # Dropout率
-    l2_emb: float = 1e-4            # L2正则化系数
+    hidden_units: int = 64  # 嵌入维度
+    maxlen: int = 25  # 最大序列长度
+    num_blocks: int = 2  # Transformer块数量
+    num_heads: int = 1  # 注意力头数
+    dropout_rate: float = 0.2  # Dropout率
+    l2_emb: float = 1e-4  # L2正则化系数
 
     # 训练超参数
-    learning_rate: float = 0.01     # 学习率
-    weight_decay: float = 0.01      # 权重衰减
-    batch_size: int = 1024          # 批大小（根据数据集规模调整）
-    max_epochs: int = 5000          # 最大训练轮数
-    patience: int = 100             # 早停耐心值
-    eval_interval: int = 1          # 评估间隔
+    learning_rate: float = 0.01  # 学习率
+    weight_decay: float = 0.01  # 权重衰减
+    batch_size: int = 1024  # 批大小（根据数据集规模调整）
+    max_epochs: int = 5000  # 最大训练轮数
+    patience: int = 100  # 早停耐心值
+    eval_interval: int = 1  # 评估间隔
 
     # 数据参数（由数据集自动设置）
-    user_num: int = 0               # 用户数量
-    item_num: int = 0               # 物品数量
+    user_num: int = 0  # 用户数量
+    item_num: int = 0  # 物品数量
 
     def __post_init__(self):
         """后处理：验证配置有效性"""

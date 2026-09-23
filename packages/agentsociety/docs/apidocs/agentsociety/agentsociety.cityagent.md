@@ -22,14 +22,14 @@ agentsociety.cityagent.blocks
 :titlesonly:
 :maxdepth: 1
 
-agentsociety.cityagent.societyagent
-agentsociety.cityagent.memory_config
 agentsociety.cityagent.initial
-agentsociety.cityagent.governmentagent
-agentsociety.cityagent.bankagent
-agentsociety.cityagent.sharing_params
-agentsociety.cityagent.firmagent
 agentsociety.cityagent.nbsagent
+agentsociety.cityagent.bankagent
+agentsociety.cityagent.societyagent
+agentsociety.cityagent.firmagent
+agentsociety.cityagent.governmentagent
+agentsociety.cityagent.sharing_params
+agentsociety.cityagent.memory_config
 ```
 
 ## Package Contents

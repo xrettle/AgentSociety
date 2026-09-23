@@ -12,6 +12,42 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **agentsociety2**：环境模块 `is_concurrency_safe()`；全部安全时 Env Ray actor 使用
+  `AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY`（默认 8），否则 `max_concurrency=1`。
+- **agentsociety2**：实验日志后端接口支持按行 `tail` 读取（非整文件）。
+- **agentsociety2**：contrib onboarding 模块 `SpecialistAgent`、`WeatherEnvironment`（Ray 可发现）。
+- **agentsociety2**：`AgentSocietyHelper` 计划/答案改为 XML；新增 `get_agent_profile` 工具。
+- **agentsociety2**：`AGENT.json` 持久化 `world_description`，供 Ray 重建恢复。
+- **extension / frontend**：回放时间线可用性改善；前端路由懒加载；Console 日志截断。
+
+### Changed
+
+- **agentsociety2**：`CodeGenRouter` FAISS 指令模板缓存仅在 `template_mode=True` 时生效；无
+  observe/statistics 工具时 init 不再为了空集合跑 LLM 代码生成。
+- **agentsociety2**：`society.step` 在任一 agent `ok=False` 时抛错；博弈/contrib agent 的 LLM
+  失败改为上抛，不再静默默认出招。
+- **agentsociety2**：`ask_env` 统一返回 `(ctx, answer)` 二元组。
+- **agentsociety2**：examples onboarding 改为 `EnvRouterProxy` + contrib 模块路径。
+
+### Performance（同条件 A/B，`deepseek-v4-flash`，2026-09-22）
+
+| 场景 | Before | After | 收益 |
+| ---- | ------ | ----- | ---- |
+| env 锁拓扑（8×0.04s，2 模块） | 0.323s 全局锁 | 0.162s 模块锁 | ×1.996 |
+| 实验日志 tail（2.5MB，tail=500） | 2.69ms / 2.5MB | 0.46ms / 104KB | 字节 4.2%；时间 ×5.8 |
+| FAISS 模板缓存（`template_mode`，1 ask） | 14.9s / 2148 tok / 命中 0 | 0.049s / 0 tok / 命中率 1.0 | 墙钟 ×304；token→0 |
+| Env actor 并发（4 并行 ask，c=1→8） | 433.8s | 120.6s | ×3.60 |
+
+单元测试：`test_env_concurrency_and_log_tail`、`test_society_helper_xml`、`test_replay_timeline_and_skill_cache`；
+examples basics/advanced/games 全量 LLM 回归均为 SUCCESS。
+
+正确性抽检（2026-09-22 实跑）：`SpecialistAgent` onboarding SUCCESS（~30s）；
+囚徒困境 2 轮 SUCCESS（~68s）；`PersonAgent` `step`+`ask` SUCCESS（~377s，`AGENT.json` 写出）。
+
 ## [2.9.0] - 2026-09-17
 
 - **agentsociety2** `2.9.0` · **extension** `1.7.0` · 标签 `agentsociety2-v2.9.0`

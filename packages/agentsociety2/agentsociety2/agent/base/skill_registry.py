@@ -17,6 +17,7 @@ import yaml
 # registry keeps scanning the real skill content directory regardless of where
 # this module itself is imported from / located.
 _BUILTIN_ROOT = Path(__file__).resolve().parent.parent / "skills"
+_RESOURCE_FILES_CACHE: dict[tuple[str, int], list[str]] = {}
 
 
 @dataclass(frozen=True)
@@ -54,9 +55,18 @@ class SkillDescriptor:
         Returns:
             Relative resource file paths under the skill root.
         """
-        resources: list[str] = []
         if not self.root.is_dir():
-            return resources
+            return []
+        try:
+            mtime_ns = self.root.stat().st_mtime_ns
+        except OSError:
+            mtime_ns = 0
+        cache_key = (str(self.root), mtime_ns)
+        cached = _RESOURCE_FILES_CACHE.get(cache_key)
+        if cached is not None:
+            return list(cached)
+
+        resources: list[str] = []
         for path in sorted(
             (item for item in self.root.rglob("*") if item.is_file()),
             key=lambda item: item.relative_to(self.root).as_posix().casefold(),
@@ -65,7 +75,8 @@ class SkillDescriptor:
             if _is_hidden_or_cache_path(relative):
                 continue
             resources.append(relative.as_posix())
-        return resources
+        _RESOURCE_FILES_CACHE[cache_key] = resources
+        return list(resources)
 
 
 class SkillRegistry:
@@ -220,13 +231,9 @@ class SkillRegistry:
         Returns:
             Skill descriptors that declare the hook.
         """
-        return [
-            item
-            for item in self.list_all()
-            if hook_type in item.hooks and item.hooks[hook_type]
-        ]
+        return [item for item in self.list_all() if item.hooks.get(hook_type)]
 
-    def copy(self) -> "SkillRegistry":
+    def copy(self) -> SkillRegistry:
         """Copy this registry.
 
         Args:

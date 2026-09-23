@@ -14,10 +14,10 @@ import asyncio
 import json
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-import aiohttp
 
+import aiohttp
 
 BEIJING_MAP_URL = "https://cloud.tsinghua.edu.cn/f/f5c777485d2748fa8535/?dl=1"
 
@@ -294,15 +294,17 @@ async def download_map_file(target_dir: Path, timeout: int = 300) -> dict:
     map_file_path = data_dir / "beijing_map.pb"
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
                 BEIJING_MAP_URL, timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
-                response.raise_for_status()
+            ) as response,
+        ):
+            response.raise_for_status()
 
-                with open(map_file_path, "wb") as f:
-                    async for chunk in response.content.iter_chunked(8192):
-                        f.write(chunk)
+            with open(map_file_path, "wb") as f:
+                async for chunk in response.content.iter_chunked(8192):
+                    f.write(chunk)
 
         result["success"] = True
         result["message"] = f"Map file downloaded to {map_file_path}"
@@ -565,8 +567,8 @@ async def init_workspace(
                 if not index_file.exists():
                     index_data = {
                         "version": "1.0",
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                         "entries": [],
                     }
                     index_file.write_text(
@@ -636,7 +638,7 @@ async def init_workspace(
                     "version": "1.3",
                     "workspace": {
                         "topic": topic or "",
-                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                         "current_stage": "literature_search",
                         "current_hypothesis_id": None,
                         "current_experiment_id": None,

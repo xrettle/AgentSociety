@@ -10,40 +10,41 @@ import hashlib
 import json
 import os
 import sys
-import yaml
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+import yaml
 
 from agentsociety2.config import Config
 from agentsociety2.env import EnvBase
 from agentsociety2.env.env_router_actor import get_env_router_actor_class
 from agentsociety2.env.env_router_proxy import EnvRouterProxy
+from agentsociety2.logger import add_file_handler, get_logger, set_logger_level
 from agentsociety2.registry import (
-    get_registered_env_modules,
     get_registered_agent_modules,
+    get_registered_env_modules,
     scan_and_register_custom_modules,
 )
 from agentsociety2.society.models import (
-    InitConfig,
-    RunStep,
     AskStep,
+    InitConfig,
     InterveneStep,
     QuestionnaireStep,
+    RunStep,
     StepsConfig,
 )
 from agentsociety2.society.questionnaire import Questionnaire
 from agentsociety2.society.society import AgentSociety
-from agentsociety2.logger import get_logger, set_logger_level, add_file_handler
 
 logger = get_logger()
 
 
 #: Agent ``kwargs`` keys the CLI splits into the static ``config`` record (the
-#: remaining ``kwargs`` become the ``profile``). Must stay in sync with the
-#: validator at ``extension/skills/agentsociety-experiment-config/.../validate_config.py``
-#: and with the keys ``AgentBase.restore`` reads from ``self._config``. Add a key
-#: here whenever an agent gains a new runtime-config field.
+#: remaining ``kwargs`` become the ``profile``). Must stay in sync with
+#: ``ags experiment-config validate`` and with the keys ``AgentBase.restore``
+#: reads from ``self._config``. Add a key here whenever an agent gains a new
+#: runtime-config field.
 AGENT_CONFIG_KEYS: frozenset[str] = frozenset(
     {
         "max_react_turns",
@@ -100,7 +101,7 @@ class ExperimentRunner:
         # 文件路径
         self.pid_file = self.run_dir / "pid.json"
 
-        self.society: Optional[AgentSociety] = None
+        self.society: AgentSociety | None = None
         self._env_router: Any = None
         self._should_terminate = False
 
@@ -177,8 +178,8 @@ class ExperimentRunner:
             raise ValueError(f"Invalid steps.yaml format: {e}") from e
 
     def _create_env_modules(
-        self, env_module_types: List[str], env_kwargs: Dict[str, Dict[str, Any]]
-    ) -> List[EnvBase]:
+        self, env_module_types: list[str], env_kwargs: dict[str, dict[str, Any]]
+    ) -> list[EnvBase]:
         """创建环境模块实例"""
         env_modules = []
         env_type_map = {
@@ -202,8 +203,8 @@ class ExperimentRunner:
 
     def _build_agent_specs(
         self,
-        agent_args: List[Dict[str, Any]],
-    ) -> tuple[List[dict], str]:
+        agent_args: list[dict[str, Any]],
+    ) -> tuple[list[dict], str]:
         """Build record-based agent specs (no agent objects instantiated).
 
         Emits ``{"id", "profile", "config"}`` specs. The ``AgentSociety`` then
@@ -226,7 +227,7 @@ class ExperimentRunner:
             for agent_type, agent_class in get_registered_agent_modules()
         }
 
-        specs: List[dict] = []
+        specs: list[dict] = []
         class_names: set[str] = set()
         for agent_arg in agent_args:
             agent_type = agent_arg.get("agent_type")
@@ -288,23 +289,23 @@ class ExperimentRunner:
             try:
                 with open(self.pid_file, "r", encoding="utf-8") as f:
                     pid_data = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                logger.debug("Failed to read existing pid file, starting fresh", exc_info=True)
+            except (OSError, json.JSONDecodeError):
+                logger.debug(
+                    "Failed to read existing pid file, starting fresh", exc_info=True
+                )
 
         # 更新基本字段
         pid_data.update(
             {
                 "pid": os.getpid(),
                 "status": status,
-                "start_time": pid_data.get(
-                    "start_time", datetime.now(timezone.utc).isoformat()
-                ),
+                "start_time": pid_data.get("start_time", datetime.now(UTC).isoformat()),
                 **kwargs,
             }
         )
 
         if status == "completed" or status == "failed":
-            pid_data["end_time"] = datetime.now(timezone.utc).isoformat()
+            pid_data["end_time"] = datetime.now(UTC).isoformat()
 
         with open(self.pid_file, "w", encoding="utf-8") as f:
             json.dump(pid_data, f, indent=2, ensure_ascii=False)
@@ -322,9 +323,9 @@ class ExperimentRunner:
         self,
         config_path: Path,
         steps_path: Path,
-        experiment_id: Optional[str] = None,
+        experiment_id: str | None = None,
         replay_disable: bool = False,
-        batch_size: Optional[int] = None,
+        batch_size: int | None = None,
         resume: bool = False,
     ):
         """
@@ -382,7 +383,7 @@ class ExperimentRunner:
             society_json = (
                 self.run_dir / "SOCIETY.json" if self.run_dir is not None else None
             )
-            resume_meta: Optional[dict] = None
+            resume_meta: dict | None = None
             completed_step_count = 0  # 已完成的前置顶层 step 数（含 Ask/Intervene）
             sim_step_cursor = 0  # 已完成的仿真 tick 数（用于 RunStep 部分跳过）
             if resume:
@@ -467,7 +468,7 @@ class ExperimentRunner:
             # disabled proxy (enabled=False) so writes are no-ops.
             from agentsociety2.storage.replay_proxy import ReplayProxy
 
-            replay_proxy: Optional[ReplayProxy] = None
+            replay_proxy: ReplayProxy | None = None
             replay_enabled = not replay_disable
             if self.run_dir is not None:
                 replay_dir = (self.run_dir / "replay").resolve()
@@ -552,9 +553,7 @@ class ExperimentRunner:
                     service_proxy=service_proxy,
                 )
             else:
-                logger.info(
-                    f"Building {len(agent_args)} agent specs (record-based)..."
-                )
+                logger.info(f"Building {len(agent_args)} agent specs (record-based)...")
                 agent_specs, agent_class_name = self._build_agent_specs(agent_args)
                 logger.info(
                     "Creating AgentSociety instance (record-based, no agent objects)..."
@@ -643,16 +642,15 @@ class ExperimentRunner:
                             update_progress_periodically()
                         )
                         try:
-                            await self.society.run(
-                                num_steps=remaining, tick=step.tick
-                            )
+                            await self.society.run(num_steps=remaining, tick=step.tick)
                         finally:
                             progress_task.cancel()
                             try:
                                 await progress_task
                             except asyncio.CancelledError:
-                                logger.debug("Progress task cancelled after step completion")
-                                pass
+                                logger.debug(
+                                    "Progress task cancelled after step completion"
+                                )
                         # 最终更新进度
                         self._update_progress()
 
@@ -772,7 +770,9 @@ class ExperimentRunner:
                 try:
                     await self.society.close()
                 except Exception:
-                    logger.debug("Error closing society during failure cleanup", exc_info=True)
+                    logger.debug(
+                        "Error closing society during failure cleanup", exc_info=True
+                    )
             raise
 
     def _log_llm_stats(self) -> None:

@@ -22,7 +22,9 @@ def _load_daily_guidance_module():
 def test_normalize_argv_preserves_lifecycle_hook_args_json():
     daily_guidance = _load_daily_guidance_module()
 
-    assert daily_guidance.normalize_argv(["--args-json", '{"hook_type":"pre_step"}']) == [
+    assert daily_guidance.normalize_argv(
+        ["--args-json", '{"hook_type":"pre_step"}']
+    ) == [
         "--args-json",
         '{"hook_type":"pre_step"}',
     ]

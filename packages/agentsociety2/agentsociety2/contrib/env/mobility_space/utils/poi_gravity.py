@@ -125,7 +125,7 @@ def normalize_poi_candidates(raw_pois: list[Any]) -> list[dict]:
             p = p.model_dump()
         elif hasattr(p, "id"):
             p = {
-                "id": getattr(p, "id"),
+                "id": p.id,
                 "name": getattr(p, "name", "unknown"),
                 "category": getattr(p, "category", ""),
                 "distance": getattr(p, "distance", 0),

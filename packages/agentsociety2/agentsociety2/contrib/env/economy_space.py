@@ -1,7 +1,9 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import ClassVar, List
+from typing import ClassVar
+
+from pydantic import BaseModel, Field
 
 from agentsociety2.env import (
     EnvBase,
@@ -11,7 +13,6 @@ from agentsociety2.env.base import load_int_map
 from agentsociety2.logger import get_logger
 from agentsociety2.storage import ColumnDef
 from agentsociety2.storage.workspace_state import atomic_write_text
-from pydantic import BaseModel, Field
 
 # 本模块自选的 workspace 布局：<workspace_root>/state/ENV_STATE.json。
 _STATE_REL = "state/ENV_STATE.json"
@@ -21,7 +22,9 @@ class EconomyPerson(BaseModel):
     id: int = Field(..., description="Person ID")
     currency: float = Field(..., description="The currency of the person")
     skill: str = Field(..., description="The skill description of the person")
-    consumption: float = Field(..., description="The consumption of the person (per day)")
+    consumption: float = Field(
+        ..., description="The consumption of the person (per day)"
+    )
     income: float = Field(..., description="The income of the person (per day)")
 
     def __str__(self):
@@ -94,6 +97,11 @@ class SetPersonIncomeResponse(BaseModel):
 
 
 class EconomySpace(EnvBase):
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
+
     # 声明式状态持久化
     _agent_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("currency", "REAL"),
@@ -104,7 +112,7 @@ class EconomySpace(EnvBase):
         ColumnDef("bank_interest_rate", "REAL"),
     ]
 
-    def __init__(self, persons: List[EconomyPerson] | List[dict], **kwargs):
+    def __init__(self, persons: list[EconomyPerson] | list[dict], **kwargs):
         """
         Initialize the Economy Space environment.
 
@@ -202,8 +210,7 @@ class EconomySpace(EnvBase):
         if last_run:
             self._last_run_datetime = datetime.fromisoformat(last_run)
         self._gov_tax_brackets = [
-            TaxBracket.model_validate(b)
-            for b in state.get("gov_tax_brackets", [])
+            TaxBracket.model_validate(b) for b in state.get("gov_tax_brackets", [])
         ]
         self._step_counter = int(state.get("step_counter", 0))
         return True
@@ -282,7 +289,9 @@ class EconomySpace(EnvBase):
             return GetPersonCurrencyResponse(currency=person.currency)
 
     @tool(readonly=False)
-    async def add_person_currency(self, id: int, delta: float) -> AddPersonCurrencyResponse:
+    async def add_person_currency(
+        self, id: int, delta: float
+    ) -> AddPersonCurrencyResponse:
         """
         Add the currency of a person.
 
@@ -376,7 +385,9 @@ class EconomySpace(EnvBase):
             return GetPersonIncomeResponse(income=person.income)
 
     @tool(readonly=False)
-    async def set_person_income(self, id: int, income: float) -> SetPersonIncomeResponse:
+    async def set_person_income(
+        self, id: int, income: float
+    ) -> SetPersonIncomeResponse:
         """
         Set the income of a person.
 
@@ -438,13 +449,17 @@ class EconomySpace(EnvBase):
         # 持久化 agent 状态
         for person in self._persons.values():
             await self._write_agent_state(
-                agent_id=person.id, step=self._step_counter, t=t,
-                currency=person.currency, income=person.income,
+                agent_id=person.id,
+                step=self._step_counter,
+                t=t,
+                currency=person.currency,
+                income=person.income,
                 consumption=person.consumption,
             )
         # 持久化环境全局状态
         await self._write_env_state(
-            step=self._step_counter, t=t,
+            step=self._step_counter,
+            t=t,
             bank_interest_rate=self._bank_interest_rate,
         )
         self._step_counter += 1

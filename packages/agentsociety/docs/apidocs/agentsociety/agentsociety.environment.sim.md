@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 1
 
-agentsociety.environment.sim.person_service
 agentsociety.environment.sim.client
+agentsociety.environment.sim.person_service
 ```
 
 ## Package Contents

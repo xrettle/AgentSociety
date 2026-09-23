@@ -7,12 +7,14 @@
 import re
 import sqlite3
 import xml.etree.ElementTree as ET
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar, Type
+from typing import Any, TypeVar
 
 import json_repair
 from pydantic import BaseModel
+
 from agentsociety2.storage.replay_metadata import (
     COLUMN_CATALOG_TABLE,
     DATASET_CATALOG_TABLE,
@@ -30,9 +32,6 @@ from .models import (
     DIR_RUN,
     DIR_SYNTHESIS,
     FILE_ANALYSIS_SUMMARY_JSON,
-    FILE_SYNTHESIS_REPORT_EN_SUFFIX,
-    FILE_SYNTHESIS_REPORT_PREFIX,
-    FILE_SYNTHESIS_REPORT_ZH_SUFFIX,
     FILE_PID,
     FILE_README_MD,
     FILE_REPORT_EN_HTML,
@@ -40,13 +39,16 @@ from .models import (
     FILE_REPORT_ZH_HTML,
     FILE_REPORT_ZH_MD,
     FILE_SQLITE,
+    FILE_SYNTHESIS_REPORT_EN_SUFFIX,
+    FILE_SYNTHESIS_REPORT_PREFIX,
+    FILE_SYNTHESIS_REPORT_ZH_SUFFIX,
     ExperimentPaths,
     PresentationPaths,
     SynthesisPaths,
 )
 
 # 进度回调类型，供 service/agents 等使用
-AnalysisProgressCallback = Optional[Callable[[str], Awaitable[None]]]
+AnalysisProgressCallback = Callable[[str], Awaitable[None]] | None
 
 
 class XmlParseError(Exception):
@@ -79,7 +81,7 @@ def _sanitize_id(raw: str) -> str:
     return s or "unknown"
 
 
-def _resolve_replay_dir(path: Path) -> Optional[Path]:
+def _resolve_replay_dir(path: Path) -> Path | None:
     """Return the replay directory for a run/replay/sqlite-compatible path."""
     p = Path(path)
     candidates = []
@@ -107,7 +109,9 @@ def experiment_paths(
     run = exp / DIR_RUN
     replay = run / DIR_REPLAY
     legacy_sqlite = run / FILE_SQLITE
-    data_path = legacy_sqlite if legacy_sqlite.exists() and not replay.exists() else replay
+    data_path = (
+        legacy_sqlite if legacy_sqlite.exists() and not replay.exists() else replay
+    )
     return ExperimentPaths(
         hypothesis_base=base,
         experiment_path=exp,
@@ -161,7 +165,7 @@ def synthesis_paths(
     )
 
 
-def _parse_skill_frontmatter(path: Path) -> Dict[str, Any]:
+def _parse_skill_frontmatter(path: Path) -> dict[str, Any]:
     """Parse YAML-like frontmatter from markdown skill files.
 
     Supported keys: name, priority, description, required.
@@ -177,7 +181,7 @@ def _parse_skill_frontmatter(path: Path) -> Dict[str, Any]:
     if len(lines) < 3 or lines[0].strip() != "---":
         return {}
 
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     for line in lines[1:]:
         s = line.strip()
         if s == "---":
@@ -210,9 +214,9 @@ def _strip_md_frontmatter(text: str) -> str:
     return text.strip()
 
 
-def list_analysis_skills() -> List[AnalysisSkillMeta]:
+def list_analysis_skills() -> list[AnalysisSkillMeta]:
     """扫描 `instruction_md/` 下 Markdown，返回元数据（不读取正文）。"""
-    result: List[AnalysisSkillMeta] = []
+    result: list[AnalysisSkillMeta] = []
     if not _INSTRUCTION_MD_DIR.exists():
         return result
 
@@ -237,7 +241,7 @@ def list_analysis_skills() -> List[AnalysisSkillMeta]:
 
 
 def get_analysis_skills(
-    selected_names: Optional[List[str]] = None,
+    selected_names: list[str] | None = None,
     strict_selection: bool = True,
 ) -> str:
     """加载选中的 `instruction_md/*.md` 全文并拼接为 LLM 上下文片段。
@@ -269,7 +273,7 @@ def get_analysis_skills(
 
     # Remove duplicates while preserving order
     seen = set()
-    unique_targets: List[AnalysisSkillMeta] = []
+    unique_targets: list[AnalysisSkillMeta] = []
     for m in targets:
         if m.name not in seen:
             seen.add(m.name)
@@ -278,7 +282,7 @@ def get_analysis_skills(
     # Sort by priority
     unique_targets.sort(key=lambda x: (x.priority, x.name))
 
-    parts: List[str] = []
+    parts: list[str] = []
     for m in unique_targets:
         raw = m.path.read_text(encoding="utf-8")
         body = _strip_md_frontmatter(raw).strip()
@@ -314,7 +318,7 @@ def _xml_element_to_value(el: ET.Element) -> Any:
     tags = [c.tag for c in children]
     if len(set(tags)) == 1 and len(children) > 1:
         return [_xml_element_to_value(c) for c in children]
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     for c in children:
         val = _xml_element_to_value(c)
         if c.tag in result:
@@ -328,7 +332,7 @@ def _xml_element_to_value(el: ET.Element) -> Any:
 
 def _parse_xml_to_root(xml_str: str) -> ET.Element:
     """解析 XML 字符串为 Element，使用 elemental-xenon 修复 LLM 生成的畸形 XML。"""
-    from xenon import repair_xml_safe, TrustLevel
+    from xenon import TrustLevel, repair_xml_safe
 
     # 使用 xenon 修复 XML（专为 LLM 输出设计）
     repaired = repair_xml_safe(xml_str, trust=TrustLevel.UNTRUSTED)
@@ -341,7 +345,7 @@ def _parse_xml_to_root(xml_str: str) -> ET.Element:
         ) from e
 
 
-def parse_llm_xml_response(content: str, root_tag: str = "result") -> Dict[str, Any]:
+def parse_llm_xml_response(content: str, root_tag: str = "result") -> dict[str, Any]:
     """解析 LLM 返回的 XML 为字典。
 
     :param content: LLM 返回的原始内容（可包含 ```xml 代码块）
@@ -366,7 +370,7 @@ def parse_llm_xml_response(content: str, root_tag: str = "result") -> Dict[str, 
 
 
 def parse_llm_xml_to_model(
-    content: str, model_class: Type[T], root_tag: str = "result"
+    content: str, model_class: type[T], root_tag: str = "result"
 ) -> T:
     """解析 LLM 返回的 XML 并验证为 Pydantic 模型。"""
     data = parse_llm_xml_response(content, root_tag)
@@ -389,13 +393,13 @@ def _take_json_string(content: str) -> str:
             s = p.strip()
             if i == 0:
                 s = s.lstrip("json").strip()
-            if s and (s.startswith("{") or s.startswith("[")):
+            if s and (s.startswith(("{", "["))):
                 return s
         return ""
     return raw
 
 
-def parse_llm_json_response(content: str) -> Dict[str, Any]:
+def parse_llm_json_response(content: str) -> dict[str, Any]:
     """解析 LLM 返回的 JSON，约定为单段 JSON 或 ```json ... ```。
 
     - 提取不到 JSON 或 JSON 根不是 object：抛出 ValueError。
@@ -409,7 +413,7 @@ def parse_llm_json_response(content: str) -> Dict[str, Any]:
     return data
 
 
-def parse_llm_report_response(content: str) -> Dict[str, str]:
+def parse_llm_report_response(content: str) -> dict[str, str]:
     """解析报告类 LLM 输出（XML 格式，双语）。
 
     格式::
@@ -474,7 +478,7 @@ def _quote_identifier(name: str) -> str:
     return '"' + str(name).replace('"', '""') + '"'
 
 
-def extract_database_schema(db_path: Path) -> Dict[str, Any]:
+def extract_database_schema(db_path: Path) -> dict[str, Any]:
     """Extract replay schema from metadata catalog tables."""
     if not db_path or not db_path.exists():
         return {}
@@ -482,7 +486,7 @@ def extract_database_schema(db_path: Path) -> Dict[str, Any]:
     if replay_dir is not None:
         reader = ReplayReader(replay_dir)
         try:
-            schema: Dict[str, Any] = {}
+            schema: dict[str, Any] = {}
             for dataset in reader.load_dataset_catalog():
                 meta = {
                     key: dataset.get(key)
@@ -500,7 +504,9 @@ def extract_database_schema(db_path: Path) -> Dict[str, Any]:
                 }
                 columns = []
                 pk_columns = {
-                    key for key in (dataset.get("entity_key"), dataset.get("step_key")) if key
+                    key
+                    for key in (dataset.get("entity_key"), dataset.get("step_key"))
+                    if key
                 }
                 for column in dataset.get("columns", []):
                     name = column.get("column_name")
@@ -555,7 +561,7 @@ def extract_database_schema(db_path: Path) -> Dict[str, Any]:
             f"FROM {DATASET_CATALOG_TABLE} ORDER BY dataset_id"
         )
         dataset_rows = cursor.fetchall()
-        dataset_meta_by_table: Dict[str, Dict[str, Any]] = {}
+        dataset_meta_by_table: dict[str, dict[str, Any]] = {}
         for row in dataset_rows:
             default_order = json_repair.loads(row[8]) if row[8] else []
             capabilities = json_repair.loads(row[9]) if row[9] else []
@@ -578,7 +584,7 @@ def extract_database_schema(db_path: Path) -> Dict[str, Any]:
             f"FROM {COLUMN_CATALOG_TABLE} ORDER BY dataset_id, column_name"
         )
         column_rows = cursor.fetchall()
-        columns_by_dataset: Dict[str, List[Dict[str, Any]]] = {}
+        columns_by_dataset: dict[str, list[dict[str, Any]]] = {}
         for row in column_rows:
             enum_values = json_repair.loads(row[8]) if row[8] else None
             example = json_repair.loads(row[9]) if row[9] else None
@@ -600,7 +606,7 @@ def extract_database_schema(db_path: Path) -> Dict[str, Any]:
                 }
             )
 
-        schema: Dict[str, Any] = {}
+        schema: dict[str, Any] = {}
         for table_name, meta in dataset_meta_by_table.items():
             dataset_columns = columns_by_dataset.get(meta["dataset_id"], [])
             pk_columns = {
@@ -618,9 +624,9 @@ def extract_database_schema(db_path: Path) -> Dict[str, Any]:
 
 
 def format_database_schema_markdown(
-    schema: Dict[str, Any],
+    schema: dict[str, Any],
     include_row_counts: bool = False,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> str:
     """将 replay metadata schema 格式化为 Markdown，可选行数。"""
     if not schema:
@@ -685,14 +691,14 @@ def format_database_schema_markdown(
     return "\n".join(lines)
 
 
-def collect_experiment_files(db_path: Path) -> List[str]:
+def collect_experiment_files(db_path: Path) -> list[str]:
     """收集 run 目录下可供执行器使用的文件路径（含 replay/、同级文件、run/artifacts）。"""
     if not db_path:
         return []
-    files: List[str] = [str(db_path)]
+    files: list[str] = [str(db_path)]
     if not db_path.exists():
         return files
-    run_dir = db_path.parent if db_path.is_file() else db_path.parent
+    run_dir = db_path.parent
     if db_path.is_dir() and db_path.name != DIR_REPLAY:
         run_dir = db_path
     if run_dir.exists():

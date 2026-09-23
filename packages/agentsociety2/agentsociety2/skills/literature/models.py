@@ -6,8 +6,9 @@ Pydantic models for literature search results and indexing.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Dict, Any, Literal
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agentsociety2.logger import get_logger
 
@@ -23,11 +24,11 @@ class LiteratureEntry(BaseModel):
     # Basic information
     title: str = Field(..., description="Literature title")
 
-    journal: Optional[str] = Field(None, description="Journal name")
+    journal: str | None = Field(None, description="Journal name")
 
-    doi: Optional[str] = Field(None, description="DOI identifier")
+    doi: str | None = Field(None, description="DOI identifier")
 
-    abstract: Optional[str] = Field(None, description="Abstract")
+    abstract: str | None = Field(None, description="Abstract")
 
     # File information
     file_path: str = Field(..., description="File path (relative to workspace root)")
@@ -42,9 +43,9 @@ class LiteratureEntry(BaseModel):
     )
 
     # Search related (only when source is literature_search)
-    query: Optional[str] = Field(None, description="Search query")
+    query: str | None = Field(None, description="Search query")
 
-    avg_similarity: Optional[float] = Field(
+    avg_similarity: float | None = Field(
         None, ge=0.0, le=1.0, description="Average similarity score (0-1)"
     )
 
@@ -52,7 +53,7 @@ class LiteratureEntry(BaseModel):
     saved_at: str = Field(..., description="Save time (ISO format)")
 
     # Other fields (allow extension)
-    extra_fields: Optional[Dict[str, Any]] = Field(
+    extra_fields: dict[str, Any] | None = Field(
         None, description="Other extension fields"
     )
 
@@ -79,14 +80,14 @@ class LiteratureEntry(BaseModel):
     def validate_saved_at(cls, v: str) -> str:
         """Validate save time format"""
         try:
-            datetime.fromisoformat(v.replace("Z", "+00:00"))
+            datetime.fromisoformat(v)
         except ValueError:
             raise ValueError(f"Invalid ISO format for saved_at: {v}") from None
         return v
 
     @field_validator("doi")
     @classmethod
-    def validate_doi(cls, v: Optional[str]) -> Optional[str]:
+    def validate_doi(cls, v: str | None) -> str | None:
         """Validate DOI format (basic check)"""
         if v is None:
             return v
@@ -108,11 +109,9 @@ class LiteratureIndex(BaseModel):
 
     version: str = Field(default="1.0", description="Index file version")
 
-    created_at: Optional[str] = Field(
-        None, description="Index creation time (ISO format)"
-    )
+    created_at: str | None = Field(None, description="Index creation time (ISO format)")
 
-    updated_at: Optional[str] = Field(
+    updated_at: str | None = Field(
         None, description="Index last update time (ISO format)"
     )
 

@@ -10,10 +10,9 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 
 MEMORY_MD_PATH = "MEMORY.md"
 MEMORY_DIR = "memory"
@@ -186,7 +185,7 @@ class AgentMemoryStore:
         agent_id: Numeric agent id used in persisted episode records.
     """
 
-    trigger_types = {
+    trigger_types: ClassVar[set[str]] = {
         "commitment",
         "relationship",
         "preference",
@@ -690,12 +689,10 @@ class AgentMemoryStore:
             ):
                 return True, "pending episode threshold"
         last_step = int(state.get("last_consolidated_step") or 0)
-        if step_count - last_step >= config.interval_steps:
-            if any(
-                self.is_long_term_memory_candidate(item)
-                for item in self.unconsolidated()
-            ):
-                return True, "consolidation interval"
+        if step_count - last_step >= config.interval_steps and any(
+            self.is_long_term_memory_candidate(item) for item in self.unconsolidated()
+        ):
+            return True, "consolidation interval"
         return False, ""
 
     @staticmethod

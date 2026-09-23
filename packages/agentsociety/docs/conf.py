@@ -10,10 +10,11 @@ from pathlib import Path
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-# Read version from pyproject.toml
-_pyproject = (
-    Path(__file__).parent.parent / "packages" / "agentsociety" / "pyproject.toml"
-)
+# Read version from package pyproject.toml
+# docs live at packages/agentsociety/docs/ (not repo-root docs/)
+_DOCS_DIR = Path(__file__).resolve().parent
+_PKG_ROOT = _DOCS_DIR.parent
+_pyproject = _PKG_ROOT / "pyproject.toml"
 with open(_pyproject, "rb") as f:
     _version = tomllib.load(f)["project"]["version"]
 
@@ -40,7 +41,8 @@ extensions = [
 ]
 
 autodoc2_packages = [
-    "../packages/agentsociety/agentsociety",
+    # relative to this conf.py (packages/agentsociety/docs/)
+    "../agentsociety",
 ]
 autodoc2_render_plugin = "myst"
 
@@ -72,7 +74,7 @@ html_theme_options = {
     "top_of_page_buttons": ["view", "edit"],
     "source_repository": "https://github.com/tsinghua-fib-lab/agentsociety/",
     "source_branch": "main",
-    "source_directory": "docs/",
+    "source_directory": "packages/agentsociety/docs/",
     "footer_icons": [
         {
             "name": "GitHub",
@@ -117,6 +119,14 @@ epub_exclude_files = ["search.html"]
 
 # -- Extension configuration -------------------------------------------------
 
+# autodoc2 emits ambiguous short refs like ``type`` across many models.
+nitpick_ignore_regex = [
+    (r"py:.*", r"type"),
+]
+suppress_warnings = [
+    "ref.python",
+]
+
 # -- Options for intersphinx extension ---------------------------------------
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
@@ -126,6 +136,8 @@ intersphinx_mapping = {
 # -- Options for MyST parser -------------------------------------------------
 myst_enable_extensions = [
     "amsmath",
+    "attrs_block",
+    "attrs_inline",
     "colon_fence",
     "deflist",
     "dollarmath",
@@ -137,3 +149,5 @@ myst_enable_extensions = [
     "substitution",
     "tasklist",
 ]
+# Auto-generate heading anchors; custom ``{#id}`` also works with attrs_* above.
+myst_heading_anchors = 2

@@ -6,7 +6,7 @@
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { localize } from './i18n';
+import {localize, isExtensionZh} from './i18n';
 
 export class PidStatusViewer {
   public static currentPanel: PidStatusViewer | undefined;
@@ -52,7 +52,7 @@ export class PidStatusViewer {
       // 读取失败
     }
 
-    const isChinese = vscode.env.language === 'zh-CN' || vscode.env.language.startsWith('zh');
+    const isChinese = isExtensionZh();
 
     this.panel.webview.html = this.getWebviewContent(data, isChinese);
   }

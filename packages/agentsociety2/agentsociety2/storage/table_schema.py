@@ -10,7 +10,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Any, List, Literal, Optional
+from typing import Any, Literal
 
 # SQLite column types
 ColumnType = Literal["INTEGER", "REAL", "TEXT", "BLOB", "TIMESTAMP", "JSON"]
@@ -39,14 +39,14 @@ class ColumnDef:
     name: str
     type: ColumnType
     nullable: bool = True
-    default: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    logical_type: Optional[str] = None
-    analysis_role: Optional[str] = None
-    unit: Optional[str] = None
-    enum_values: Optional[list[Any]] = None
-    example: Optional[Any] = None
+    default: str | None = None
+    title: str | None = None
+    description: str | None = None
+    logical_type: str | None = None
+    analysis_role: str | None = None
+    unit: str | None = None
+    enum_values: list[Any] | None = None
+    example: Any | None = None
     tags: list[str] = field(default_factory=list)
 
     def to_sql(self) -> str:
@@ -68,10 +68,11 @@ class TableSchema:
     :param primary_key: 主键列名列表。
     :param indexes: 索引定义列表（每项为列名列表）。
     """
+
     name: str
-    columns: List[ColumnDef]
-    primary_key: List[str] = field(default_factory=list)
-    indexes: List[List[str]] = field(default_factory=list)
+    columns: list[ColumnDef]
+    primary_key: list[str] = field(default_factory=list)
+    indexes: list[list[str]] = field(default_factory=list)
 
     def to_create_sql(self) -> str:
         """:returns: ``CREATE TABLE`` SQL 语句。"""
@@ -85,7 +86,7 @@ class TableSchema:
         columns_sql = ",\n    ".join(column_defs)
         return f"CREATE TABLE IF NOT EXISTS {self.name} (\n    {columns_sql}\n)"
 
-    def to_index_sql(self) -> List[str]:
+    def to_index_sql(self) -> list[str]:
         """:returns: ``CREATE INDEX`` SQL 语句列表。"""
         statements = []
         for idx_cols in self.indexes:

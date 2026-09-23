@@ -1,6 +1,5 @@
 import socket
 import time
-from typing import List
 
 from agentsociety2.logger import get_logger
 
@@ -9,7 +8,7 @@ __all__ = ["find_free_ports", "wait_for_port"]
 logger = get_logger()
 
 
-def find_free_ports(num_ports: int = 1) -> List[int]:
+def find_free_ports(num_ports: int = 1) -> list[int]:
     ports: list[int] = []
     sockets = []
 
@@ -46,7 +45,7 @@ def wait_for_port(
                 if result == 0:
                     # Port is open and listening
                     return True
-        except (socket.error, socket.timeout) as e:
+        except (TimeoutError, OSError) as e:
             # 输出报错内容
             logger.warning(f"Error: {e}")
         time.sleep(check_interval)

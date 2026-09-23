@@ -19,7 +19,8 @@ Generation rules:
 - Include at least one legal `@tool`.
 - Provide `step()`.
 - Default to no-arg construction.
-- If the module needs observation capability, provide it through one or more `@tool(readonly=True, kind="observe")` methods.
+- If the module needs observation capability, provide it through one or more `@tool(readonly=True, kind="observe")` methods. Observe/statistics 都不是强制项；全空则 router 跳过对应初始化 codegen。
+- Keep tool signatures and instruction templates stable. FAISS 模板缓存仅在 agent 侧 `ask(..., template_mode=True)` 时启用，不要假定默认就会命中 cache。
 - Provide a short `description()` and useful `init_description()` for init kwargs.
 - If per-agent state must be persisted to replay, declare `_agent_state_columns` and write through `_write_agent_state()` or `_write_agent_state_batch()`.
 - If global environment state must be persisted to replay, declare `_env_state_columns` and write through `_write_env_state()`.
@@ -59,7 +60,8 @@ description: Social-media interaction: post / repost / comment / like / follow, 
 
 Body — injected into the prompt only after the agent activates this skill.
 Teach the ask_env(instruction=..., variables=..., ctx={"id": ...}, readonly=...)
-contract here; keep instruction templates stable so the env router cache hits.
+contract here; keep instruction templates stable. FAISS 模板缓存仅在
+`template_mode=True` 时启用。
 ```
 
 Why this is mandatory: at selection time the model sees **only** the

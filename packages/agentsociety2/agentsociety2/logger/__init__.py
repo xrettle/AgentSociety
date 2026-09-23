@@ -35,7 +35,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar
 
 __all__ = [
     "get_logger",
@@ -74,7 +74,10 @@ class ColoredFormatter(logging.Formatter):
         :param fmt: 日志格式，默认为 "[%(asctime)s] %(levelname)-7s %(message)s"
         :param datefmt: 时间格式，默认为 "%Y-%m-%d %H:%M:%S"
         """
-        super().__init__(fmt=fmt or "[%(asctime)s] %(levelname)-7s %(message)s", datefmt=datefmt or "%Y-%m-%d %H:%M:%S")
+        super().__init__(
+            fmt=fmt or "[%(asctime)s] %(levelname)-7s %(message)s",
+            datefmt=datefmt or "%Y-%m-%d %H:%M:%S",
+        )
 
     def format(self, record: logging.LogRecord) -> str:
         # 保存原始消息
@@ -127,7 +130,9 @@ def add_file_handler(log_file: str, level: int = logging.INFO) -> None:
 
     # 检查是否已经有相同文件的文件处理器
     for handler in logger.handlers:
-        if isinstance(handler, logging.FileHandler) and handler.baseFilename == os.path.abspath(log_file):
+        if isinstance(
+            handler, logging.FileHandler
+        ) and handler.baseFilename == os.path.abspath(log_file):
             return  # 已存在，不重复添加
 
     # 创建日志目录（如果不存在）
@@ -166,13 +171,13 @@ class LiteLLMLogger:
 
     def __init__(self):
         self.logger = get_logger()
-        self._call_start_times: Dict[str, float] = {}
+        self._call_start_times: dict[str, float] = {}
 
     def log_pre_api_call(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
-        kwargs: Dict[str, Any],
+        messages: list[dict[str, Any]],
+        kwargs: dict[str, Any],
     ):
         """在 API 调用前记录 prompt（DEBUG）。"""
         # Generate a unique call ID for tracking
@@ -188,7 +193,7 @@ class LiteLLMLogger:
 
     def log_post_api_call(
         self,
-        kwargs: Dict[str, Any],
+        kwargs: dict[str, Any],
         response_obj: Any,
         start_time: float,
         end_time: float,
@@ -232,7 +237,7 @@ class LiteLLMLogger:
             f"Duration: {duration:.3f}s"
         )
 
-    def _format_messages(self, messages: List[Dict[str, Any]]) -> str:
+    def _format_messages(self, messages: list[dict[str, Any]]) -> str:
         """将 messages 格式化为可读字符串。"""
         formatted_parts = []
         for _i, msg in enumerate(messages):
@@ -327,9 +332,9 @@ def setup_litellm_logging():
 
 
 def setup_logging(
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     log_level: int = logging.INFO,
-    log_format: Optional[str] = None,
+    log_format: str | None = None,
     console_output: bool = True,
 ) -> logging.Logger:
     """初始化应用日志（root + agentsociety + LiteLLM）。

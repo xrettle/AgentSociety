@@ -165,6 +165,8 @@ const translations: Record<string, Record<string, string>> = {
     'extension.viewEvidenceGraph.truncatedNodes': '共 {0} 个节点，仅显示前 200 条',
     'extension.viewEvidenceGraph.truncatedEdges': '共 {0} 条边，仅显示前 200 条',
     'extension.viewPaperArtifact.commandTitle': '论文产物预览',
+    'extension.viewPaperReview.commandTitle': '查看审稿结果',
+    'extension.viewCsv.commandTitle': '表格预览',
     'extension.viewPaperArtifact.openRaw': '打开原始 JSON',
     'extension.viewPaperArtifact.openEditor': '在编辑器中打开',
     'extension.viewPaperArtifact.openPath': '打开',
@@ -562,6 +564,7 @@ const translations: Record<string, Record<string, string>> = {
     // projectStructureProvider.ts - analysis reports
     'projectStructure.presentation': '假设分析',
     'projectStructure.synthesis': '综合报告',
+    'projectStructure.synthesisBrief': '综合摘要',
     'projectStructure.generatedPaper': '论文输出',
     'projectStructure.reportHtml': 'HTML 报告',
     'projectStructure.reportMd': 'Markdown 报告',
@@ -666,6 +669,7 @@ const translations: Record<string, Record<string, string>> = {
     'projectStructure.paperTableSpecs': '表格规格',
     'projectStructure.paperCompileRuns': '编译记录',
     'projectStructure.paperReviews': '审阅记录',
+    'projectStructure.paperReviewRound.overview': '轮次汇总',
     'projectStructure.paperLit': '文献搜索',
     'projectStructure.paperBib': '参考文献',
     'projectStructure.paperMainTex': '主文档',
@@ -850,6 +854,8 @@ const translations: Record<string, Record<string, string>> = {
     'extension.viewEvidenceGraph.truncatedNodes': '{0} nodes total; showing first 200',
     'extension.viewEvidenceGraph.truncatedEdges': '{0} edges total; showing first 200',
     'extension.viewPaperArtifact.commandTitle': 'Paper artifact preview',
+    'extension.viewPaperReview.commandTitle': 'View paper review',
+    'extension.viewCsv.commandTitle': 'Table preview',
     'extension.viewPaperArtifact.openRaw': 'Open raw JSON',
     'extension.viewPaperArtifact.openEditor': 'Open in editor',
     'extension.viewPaperArtifact.openPath': 'Open',
@@ -1256,6 +1262,7 @@ const translations: Record<string, Record<string, string>> = {
     // projectStructureProvider.ts - analysis reports
     'projectStructure.presentation': 'Hypothesis Analysis',
     'projectStructure.synthesis': 'Synthesis Reports',
+    'projectStructure.synthesisBrief': 'Synthesis brief',
     'projectStructure.generatedPaper': 'Generated Paper',
     'projectStructure.reportHtml': 'HTML Report',
     'projectStructure.reportMd': 'Markdown Report',
@@ -1362,6 +1369,7 @@ const translations: Record<string, Record<string, string>> = {
     'projectStructure.paperTableSpecs': 'Table Specs',
     'projectStructure.paperCompileRuns': 'Compile Runs',
     'projectStructure.paperReviews': 'Reviews',
+    'projectStructure.paperReviewRound.overview': 'Round overview',
     'projectStructure.paperLit': 'Literature Search',
     'projectStructure.paperBib': 'References',
     'projectStructure.paperMainTex': 'Main Document',
@@ -1459,4 +1467,9 @@ export function localize(key: string, ...args: (string | number)[]): string {
  */
 export function getCurrentLanguageCode(): ExtensionLanguage {
   return getCurrentLanguage();
+}
+
+/** 扩展 UI 是否为中文（跟随 `aiSocialScientist.language`，非 VS Code Display Language）。 */
+export function isExtensionZh(): boolean {
+  return getCurrentLanguage() === 'zh-CN';
 }

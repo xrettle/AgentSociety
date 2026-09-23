@@ -117,7 +117,7 @@ AgentSociety/
 ├── frontend/               # React web frontend
 ├── extension/              # VSCode extension
 ├── packages/agentsociety/docs/   # v1 Sphinx documentation (legacy)
-└── examples/               # Example experiments
+└── packages/agentsociety2/examples/  # AS2 onboarding examples (basics / games / advanced)
 ```
 
 ## Quick Start

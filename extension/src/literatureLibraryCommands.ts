@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { localize } from './i18n';
+import {localize, isExtensionZh} from './i18n';
 import { LiteratureIndexViewer } from './literatureIndexViewer';
 import {
   exportLiteratureBibtex,
@@ -85,7 +85,7 @@ export async function openLiteratureLibrary(
 }
 
 export async function runSyncLiteratureLibrary(): Promise<void> {
-  const isZh = vscode.env.language.startsWith('zh');
+  const isZh = isExtensionZh();
   const root = workspaceRoot();
   if (!root) {
     vscode.window.showErrorMessage(localize('extension.literature.noWorkspace'));
@@ -120,7 +120,7 @@ export async function runSyncLiteratureLibrary(): Promise<void> {
 }
 
 export async function runExportLiteratureBib(mode: 'copy' | 'file'): Promise<void> {
-  const isZh = vscode.env.language.startsWith('zh');
+  const isZh = isExtensionZh();
   const root = workspaceRoot();
   if (!root) {
     vscode.window.showErrorMessage(localize('extension.literature.noWorkspace'));
@@ -167,7 +167,7 @@ export async function runExportLiteratureBib(mode: 'copy' | 'file'): Promise<voi
 export async function runImportLiteratureBib(
   context: vscode.ExtensionContext
 ): Promise<void> {
-  const isZh = vscode.env.language.startsWith('zh');
+  const isZh = isExtensionZh();
   const root = workspaceRoot();
   if (!root) {
     vscode.window.showErrorMessage(localize('extension.literature.noWorkspace'));

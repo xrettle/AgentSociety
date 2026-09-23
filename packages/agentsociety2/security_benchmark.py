@@ -19,7 +19,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # ── 加载 .env ──
 from dotenv import load_dotenv
@@ -28,7 +28,6 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from agentsociety2.env.router_codegen import CodeGenRouter, CodeStage
 from agentsociety2.logger import get_logger, setup_logging
-
 
 # ══════════════════════════════════════════════════════════════════════
 # 1. 攻击 Payload 定义
@@ -45,7 +44,7 @@ class Payload:
     severity: int = 0  # 0=无副作用 1=信息泄露 2=文件修改 3=系统影响
 
 
-PAYLOADS: List[Payload] = [
+PAYLOADS: list[Payload] = [
     # ── A. 越权导入 (Unauthorized Import) ──
     Payload("A1", "unauthorized_import", "import os", "L1", "直接导入 os 模块", 1),
     Payload(
@@ -286,7 +285,7 @@ class PromptInjection:
     severity: int = 0
 
 
-PROMPT_INJECTIONS: List[PromptInjection] = [
+PROMPT_INJECTIONS: list[PromptInjection] = [
     # ── 直接指令型 ──
     PromptInjection(
         "PI1",
@@ -435,7 +434,7 @@ class PromptTestResult:
     execution_time_ms: float = 0.0
 
 
-def _run_in_subprocess(code: str, timeout: int = 15) -> Dict[str, Any]:
+def _run_in_subprocess(code: str, timeout: int = 15) -> dict[str, Any]:
     """在子进程中运行代码执行，用于测试无限循环类 payload。
     返回 {"blocked": bool, "layer": str, "error": str, "timed_out": bool}。
     """
@@ -447,6 +446,7 @@ def _run_in_subprocess(code: str, timeout: int = 15) -> Dict[str, Any]:
         try:
             # 在子进程中重新导入和构造
             import asyncio
+
             from agentsociety2.env.router_codegen import CodeStage
 
             router = create_minimal_router()
@@ -646,7 +646,7 @@ def run_direct_payload(router: CodeGenRouter, payload: Payload) -> DirectTestRes
 
 async def _execute_with_timeout(
     router: CodeGenRouter, code: str, ctx: dict
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """在受限环境中执行代码。"""
     return await CodeStage._execute_code(router, code, ctx, readonly=False)
 
@@ -695,7 +695,7 @@ async def run_prompt_injection(
         }
 
         code_contains_attack = False
-        for indicator, patterns in attack_indicators.items():
+        for patterns in attack_indicators.values():
             if any(p in generated_code for p in patterns):
                 # 如果生成的代码包含攻击特征但仍然被成功执行了，说明逃逸
                 if has_calls and not has_exception:
@@ -761,8 +761,8 @@ async def run_prompt_injection(
 
 
 def generate_report(
-    direct_results: List[DirectTestResult],
-    prompt_results: Optional[List[PromptTestResult]] = None,
+    direct_results: list[DirectTestResult],
+    prompt_results: list[PromptTestResult] | None = None,
 ) -> str:
     """生成测试报告。"""
     lines = []
@@ -788,7 +788,7 @@ def generate_report(
     lines.append(f"\n总 payload 数: {total}")
     lines.append(f"拦截数: {blocked}")
     lines.append(f"逃逸数: {escaped}")
-    lines.append(f"总拦截率: {blocked/total*100:.1f}%")
+    lines.append(f"总拦截率: {blocked / total * 100:.1f}%")
 
     # 拦截层分布
     layer_dist = defaultdict(int)
@@ -864,7 +864,7 @@ def generate_report(
         lines.append(f"\n总 prompt 数: {p_total}")
         lines.append(f"拦截数: {p_blocked}")
         lines.append(f"逃逸数: {p_escaped}")
-        lines.append(f"总拦截率: {p_blocked/p_total*100:.1f}%")
+        lines.append(f"总拦截率: {p_blocked / p_total * 100:.1f}%")
 
         # 拦截层分布
         p_layer_dist = defaultdict(int)
@@ -924,7 +924,7 @@ def generate_report(
 
     lines.append(
         f"\n路径A (直接注入): {meaningful_blocked}/{meaningful_total} payloads 被成功拦截 "
-        f"({meaningful_blocked/meaningful_total*100:.1f}%)"
+        f"({meaningful_blocked / meaningful_total * 100:.1f}%)"
         if meaningful_total > 0
         else ""
     )
@@ -932,7 +932,7 @@ def generate_report(
     if prompt_results:
         lines.append(
             f"路径B (LLM注入): {p_blocked}/{p_total} prompts 被成功拦截 "
-            f"({p_blocked/p_total*100:.1f}%)"
+            f"({p_blocked / p_total * 100:.1f}%)"
         )
 
     report = "\n".join(lines)
@@ -1003,7 +1003,7 @@ def main():
     logger.info("=" * 60)
 
     router = create_minimal_router()
-    direct_results: List[DirectTestResult] = []
+    direct_results: list[DirectTestResult] = []
     for payload in PAYLOADS:
         result = run_direct_payload(router, payload)
         direct_results.append(result)
@@ -1017,7 +1017,7 @@ def main():
             logger.warning(f"    ⚠ ESCAPED! {payload.description}")
 
     # ── 路径B: LLM Prompt 注入 (需要 async) ──
-    prompt_results: List[PromptTestResult] = []
+    prompt_results: list[PromptTestResult] = []
     if not args.direct_only:
         prompt_results = asyncio.run(_run_prompt_tests(prompt_runs=args.prompt_runs))
 
@@ -1067,10 +1067,10 @@ def main():
     logger.info(f"\n结果已保存到: {output_path}")
 
 
-async def _run_prompt_tests(prompt_runs: int) -> List[PromptTestResult]:
+async def _run_prompt_tests(prompt_runs: int) -> list[PromptTestResult]:
     """运行 LLM Prompt 注入测试 (async)。"""
     logger = get_logger()
-    prompt_results: List[PromptTestResult] = []
+    prompt_results: list[PromptTestResult] = []
 
     logger.info("\n" + "=" * 60)
     logger.info("路径B: LLM Prompt 注入攻击测试")
@@ -1124,7 +1124,7 @@ async def _run_prompt_tests(prompt_runs: int) -> List[PromptTestResult]:
                 prompt_results.append(result)
 
                 status_icon = "✓" if result.blocked else "✗"
-                run_tag = f"[run {run_idx+1}]" if prompt_runs > 1 else ""
+                run_tag = f"[run {run_idx + 1}]" if prompt_runs > 1 else ""
                 logger.info(
                     f"  {status_icon} [{injection.id}]{run_tag} {injection.category:<25} "
                     f"layer={result.block_layer:<15} "

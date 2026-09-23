@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Literal, Tuple
+from typing import Any, Literal
 
 SurfaceKind = Literal["report", "data"]
 
@@ -14,7 +14,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     pd = None
 
-OKABE_ITO: Tuple[str, ...] = (
+OKABE_ITO: tuple[str, ...] = (
     "#E69F00",
     "#56B4E9",
     "#009E73",
@@ -25,7 +25,7 @@ OKABE_ITO: Tuple[str, ...] = (
     "#000000",
 )
 
-REPORT_UI: Dict[str, str] = {
+REPORT_UI: dict[str, str] = {
     "text": "#1a1a1a",
     "text_muted": "#5e5e5e",
     "bg": "#ffffff",
@@ -41,7 +41,7 @@ REPORT_UI: Dict[str, str] = {
     "node_amber": "#e69f00",
 }
 
-FIGURE_MM: Dict[str, float] = {
+FIGURE_MM: dict[str, float] = {
     "single": 89.0,
     "wide": 120.0,
     "double": 183.0,
@@ -54,7 +54,7 @@ def mm_to_inches(mm: float) -> float:
 
 def report_figsize(
     width_mm: float = 120.0, aspect: float = 0.62
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     w = mm_to_inches(width_mm)
     return (w, w * aspect)
 
@@ -111,7 +111,7 @@ BRAND_TAGLINE_ZH = "多智能体社会仿真 · 分析报告"
 BRAND_TAGLINE_EN = "Multi-agent social simulation · Analysis report"
 
 
-def _brand_icon_candidates() -> Tuple[Path, ...]:
+def _brand_icon_candidates() -> tuple[Path, ...]:
     """Return supported source, installed-skill, and explicit icon locations."""
 
     here = Path(__file__).resolve()
@@ -268,7 +268,7 @@ def brand_lockup_html(
 </div>"""
 
 
-EDA_HUB_ENTRIES: Tuple[Dict[str, str], ...] = (
+EDA_HUB_ENTRIES: tuple[dict[str, str], ...] = (
     {
         "key": "quick-stats",
         "file": "eda_quick_stats.md",
@@ -359,7 +359,7 @@ EDA_HUB_ENTRIES: Tuple[Dict[str, str], ...] = (
     },
 )
 
-REPORT_TOOL_LINKS: Tuple[Dict[str, str], ...] = tuple(
+REPORT_TOOL_LINKS: tuple[dict[str, str], ...] = tuple(
     e for e in EDA_HUB_ENTRIES if e["key"] != "quick-stats"
 )
 
@@ -420,19 +420,19 @@ def report_design_tokens_css() -> str:
     u = REPORT_UI
     return f"""
     :root {{
-      --as-text: {u['text']};
-      --as-muted: {u['text_muted']};
-      --as-bg: {u['bg']};
-      --as-bg-subtle: {u['bg_subtle']};
-      --as-bg-warm: {u['bg_warm']};
-      --as-panel: {u['bg_panel']};
-      --as-border: {u['border']};
-      --as-border-light: {u['border_light']};
-      --as-accent: {u['accent']};
-      --as-link: {u['link']};
-      --as-blue: {u['node_blue']};
-      --as-green: {u['node_green']};
-      --as-amber: {u['node_amber']};
+      --as-text: {u["text"]};
+      --as-muted: {u["text_muted"]};
+      --as-bg: {u["bg"]};
+      --as-bg-subtle: {u["bg_subtle"]};
+      --as-bg-warm: {u["bg_warm"]};
+      --as-panel: {u["bg_panel"]};
+      --as-border: {u["border"]};
+      --as-border-light: {u["border_light"]};
+      --as-accent: {u["accent"]};
+      --as-link: {u["link"]};
+      --as-blue: {u["node_blue"]};
+      --as-green: {u["node_green"]};
+      --as-amber: {u["node_amber"]};
       --as-font-serif: "Source Serif 4", "Noto Serif SC", "Songti SC", serif;
       --as-font-sans: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
       --as-font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
@@ -777,13 +777,13 @@ def eda_datatable_css() -> str:
     .standalone-wrap {{ max-width: 100%; margin: 0; padding: 0 0 24px; }}
     .standalone-body {{ padding: 12px 24px 24px; }}
     .standalone-body h1 {{ font-size: 1.1rem; font-weight: 600; margin: 0 0 8px; }}
-    input {{ padding: 6px 10px; border: 1px solid {u['border']}; min-width: 220px; font-size: 0.88rem; border-radius: 2px; }}
-    .meta {{ font-size: 0.85rem; color: {u['text_muted']}; }}
-    .wrap {{ overflow: auto; border: 1px solid {u['border_light']}; background: {u['bg']}; border-radius: 2px; }}
+    input {{ padding: 6px 10px; border: 1px solid {u["border"]}; min-width: 220px; font-size: 0.88rem; border-radius: 2px; }}
+    .meta {{ font-size: 0.85rem; color: {u["text_muted"]}; }}
+    .wrap {{ overflow: auto; border: 1px solid {u["border_light"]}; background: {u["bg"]}; border-radius: 2px; }}
     table {{ border-collapse: collapse; width: 100%; font-size: 0.85rem; }}
-    th, td {{ border-bottom: 1px solid {u['border_light']}; padding: 8px 10px; text-align: left; white-space: nowrap; }}
-    th {{ background: {u['bg_panel']}; cursor: pointer; position: sticky; top: 0; font-weight: 600; }}
-    tr:hover td {{ background: {u['bg_subtle']}; }}
+    th, td {{ border-bottom: 1px solid {u["border_light"]}; padding: 8px 10px; text-align: left; white-space: nowrap; }}
+    th {{ background: {u["bg_panel"]}; cursor: pointer; position: sticky; top: 0; font-weight: 600; }}
+    tr:hover td {{ background: {u["bg_subtle"]}; }}
     .toolbar {{ margin: 12px 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }}
     """
     )
@@ -797,16 +797,16 @@ def eda_index_page_css() -> str:
     .index-shell {{ max-width: 720px; margin: 0 auto; padding: 0 0 32px; }}
     .index-body {{ padding: 16px 24px 28px; }}
     .index-body table {{ border-collapse: collapse; width: 100%; font-size: 0.9rem; }}
-    .index-body th, .index-body td {{ border: 1px solid {u['border_light']}; padding: 12px 14px; text-align: left; }}
-    .index-body th {{ background: {u['bg_panel']}; font-weight: 600; }}
-    .index-body tr:hover {{ background: {u['bg_subtle']}; }}
+    .index-body th, .index-body td {{ border: 1px solid {u["border_light"]}; padding: 12px 14px; text-align: left; }}
+    .index-body th {{ background: {u["bg_panel"]}; font-weight: 600; }}
+    .index-body tr:hover {{ background: {u["bg_subtle"]}; }}
     td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
     """
     )
 
 
-def plotly_report_layout(**overrides: Any) -> Dict[str, Any]:
-    layout: Dict[str, Any] = {
+def plotly_report_layout(**overrides: Any) -> dict[str, Any]:
+    layout: dict[str, Any] = {
         "template": "plotly_white",
         "font": {
             "family": "Arial, Helvetica, sans-serif",
@@ -848,7 +848,7 @@ def export_altair_html(
 
 
 def export_pygwalker_html(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     path: str | Path,
     *,
     embed_lib: bool = True,

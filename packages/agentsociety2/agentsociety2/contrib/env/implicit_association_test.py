@@ -2,10 +2,11 @@
 Implicit Association Test (IAT) Experiment Environment
 Environment for Implicit Association Test experiment based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -22,10 +23,19 @@ class TrialInfo(BaseModel):
     """Response model for get_next_trial() function"""
 
     trial_id: int = Field(..., description="Trial ID (sequential number)")
-    block_code: str = Field(..., description="Block code (identity_practice, valence_practice, congruent, identity_switch, incongruent)")
+    block_code: str = Field(
+        ...,
+        description="Block code (identity_practice, valence_practice, congruent, identity_switch, incongruent)",
+    )
     stimuli: str = Field(..., description="Stimulus word (in Chinese)")
-    identity: Optional[str] = Field(None, description="Identity category (1=self, 2=others, or None if not applicable)")
-    valence: Optional[str] = Field(None, description="Valence category (1=positive, 2=negative, or None if not applicable)")
+    identity: str | None = Field(
+        None,
+        description="Identity category (1=self, 2=others, or None if not applicable)",
+    )
+    valence: str | None = Field(
+        None,
+        description="Valence category (1=positive, 2=negative, or None if not applicable)",
+    )
     left_label: str = Field(..., description="Left label")
     right_label: str = Field(..., description="Right label")
     correct_key: str = Field(..., description="Correct response key (z or m)")
@@ -46,6 +56,11 @@ class SubmitTrialResponse(BaseModel):
 class ImplicitAssociationTestEnv(EnvBase):
     """Environment for Implicit Association Test (IAT) experiment based on AgentSociety2"""
 
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
+
     _agent_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("completed_trials", "INTEGER", nullable=False),
         ColumnDef("total_trials", "INTEGER", nullable=False),
@@ -60,150 +75,1202 @@ class ImplicitAssociationTestEnv(EnvBase):
     # or generated according to IAT protocol
     STANDARD_TRIALS: ClassVar[list[dict]] = [
         # Block 1: Identity Practice (12 trials)
-        {"block_code": "identity_practice", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "identity_practice", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "identity_practice", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "identity_practice", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "identity_practice", "stimuli": "本人", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "identity_practice", "stimuli": "他", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "identity_practice", "stimuli": "我的", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "identity_practice", "stimuli": "别人", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "identity_practice", "stimuli": "自个", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "identity_practice", "stimuli": "她", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "identity_practice", "stimuli": "俺", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "identity_practice", "stimuli": "他的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-
+        {
+            "block_code": "identity_practice",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "本人",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "他",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "我的",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "别人",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "自个",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "她",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "俺",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_practice",
+            "stimuli": "他的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
         # Block 2: Valence Practice (12 trials)
-        {"block_code": "valence_practice", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "valence_practice", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "valence_practice", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "valence_practice", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "valence_practice", "stimuli": "友好", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "valence_practice", "stimuli": "冷漠", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "valence_practice", "stimuli": "诚实", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "valence_practice", "stimuli": "自私", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "valence_practice", "stimuli": "慷慨", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "valence_practice", "stimuli": "卑鄙", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "valence_practice", "stimuli": "真诚", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "valence_practice", "stimuli": "狡猾", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-
+        {
+            "block_code": "valence_practice",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "友好",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "冷漠",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "诚实",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "自私",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "慷慨",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "卑鄙",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "真诚",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "valence_practice",
+            "stimuli": "狡猾",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
         # Block 3: Congruent (self+positive, others+negative) - 48 trials
         # Mix of identity and valence words
-        {"block_code": "congruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "others", "right_label": "self", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "negative", "right_label": "positive", "correct_key": "m"},
-        {"block_code": "congruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-        {"block_code": "congruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "negative", "right_label": "positive", "correct_key": "z"},
-
+        {
+            "block_code": "congruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "others",
+            "right_label": "self",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "congruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "negative",
+            "right_label": "positive",
+            "correct_key": "z",
+        },
         # Block 4: Identity Switch (12 trials)
-        {"block_code": "identity_switch", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "identity_switch", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "identity_switch", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "identity_switch", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "identity_switch", "stimuli": "本人", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "identity_switch", "stimuli": "他", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "identity_switch", "stimuli": "我的", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "identity_switch", "stimuli": "别人", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "identity_switch", "stimuli": "自个", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "identity_switch", "stimuli": "她", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "identity_switch", "stimuli": "俺", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "identity_switch", "stimuli": "他的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-
+        {
+            "block_code": "identity_switch",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "本人",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "他",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "我的",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "别人",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "自个",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "她",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "俺",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "identity_switch",
+            "stimuli": "他的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
         # Block 5: Incongruent (self+negative, others+positive) - 48 trials
-        {"block_code": "incongruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "他们", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "虚伪", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "可靠", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "自我", "identity": "1", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "她的", "identity": "2", "valence": None, "left_label": "self", "right_label": "others", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "吝啬", "identity": None, "valence": "2", "left_label": "positive", "right_label": "negative", "correct_key": "m"},
-        {"block_code": "incongruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
-        {"block_code": "incongruent", "stimuli": "善良", "identity": None, "valence": "1", "left_label": "positive", "right_label": "negative", "correct_key": "z"},
+        {
+            "block_code": "incongruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "他们",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "虚伪",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "可靠",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "自我",
+            "identity": "1",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "她的",
+            "identity": "2",
+            "valence": None,
+            "left_label": "self",
+            "right_label": "others",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "吝啬",
+            "identity": None,
+            "valence": "2",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "m",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
+        {
+            "block_code": "incongruent",
+            "stimuli": "善良",
+            "identity": None,
+            "valence": "1",
+            "left_label": "positive",
+            "right_label": "negative",
+            "correct_key": "z",
+        },
     ]
 
-    def __init__(self, agent_ids: List[int], trials: Optional[List[Dict]] = None):
+    def __init__(self, agent_ids: list[int], trials: list[dict] | None = None):
         """
         Initialize the Implicit Association Test environment.
 
@@ -220,12 +1287,10 @@ class ImplicitAssociationTestEnv(EnvBase):
         self.total_trials = len(self.trials)
 
         # Track progress for each agent: {agent_id: current_trial_index}
-        self._trial_progress: Dict[int, int] = {
-            agent_id: 0 for agent_id in agent_ids
-        }
+        self._trial_progress: dict[int, int] = {agent_id: 0 for agent_id in agent_ids}
 
         # Store responses: {agent_id: [{trial_id, key_press, rt, corr, ...}]}
-        self._responses: Dict[int, List[Dict]] = {
+        self._responses: dict[int, list[dict]] = {
             agent_id: [] for agent_id in agent_ids
         }
 
@@ -259,8 +1324,12 @@ class ImplicitAssociationTestEnv(EnvBase):
         if not state_path.is_file():
             return False
         d = json.loads(state_path.read_text(encoding="utf-8"))
-        self._trial_progress = {aid: int(v) for aid, v in load_int_map(d.get("trial_progress")).items()}
-        self._responses = {aid: list(v) for aid, v in load_int_map(d.get("responses")).items()}
+        self._trial_progress = {
+            aid: int(v) for aid, v in load_int_map(d.get("trial_progress")).items()
+        }
+        self._responses = {
+            aid: list(v) for aid, v in load_int_map(d.get("responses")).items()
+        }
         self._step_counter = int(d.get("step_counter", 0))
         return True
 
@@ -290,8 +1359,13 @@ class ImplicitAssociationTestEnv(EnvBase):
     @classmethod
     def description(cls) -> str:
         """Return a short module description."""
-        return "Implicit Association Test environment for measuring implicit associations."
-    def _get_instruction(self, block_code: str, identity: Optional[str], valence: Optional[str]) -> str:
+        return (
+            "Implicit Association Test environment for measuring implicit associations."
+        )
+
+    def _get_instruction(
+        self, block_code: str, identity: str | None, valence: str | None
+    ) -> str:
         """Generate instruction text for a trial"""
         if block_code == "identity_practice":
             return "Categorize the word as 'self' (press m) or 'others' (press z)"
@@ -337,7 +1411,7 @@ class ImplicitAssociationTestEnv(EnvBase):
             instruction = self._get_instruction(
                 trial_data["block_code"],
                 trial_data.get("identity"),
-                trial_data.get("valence")
+                trial_data.get("valence"),
             )
 
             return TrialInfo(
@@ -382,7 +1456,9 @@ class ImplicitAssociationTestEnv(EnvBase):
                 )
 
             if expected_index >= self.total_trials:
-                raise ValueError(f"Trial ID {trial_id} is out of range. Total trials: {self.total_trials}")
+                raise ValueError(
+                    f"Trial ID {trial_id} is out of range. Total trials: {self.total_trials}"
+                )
 
             # Validate key_press
             key_press = key_press.lower().strip()
@@ -392,8 +1468,7 @@ class ImplicitAssociationTestEnv(EnvBase):
             # Validate rt (should be positive and reasonable)
             if rt < 0:
                 rt = 0.0
-            if rt > 10.0:  # Cap at 10 seconds
-                rt = 10.0
+            rt = min(rt, 10.0)
 
             # Get trial data
             trial_data = self.trials[expected_index]
@@ -435,7 +1510,7 @@ class ImplicitAssociationTestEnv(EnvBase):
             )
 
     @tool(readonly=True, kind="observe")
-    async def get_my_progress(self, agent_id: int) -> Dict:
+    async def get_my_progress(self, agent_id: int) -> dict:
         """
         Get progress for a specific agent.
 
@@ -465,13 +1540,15 @@ class ImplicitAssociationTestEnv(EnvBase):
                 "agent_id": agent_id,
                 "completed_trials": completed,
                 "total_trials": self.total_trials,
-                "progress_percent": (completed / self.total_trials * 100) if self.total_trials > 0 else 0,
+                "progress_percent": (completed / self.total_trials * 100)
+                if self.total_trials > 0
+                else 0,
                 "accuracy": accuracy,
                 "average_rt": avg_rt,
             }
 
     @tool(readonly=True, kind="statistics")
-    async def get_all_progress(self) -> Dict[int, Dict]:
+    async def get_all_progress(self) -> dict[int, dict]:
         """
         Get progress for all agents.
 
@@ -495,7 +1572,9 @@ class ImplicitAssociationTestEnv(EnvBase):
                 result[agent_id] = {
                     "completed_trials": completed,
                     "total_trials": self.total_trials,
-                    "progress_percent": (completed / self.total_trials * 100) if self.total_trials > 0 else 0,
+                    "progress_percent": (completed / self.total_trials * 100)
+                    if self.total_trials > 0
+                    else 0,
                     "accuracy": accuracy,
                     "average_rt": avg_rt,
                 }
@@ -525,7 +1604,9 @@ class ImplicitAssociationTestEnv(EnvBase):
                 responses = self._responses[agent_id]
                 completed_trials = self._trial_progress[agent_id]
                 if responses:
-                    correct_count = sum(1 for response in responses if response["corr"] == 1)
+                    correct_count = sum(
+                        1 for response in responses if response["corr"] == 1
+                    )
                     accuracy = correct_count / len(responses)
                     average_rt = sum(response["rt"] for response in responses) / len(
                         responses
@@ -557,7 +1638,7 @@ class ImplicitAssociationTestEnv(EnvBase):
         )
         self._step_counter += 1
 
-    def get_results(self) -> Dict[int, List[Dict]]:
+    def get_results(self) -> dict[int, list[dict]]:
         """
         Get all trial responses (synchronous method for result extraction).
 
@@ -567,5 +1648,6 @@ class ImplicitAssociationTestEnv(EnvBase):
             agent_id: [response.copy() for response in responses]
             for agent_id, responses in self._responses.items()
         }
+
 
 __all__ = ["ImplicitAssociationTestEnv", "SubmitTrialResponse", "TrialInfo"]

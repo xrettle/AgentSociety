@@ -10,6 +10,7 @@ tool / react) has been pushed down into ``agent.base``.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -124,7 +125,7 @@ Minimal config example:
     async def restore(
         self,
         workspace_path: Path,
-        service_proxy: "ServiceProxy",
+        service_proxy: ServiceProxy,
     ) -> None:
         """Restore base state, then build person-specific runtime (memory).
 
@@ -134,7 +135,10 @@ Minimal config example:
         """
         await super().restore(workspace_path, service_proxy)
         self._apply_person_config()
-        self._world_description: str = ""
+        meta = json.loads(
+            (Path(workspace_path) / "AGENT.json").read_text(encoding="utf-8")
+        )
+        self._world_description = str(meta.get("world_description") or "")
         self._build_memory_runtime()
 
     def _build_memory_runtime(self) -> None:
@@ -211,6 +215,7 @@ Minimal config example:
         """Build AGENT.json with person-specific memory / skill fields."""
         data = super().build_agent_json(tick=tick, t=t)
         # Enrich with person-specific memory + skill-disabled/default fields.
+        data["world_description"] = self._world_description
         data["skills"] = {
             "visible": sorted(self.skill_runtime.visible_skill_ids()),
             "activated": sorted(self.skill_runtime.activated_skill_ids()),
@@ -222,6 +227,17 @@ Minimal config example:
             "summary_path": "MEMORY.md" if self._enable_memory else None,
             "episodes_path": "memory/episodes.jsonl" if self._enable_memory else None,
         }
+        return data
+
+    def build_prompt_agent_view(
+        self,
+        *,
+        tick: int | None,
+        t: datetime | None,
+    ) -> dict[str, Any]:
+        """Prompt ``<agent>`` view; world text stays in the separate ``<world>`` block."""
+        data = super().build_prompt_agent_view(tick=tick, t=t)
+        data.pop("world_description", None)
         return data
 
     # ==================== TODO helpers ====================
@@ -298,7 +314,9 @@ Minimal config example:
         )
 
         return {
-            "finish": finish_ask_tool_schema() if readonly else finish_step_tool_schema()
+            "finish": finish_ask_tool_schema()
+            if readonly
+            else finish_step_tool_schema()
         }
 
     def _dispatch_memory_tool(
@@ -484,7 +502,6 @@ Minimal config example:
             },
         ) as span:
             self._refresh_visible_skills()
-            self.persist_agent_json(tick=tick, t=t)
 
             initial_obs: list[dict[str, Any]] = []
             pre_hooks = await self.run_lifecycle_hooks("pre_step", tick=tick, t=t)

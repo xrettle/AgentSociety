@@ -2,7 +2,7 @@
 Social Media Environment Models
 """
 
-from .models import SocialMediaPerson, Post, Comment
+from .models import Comment, Post, SocialMediaPerson
 from .recommend import RecommendationEngine
 from .social_media_space import SocialMediaSpace
 

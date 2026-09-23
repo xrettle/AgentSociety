@@ -13,9 +13,9 @@
 :titlesonly:
 :maxdepth: 3
 
+agentsociety.commercial.executor
 agentsociety.commercial.auth
 agentsociety.commercial.billing
-agentsociety.commercial.executor
 ```
 
 ## Package Contents

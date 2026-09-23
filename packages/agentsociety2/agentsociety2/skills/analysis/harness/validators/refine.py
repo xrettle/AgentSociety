@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def validate_refine(
-    state: "HypothesisAnalysisState",
+    state: HypothesisAnalysisState,
     workspace: Path,
     hypothesis_id: str,
 ) -> ValidationResult:

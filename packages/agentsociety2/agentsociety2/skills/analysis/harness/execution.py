@@ -9,10 +9,11 @@ import socket
 import sys
 import time
 import uuid
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, Literal, Mapping, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -44,7 +45,7 @@ ReceiptStatus = Literal[
 ]
 
 _SUCCESS_STATUSES = {"SUCCEEDED", "SKIPPED", "UNCHANGED"}
-_RESULT_STATUS_MAP: Dict[str, OutcomeStatus] = {
+_RESULT_STATUS_MAP: dict[str, OutcomeStatus] = {
     "BLOCKED": "BLOCKED",
     "FAILED": "FAILED",
     "SKIPPED": "SKIPPED",
@@ -123,10 +124,10 @@ class OperationOutcome(BaseModel):
     started_at: datetime
     completed_at: datetime
     duration_ms: int = 0
-    preflight: Optional[Dict[str, Any]] = None
-    result: Dict[str, Any] = Field(default_factory=dict)
-    error: Optional[OperationFailure] = None
-    artifact_fingerprints: Dict[str, str] = Field(default_factory=dict)
+    preflight: dict[str, Any] | None = None
+    result: dict[str, Any] = Field(default_factory=dict)
+    error: OperationFailure | None = None
+    artifact_fingerprints: dict[str, str] = Field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -156,12 +157,12 @@ class OperationRunReceipt(BaseModel):
     experiment_id: str = ""
     input_names: tuple[str, ...] = Field(default_factory=tuple)
     input_fingerprint: str
-    safe_inputs: Dict[str, Any] = Field(default_factory=dict)
-    preflight: Optional[Dict[str, Any]] = None
-    result_summary: Dict[str, Any] = Field(default_factory=dict)
-    error: Optional[OperationFailure] = None
+    safe_inputs: dict[str, Any] = Field(default_factory=dict)
+    preflight: dict[str, Any] | None = None
+    result_summary: dict[str, Any] = Field(default_factory=dict)
+    error: OperationFailure | None = None
     declared_artifacts: tuple[str, ...] = Field(default_factory=tuple)
-    artifact_fingerprints: Dict[str, str] = Field(default_factory=dict)
+    artifact_fingerprints: dict[str, str] = Field(default_factory=dict)
     repeatable: bool = True
     retryable: bool = False
     recommended_action: str = ""
@@ -169,7 +170,7 @@ class OperationRunReceipt(BaseModel):
     hostname: str = ""
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     duration_ms: int = 0
 
 
@@ -230,7 +231,7 @@ def _input_fingerprint(
     spec: AnalysisOperationSpec,
     values: Mapping[str, Any],
 ) -> str:
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
     declared_names = {input_spec.name for input_spec in spec.inputs}
     for input_spec in spec.inputs:
         if input_spec.name in values:
@@ -314,7 +315,7 @@ def operation_lock(path: Path) -> Iterator[bool]:
         os.close(fd)
 
 
-def _safe_inputs(values: Mapping[str, Any]) -> Dict[str, Any]:
+def _safe_inputs(values: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: _jsonable(value)
         for key, value in values.items()
@@ -355,8 +356,8 @@ def _redact_message(message: str, values: Mapping[str, Any]) -> str:
     return redacted
 
 
-def _safe_result_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
-    summary: Dict[str, Any] = {}
+def _safe_result_summary(result: Mapping[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
     for key in sorted(_SAFE_RESULT_KEYS):
         if key not in result:
             continue
@@ -546,10 +547,8 @@ def _result_error(
 def _candidate_result_paths(result: Mapping[str, Any]) -> Iterable[str]:
     for key, value in result.items():
         normalized_key = key.lower()
-        is_path_key = (
-            normalized_key in _RESULT_PATH_KEYS
-            or normalized_key.endswith("_path")
-            or normalized_key.endswith("_paths")
+        is_path_key = normalized_key in _RESULT_PATH_KEYS or normalized_key.endswith(
+            ("_path", "_paths")
         )
         if not is_path_key:
             continue
@@ -580,7 +579,7 @@ def _declared_artifact_paths(
 def _hash_workspace_files(
     workspace: Path,
     paths: Iterable[Path],
-) -> Dict[str, str]:
+) -> dict[str, str]:
     workspace = workspace.resolve()
     files: set[Path] = set()
     for path in paths:
@@ -608,7 +607,7 @@ def collect_operation_artifacts(
     workspace: Path,
     values: Mapping[str, Any],
     result: Mapping[str, Any],
-) -> Dict[str, str]:
+) -> dict[str, str]:
     paths = list(_declared_artifact_paths(spec, workspace, values))
     for raw_path in _candidate_result_paths(result):
         path = Path(raw_path)
@@ -770,7 +769,7 @@ def _execute_available_operation(
         receipt.status = "RUNNING"
         save_run_receipt(workspace, receipt)
 
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     error: OperationFailure | None = None
     try:
         result = dict(_jsonable(dict(invoke())))
@@ -788,7 +787,7 @@ def _execute_available_operation(
             retryable=spec.repeatable,
         )
 
-    artifact_fingerprints: Dict[str, str] = {}
+    artifact_fingerprints: dict[str, str] = {}
     if workspace is not None and workspace.is_dir():
         try:
             artifact_fingerprints = collect_operation_artifacts(

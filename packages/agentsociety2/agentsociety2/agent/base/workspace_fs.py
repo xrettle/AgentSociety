@@ -335,7 +335,7 @@ class WorkspaceFS:
                 proc.communicate(),
                 timeout=timeout_sec,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return CommandResult(

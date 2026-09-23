@@ -35,37 +35,32 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime
-from typing import (
-    Tuple,
-    Dict,
-    Any,
-    List,
-    Literal,
-    overload,
-    Optional,
-    TYPE_CHECKING,
-    Type,
-    TypeVar,
-)
 from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Optional,
+    TypeVar,
+    overload,
+)
 
 if TYPE_CHECKING:
     from agentsociety2.storage import ReplayWriter
 
-from pydantic import BaseModel, ValidationError
+import black
+import json_repair
+import yaml
 from litellm import AllMessageValues
 from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 from litellm.types.utils import ModelResponse
-import yaml
+from pydantic import BaseModel, ValidationError
 
+from agentsociety2.config import LLMDispatchError, extract_json, get_model_name
 from agentsociety2.env.base import EnvBase
-from agentsociety2.config import LLMDispatchError, get_model_name, extract_json
-from agentsociety2.logger import get_logger
 from agentsociety2.env.function_parser import FunctionParser, FunctionParts
 from agentsociety2.env.pydantic_collector import PydanticModelCollector
-
-import black
-import json_repair
+from agentsociety2.logger import get_logger
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -93,13 +88,7 @@ def _env_skill_catalog_row(skill_md: Path, *, module_name: str) -> str:
 
 def _empty_env_skill_catalog() -> str:
     """Return an empty Markdown table for environment skill catalog prompts."""
-    return "\n".join(
-        [
-            "| name | env_module | description |",
-            "| --- | --- | --- |",
-            "| - | - | No environment skills were declared by modules. |",
-        ]
-    )
+    return "| name | env_module | description |\n| --- | --- | --- |\n| - | - | No environment skills were declared by modules. |"
 
 
 class TokenUsageStats(BaseModel):
@@ -120,7 +109,7 @@ class TokenUsageStats(BaseModel):
 
     @property
     def cache_hit_rate(self) -> float:
-        """:returns: ``cached_input_tokens / input_tokens``, clamped to [0, 1]."""
+        """Return ``cached_input_tokens / input_tokens``, clamped to ``[0, 1]``."""
         if self.input_tokens <= 0:
             return 0.0
         return max(0.0, min(1.0, self.cached_input_tokens / self.input_tokens))
@@ -166,11 +155,11 @@ class ModuleToolsInfo(BaseModel):
     """
 
     description: str
-    tools: List[ToolInfo]
+    tools: list[ToolInfo]
 
 
 # ToolsInfoDict is just a type alias for Dict[str, ModuleToolsInfo]
-ToolsInfoDict = Dict[str, ModuleToolsInfo]
+ToolsInfoDict = dict[str, ModuleToolsInfo]
 
 
 class RouterBase(ABC):
@@ -190,7 +179,7 @@ class RouterBase(ABC):
         max_steps: int = 10,
         max_llm_call_retry: int = 10,
         replay_writer: Optional["ReplayWriter"] = None,
-        llm_clients_spec: Optional[Dict[str, Any]] = None,
+        llm_clients_spec: dict[str, Any] | None = None,
     ):
         """创建路由器实例。
 
@@ -216,8 +205,8 @@ class RouterBase(ABC):
         from agentsociety2.config.llm_dispatcher import build_client_for_role
 
         self._coder_dispatcher = spec.get("coder") or build_client_for_role("coder")
-        self._summary_dispatcher = (
-            spec.get("default") or build_client_for_role("default")
+        self._summary_dispatcher = spec.get("default") or build_client_for_role(
+            "default"
         )
 
         self.env_modules = env_modules
@@ -289,7 +278,7 @@ class RouterBase(ABC):
         message = ""
         try:
             yield
-        except Exception as exc:  # noqa: BLE001 - record then re-raise
+        except Exception as exc:
             status = "error"
             message = str(exc)
             raise
@@ -321,8 +310,10 @@ class RouterBase(ABC):
             }
             try:
                 sink.append_record(record)
-            except Exception:  # noqa: BLE001 - never let tracing break the call
-                get_logger().debug("Failed to append trace record to sink", exc_info=True)
+            except Exception:
+                get_logger().debug(
+                    "Failed to append trace record to sink", exc_info=True
+                )
 
     def _add_current_time_to_ctx(self, ctx: dict) -> None:
         """向 ctx 注入当前时间信息（原地修改）。"""
@@ -356,7 +347,7 @@ class RouterBase(ABC):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """与环境交互的统一入口（由子类实现具体路由策略）。
 
         :param ctx: 上下文字典。模板模式下可包含 ``variables``，用于 ``{var}`` 替换。
@@ -426,7 +417,7 @@ class RouterBase(ABC):
                 continue
             try:
                 restored = await module.restore(module._workspace_root)
-            except Exception as exc:  # noqa: BLE001 - 单模块失败不中断整体 resume
+            except Exception as exc:
                 get_logger().error(
                     "Env module %s restore failed (will start fresh): %s",
                     module.name,
@@ -462,12 +453,12 @@ class RouterBase(ABC):
                     "Env module %s to_workspace failed: %s", module.name, result
                 )
 
-    def get_tool_call_history(self) -> List[Dict[str, Any]]:
+    def get_tool_call_history(self) -> list[dict[str, Any]]:
         """汇总所有环境模块的工具调用历史（按时间排序）。
 
         :returns: 调用记录列表（按 ``timestamp`` 升序）。
         """
-        all_history: List[Dict[str, Any]] = []
+        all_history: list[dict[str, Any]] = []
         for env_module in self.env_modules:
             module_name = env_module.name
             module_history = env_module.get_tool_call_history()
@@ -541,8 +532,7 @@ class RouterBase(ABC):
         messages: list[AllMessageValues],
         stream: Literal[False] = False,
         **kwargs: Any,
-    ) -> ModelResponse:
-        ...
+    ) -> ModelResponse: ...
 
     @overload
     async def acompletion(
@@ -551,8 +541,7 @@ class RouterBase(ABC):
         messages: list[AllMessageValues],
         stream: Literal[True] = True,
         **kwargs: Any,
-    ) -> CustomStreamWrapper:
-        ...
+    ) -> CustomStreamWrapper: ...
 
     async def acompletion(
         self,
@@ -630,7 +619,7 @@ class RouterBase(ABC):
     async def acompletion_with_pydantic_validation(
         self,
         model: Literal["coder", "summary"],
-        model_type: Type[T],
+        model_type: type[T],
         messages: list[AllMessageValues],
         max_retries: int = 10,
         base_delay: float = 1.0,
@@ -818,7 +807,7 @@ Your corrected response:
                 dispatcher.take_token_stats()
 
     @staticmethod
-    def get_status_descriptions() -> Dict[str, str]:
+    def get_status_descriptions() -> dict[str, str]:
         """
         Get standard status descriptions.
 
@@ -997,7 +986,7 @@ Generated world description:"""
             tool_kinds_dict = getattr(module.__class__, "_tool_kinds", {})
             readonly_tools_dict = getattr(module.__class__, "_readonly_tools", {})
 
-            tools_list: List[ToolInfo] = []
+            tools_list: list[ToolInfo] = []
             for tool in all_module_tools:
                 func_info = tool["function"]
                 tool_name = func_info["name"]
@@ -1058,7 +1047,7 @@ Generated world description:"""
         filtered_info: ToolsInfoDict = {}
 
         for module_name, module_data in tools_info.items():
-            filtered_tools: List[ToolInfo] = []
+            filtered_tools: list[ToolInfo] = []
 
             for tool_info in module_data.tools:
                 # 根据 readonly 过滤
@@ -1079,7 +1068,7 @@ Generated world description:"""
 
         return filtered_info
 
-    def get_collected_pydantic_models(self) -> Dict[Type[BaseModel], str]:
+    def get_collected_pydantic_models(self) -> dict[type[BaseModel], str]:
         """
         获取已收集的所有 Pydantic BaseModel 类型及其源代码。
 
@@ -1108,7 +1097,7 @@ Generated world description:"""
         pydantic_models = self.get_collected_pydantic_models()
 
         # 构建输出
-        lines: List[str] = []
+        lines: list[str] = []
         lines.append("# Type definitions for environment modules")
         lines.append("from pydantic import BaseModel, Field")
         lines.append(
@@ -1182,7 +1171,7 @@ Generated world description:"""
         """
         pydantic_models = self.get_collected_pydantic_models()
 
-        lines: List[str] = []
+        lines: list[str] = []
         lines.append("# Type definitions for environment modules")
         lines.append("from pydantic import BaseModel, Field")
         lines.append(
@@ -1253,7 +1242,7 @@ Generated world description:"""
         """
         pydantic_models = self.get_collected_pydantic_models()
 
-        lines: List[str] = []
+        lines: list[str] = []
         lines.append("# Type definitions for environment modules")
         lines.append("from pydantic import BaseModel, Field")
         lines.append(
@@ -1323,7 +1312,7 @@ Generated world description:"""
         :returns: 格式化的 Python 代码字符串。
         """
 
-        lines: List[str] = []
+        lines: list[str] = []
         lines.append("# Type definitions for environment modules")
         lines.append("from pydantic import BaseModel, Field")
         lines.append(
@@ -1378,11 +1367,11 @@ Generated world description:"""
         self,
         ctx: dict,
         instruction: str,
-        results: Dict[str, Any],
+        results: dict[str, Any],
         process_text: str | None = None,
         status: str = "unknown",
         error: str | None = None,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """
         根据用户输入和Router输出生成最终答案。
 
@@ -1487,7 +1476,7 @@ Final Answer:"""
         # logger.info(prompt)
         # logger.info("--------------------------------")
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         response = await self.acompletion_with_pydantic_validation(
             model="summary",

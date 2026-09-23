@@ -23,6 +23,7 @@ pip install "agentsociety==1.3.7"
 AgentSociety的Python程序包不区分操作系统与体系结构，请保证运行环境符合[前置准备](./01-prerequisites.md)中的要求，否则将在运行过程中出错。
 ```
 
+(prep)=
 ## 使用前准备
 
 完成AgentSociety的安装后，在命令行中可以输入`agentsociety`命令检查是否安装成功，如果出现以下内容说明安装成功：

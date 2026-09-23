@@ -1,4 +1,3 @@
-# ruff: noqa: F841
 """
 Demo script for mobility environment.
 
@@ -10,10 +9,11 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 
+from dotenv import load_dotenv
+
 from agentsociety2.contrib.env.global_information import GlobalInformationEnv
 from agentsociety2.contrib.env.mobility_space import MobilitySpace
-from agentsociety2.env import EnvBase, CodeGenRouter
-from dotenv import load_dotenv
+from agentsociety2.env import CodeGenRouter, EnvBase
 
 # Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
@@ -56,7 +56,7 @@ async def main():
     print(env_router._writable_tools_xml)
     print("--------------------------------")
     await env_router.init(start_t)
-    ctx, answer = await env_router.ask(
+    _, answer = await env_router.ask(
         {"id": 1},
         "Go to restaurant",
         readonly=False,
@@ -64,7 +64,7 @@ async def main():
     print(answer)
 
     await env_router.step(100, start_t + timedelta(seconds=100))
-    ctx, answer = await env_router.ask(
+    _ctx, answer = await env_router.ask(
         {"id": 1},
         "go to restaurant",
         readonly=False,

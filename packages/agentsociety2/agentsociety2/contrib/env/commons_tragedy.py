@@ -2,10 +2,11 @@
 Commons Tragedy Game Environment
 Environment for Tragedy of the Commons game based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -37,13 +38,18 @@ class GetRoundHistoryResponse(BaseModel):
 
     round: int = Field(..., description="Round number")
     pool_before_round: int = Field(..., description="Pool before round")
-    extractions: Dict[str, int] = Field(..., description="Extractions by agent name")
+    extractions: dict[str, int] = Field(..., description="Extractions by agent name")
     pool_after_round: int = Field(..., description="Pool after round")
-    payoffs: Dict[str, int] = Field(..., description="Payoffs by agent name")
+    payoffs: dict[str, int] = Field(..., description="Payoffs by agent name")
 
 
 class CommonsTragedyEnv(EnvBase):
     """Environment for Tragedy of the Commons game based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _env_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("round_number", "INTEGER", nullable=False),
@@ -75,10 +81,10 @@ class CommonsTragedyEnv(EnvBase):
 
         self.current_pool_resources = self.initial_pool_resources
         self.round_number = 0
-        self.round_history: List[dict] = []
+        self.round_history: list[dict] = []
 
         # Pending extractions for current round (agent_name -> extraction)
-        self._pending_extractions: Dict[str, int] = {}
+        self._pending_extractions: dict[str, int] = {}
 
         # Track which agents have submitted in current round
         self._agents_submitted_in_current_round: set = set()
@@ -120,7 +126,9 @@ class CommonsTragedyEnv(EnvBase):
         if not state_path.is_file():
             return False
         d = json.loads(state_path.read_text(encoding="utf-8"))
-        self.current_pool_resources = d.get("current_pool_resources", self.current_pool_resources)
+        self.current_pool_resources = d.get(
+            "current_pool_resources", self.current_pool_resources
+        )
         self.round_number = int(d.get("round_number", 0))
         self.round_history = list(d.get("round_history", []))
         self._pending_extractions = dict(d.get("pending_extractions", {}))
@@ -156,6 +164,7 @@ class CommonsTragedyEnv(EnvBase):
     def description(cls) -> str:
         """Return a short module description."""
         return "Commons Tragedy game environment for shared-pool resource extraction decisions."
+
     @tool(readonly=True, kind="observe")
     async def get_pool_resources(self) -> GetPoolResourcesResponse:
         """
@@ -219,9 +228,7 @@ class CommonsTragedyEnv(EnvBase):
         self, requested_extractions: dict, pool_before: int
     ) -> tuple[dict, int, int]:
         """Calculate actual extractions considering resource pool capacity limits"""
-        actual_extractions = {
-            agent_name: 0 for agent_name in requested_extractions.keys()
-        }
+        actual_extractions = {agent_name: 0 for agent_name in requested_extractions}
         total_requested = sum(requested_extractions.values())
         total_actual_extracted = 0
 
@@ -243,7 +250,7 @@ class CommonsTragedyEnv(EnvBase):
                             - actual_extractions[name],
                             name,
                         )
-                        for name in requested_extractions.keys()
+                        for name in requested_extractions
                     ]
                     fractional_parts.sort(key=lambda x: x[0], reverse=True)
 
@@ -260,13 +267,12 @@ class CommonsTragedyEnv(EnvBase):
                 total_actual_extracted = total_requested
 
         remaining_pool = pool_before - total_actual_extracted
-        if remaining_pool < 0:
-            remaining_pool = 0
+        remaining_pool = max(remaining_pool, 0)
 
         return actual_extractions, total_actual_extracted, remaining_pool
 
     @tool(readonly=True)
-    async def get_round_history(self, round_num: Optional[int] = None) -> List[dict]:
+    async def get_round_history(self, round_num: int | None = None) -> list[dict]:
         """
         Get round history.
 
@@ -281,9 +287,7 @@ class CommonsTragedyEnv(EnvBase):
         """
         async with self._lock:
             if round_num is not None:
-                return [
-                    r for r in self.round_history if r.get("round") == round_num
-                ]
+                return [r for r in self.round_history if r.get("round") == round_num]
             return self.round_history.copy()
 
     async def init(self, start_datetime: datetime):
@@ -363,5 +367,6 @@ class CommonsTragedyEnv(EnvBase):
             max_extraction_per_agent=self.max_extraction_per_agent,
         )
         self._step_counter += 1
+
 
 __all__ = ["CommonsTragedyEnv"]

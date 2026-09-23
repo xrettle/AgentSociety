@@ -63,18 +63,14 @@ def test_step_finish_rejects_empty_memories():
 
 def test_step_finish_rejects_missing_memories():
     agent = _agent()
-    decisions, error = agent._build_react_decisions(
-        [("finish", {})], readonly=False
-    )
+    decisions, error = agent._build_react_decisions([("finish", {})], readonly=False)
     assert decisions == []
     assert error
 
 
 def test_step_finish_accepts_nonempty_memories():
     agent = _agent()
-    memories = [
-        {"type": "observation", "importance": 0.5, "text": "ate lunch"}
-    ]
+    memories = [{"type": "observation", "importance": 0.5, "text": "ate lunch"}]
     decisions, error = agent._build_react_decisions(
         [("finish", {"memories": memories})], readonly=False
     )
@@ -174,7 +170,9 @@ def _native_response(*calls):
 def test_parse_react_responses_still_returns_a_pair():
     """The pair-returning parser is the shape callers and tests depend on."""
     agent = _agent()
-    result = agent._parse_react_responses(_native_response(("c1", "read", '{"path": "a"}')))
+    result = agent._parse_react_responses(
+        _native_response(("c1", "read", '{"path": "a"}'))
+    )
     assert isinstance(result, tuple) and len(result) == 2
     decisions, error = result
     assert error == ""
@@ -184,7 +182,9 @@ def test_parse_react_responses_still_returns_a_pair():
 def test_parse_turn_surfaces_native_call_ids():
     agent = _agent()
     turn = agent._parse_react_turn(
-        _native_response(("c1", "read", '{"path": "a"}'), ("c2", "grep", '{"pattern": "p"}'))
+        _native_response(
+            ("c1", "read", '{"path": "a"}'), ("c2", "grep", '{"pattern": "p"}')
+        )
     )
     assert [d.call_id for d in turn.decisions] == ["c1", "c2"]
     assert turn.error == ""
@@ -196,11 +196,17 @@ def test_parse_turn_synthesizes_missing_ids():
     """A gateway that omits ids must not produce an unanswerable turn."""
     agent = _agent()
     message = SimpleNamespace(
-        tool_calls=[SimpleNamespace(id=None, function=SimpleNamespace(
-            name="read", arguments='{"path": "a"}'))],
+        tool_calls=[
+            SimpleNamespace(
+                id=None,
+                function=SimpleNamespace(name="read", arguments='{"path": "a"}'),
+            )
+        ],
         content=None,
     )
-    turn = agent._parse_react_turn(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    turn = agent._parse_react_turn(
+        SimpleNamespace(choices=[SimpleNamespace(message=message)])
+    )
     assert turn.decisions[0].call_id == "call_0"
 
 
@@ -222,7 +228,9 @@ def test_parse_turn_error_echoes_all_raw_calls():
 def test_parse_turn_text_path_has_no_ids_and_carries_raw_text():
     agent = _agent()
     message = SimpleNamespace(tool_calls=None, content='read(path="a.txt")')
-    turn = agent._parse_react_turn(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    turn = agent._parse_react_turn(
+        SimpleNamespace(choices=[SimpleNamespace(message=message)])
+    )
     assert turn.decisions[0].action == "read"
     assert turn.decisions[0].call_id == ""
     assert "tool_calls" not in turn.assistant_message
@@ -232,7 +240,9 @@ def test_parse_turn_text_path_has_no_ids_and_carries_raw_text():
 def test_parse_turn_empty_response_has_nothing_to_append():
     agent = _agent()
     message = SimpleNamespace(tool_calls=None, content="")
-    turn = agent._parse_react_turn(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    turn = agent._parse_react_turn(
+        SimpleNamespace(choices=[SimpleNamespace(message=message)])
+    )
     assert turn.decisions == []
     assert turn.error == ""
     assert turn.assistant_message is None
@@ -300,6 +310,7 @@ def test_ask_mode_rules_only_when_ask_mode():
 
 # ------------------------ memory validation fallback -------------------------
 
+
 def _memory_runtime():
     from agentsociety2.agent.memory_runtime import (
         MemoryRuntimeConfig,
@@ -312,7 +323,7 @@ def _memory_runtime():
         config=MemoryRuntimeConfig(),
         get_model_name=lambda: "m",
         dispatch_llm=lambda **k: None,
-        get_profile=lambda: {},
+        get_profile=dict,
         logger=__import__("logging").getLogger("test"),
     )
 
@@ -343,5 +354,5 @@ def test_validate_finish_memories_strict_still_raises_on_bad_input():
     rt = _memory_runtime()
     import pytest
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         rt._validate_finish_memories([{"type": "not-a-real-type", "text": "x"}])

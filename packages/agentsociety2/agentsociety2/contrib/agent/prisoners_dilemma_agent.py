@@ -175,9 +175,7 @@ This agent participates in a 10-round Prisoner's Dilemma game where two players 
                 readonly=False,
                 template_mode=True,
             )
-            self._ensure_env_ask_ok(
-                submit_result, submit_response, op="submit_action"
-            )
+            self._ensure_env_ask_ok(submit_result, submit_response, op="submit_action")
             self._logger.info(
                 f"[{self.name}] Round {current_round}: Submitted action={action}, "
                 f"explanation={explanation[:50]}..."
@@ -215,12 +213,15 @@ This agent participates in a 10-round Prisoner's Dilemma game where two players 
             "IMPORTANT: Do not write any additional text before or after the XML structure. Your entire output must consist of exactly the XML format shown above."
         )
 
-        action = "No"  # Default action (defect)
-        explanation = "LLM调用或解析失败"
+        action = "No"
+        explanation = ""
 
         try:
             response = await self.acompletion(
-                [{"role": "user", "content": prompt}], stream=False
+                [{"role": "user", "content": prompt}],
+                stream=False,
+                max_retries=5,
+                max_delay=90.0,
             )
 
             if not response or not response.choices or len(response.choices) == 0:
@@ -290,9 +291,9 @@ This agent participates in a 10-round Prisoner's Dilemma game where two players 
         except Exception as e:
             error_message = f"解析/调用失败: {type(e).__name__} - {e!s}"
             self._logger.error(f"[{self.name}] [ERROR] {error_message}")
-
-            action = "No"
-            explanation = f"[CRITICAL FAILURE] {error_message}，使用默认选择: No"
+            raise RuntimeError(
+                f"[{self.name}] LLM decision failed: {error_message}"
+            ) from e
 
         self._logger.debug(f"[{self.name}] [DEBUG] 最终选择: {action}")
         return action, explanation

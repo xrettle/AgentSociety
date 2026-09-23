@@ -44,6 +44,7 @@
   "command.aiSocialScientist.viewEvidenceGraph.title": "AI Social Scientist: View Evidence Graph",
   "command.aiSocialScientist.viewPaperArtifact.title": "AI Social Scientist: Paper Artifact Preview",
   "command.aiSocialScientist.viewCsvFile.title": "AI Social Scientist: Table Preview (CSV/TSV)",
+  "command.aiSocialScientist.viewPaperReview.title": "AI Social Scientist: View Paper Review",
   "command.aiSocialScientist.viewAnalysisHarnessStatus.title": "AI Social Scientist: Analysis Phase Status",
   "command.aiSocialScientist.openInExplorer.title": "AI Social Scientist: Open in System",
   "command.aiSocialScientist.copyFileName.title": "AI Social Scientist: Copy File Name",

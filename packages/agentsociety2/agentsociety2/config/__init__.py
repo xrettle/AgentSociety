@@ -27,11 +27,11 @@
 
 from .config import (
     Config,
+    extract_json,
     get_llm_connection,
     get_llm_router,
     get_llm_router_and_model,
     get_model_name,
-    extract_json,
 )
 from .llm_dispatcher import (
     LLMClient,

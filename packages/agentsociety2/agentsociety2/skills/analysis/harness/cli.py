@@ -4,23 +4,26 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agentsociety2.skills.analysis.harness import state as harness_state
 from agentsociety2.skills.analysis.harness.attestation import PHASE_RUBRIC_KEYS
 from agentsociety2.skills.analysis.harness.capabilities import capability_payload
-from agentsociety2.skills.analysis.harness.gates import (
-    evaluate_hypothesis_gate,
-    evaluate_synthesis_gate,
-    gate_status_hypothesis,
-    prior_phase_gate_issues,
-)
 from agentsociety2.skills.analysis.harness.execution import (
     OperationRunReceipt,
     list_run_receipts,
     load_run_receipt,
     operation_execution_key,
     unresolved_retryable_runs,
+)
+from agentsociety2.skills.analysis.harness.gates import (
+    evaluate_hypothesis_gate,
+    evaluate_synthesis_gate,
+    gate_status_hypothesis,
+    prior_phase_gate_issues,
+)
+from agentsociety2.skills.analysis.harness.layout import (
+    migrate_legacy_hypothesis_harness,
 )
 from agentsociety2.skills.analysis.harness.models import (
     HYPOTHESIS_PHASE_ORDER,
@@ -31,31 +34,28 @@ from agentsociety2.skills.analysis.harness.models import (
     MethodRecipeCandidate,
     PhaseAttestation,
     PreferenceCandidate,
-    ReflectionReview,
-    ReleaseStatus,
+    PromotedPreference,
     ReflectionItem,
     ReflectionReport,
-    PromotedPreference,
+    ReflectionReview,
+    ReleaseStatus,
     SynthesisAnalysisState,
     UserFeedback,
     ValidationRecord,
 )
-from agentsociety2.skills.analysis.harness.layout import (
-    migrate_legacy_hypothesis_harness,
-)
+from agentsociety2.skills.analysis.harness.operations import operation_registry
 from agentsociety2.skills.analysis.harness.paths import (
     hypothesis_claims_path,
     hypothesis_harness_dir,
     hypothesis_plan_path,
+    hypothesis_prepare_manifest_path,
     hypothesis_reflection_path,
     memory_dir,
     method_recipes_dir,
     project_lessons_path,
     synthesis_harness_dir,
     synthesis_reflection_path,
-    hypothesis_prepare_manifest_path,
 )
-from agentsociety2.skills.analysis.harness.operations import operation_registry
 from agentsociety2.skills.analysis.harness.preflight import (
     evaluate_operation_availability,
 )
@@ -112,7 +112,7 @@ def _record_validation(
     )
 
 
-def _gate_payload(gate) -> Dict[str, Any]:
+def _gate_payload(gate) -> dict[str, Any]:
     return {
         "gate": gate.model_dump(mode="json"),
         "status": gate.status,
@@ -134,7 +134,7 @@ def _apply_gate_to_state(st: HypothesisAnalysisState, gate) -> None:
         st.phase_checkpoints[gate.phase] = gate.checkpoint
 
 
-def _iter_files(path: Path) -> List[Path]:
+def _iter_files(path: Path) -> list[Path]:
     if path.is_file():
         return [path]
     if path.is_dir():
@@ -142,7 +142,7 @@ def _iter_files(path: Path) -> List[Path]:
     return []
 
 
-def _fingerprint_paths(paths: List[Path]) -> str:
+def _fingerprint_paths(paths: list[Path]) -> str:
     digest = hashlib.sha256()
     for path in sorted({p.resolve() for p in paths}, key=lambda p: str(p)):
         digest.update(str(path).encode("utf-8", errors="replace"))
@@ -158,7 +158,7 @@ def _fingerprint_paths(paths: List[Path]) -> str:
     return digest.hexdigest()[:24]
 
 
-def _fingerprint_payload(payload: Any, paths: List[Path] | None = None) -> str:
+def _fingerprint_payload(payload: Any, paths: list[Path] | None = None) -> str:
     digest = hashlib.sha256()
     digest.update(
         json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode(
@@ -249,10 +249,10 @@ def _attestation_stale_result(structural, *, phase: str, att, current: str):
     return merge_results(structural, blocked([stale]))
 
 
-def _tail_jsonl(path: Path, limit: int = 5) -> List[Dict[str, Any]]:
+def _tail_jsonl(path: Path, limit: int = 5) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -265,7 +265,7 @@ def _tail_jsonl(path: Path, limit: int = 5) -> List[Dict[str, Any]]:
     return rows[-limit:]
 
 
-def _recipe_excerpt(path: Path, *, limit: int = 1200) -> Dict[str, Any]:
+def _recipe_excerpt(path: Path, *, limit: int = 1200) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     title = path.stem
     for line in text.splitlines():
@@ -281,8 +281,8 @@ def _recipe_excerpt(path: Path, *, limit: int = 1200) -> Dict[str, Any]:
 
 def _experience_memory_context(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    hypothesis_id: str | None = None,
+) -> dict[str, Any]:
     index = harness_state.load_memory_index(workspace)
     lessons = _tail_jsonl(project_lessons_path(workspace))
     recipe_dir = method_recipes_dir(workspace)
@@ -311,8 +311,8 @@ def _experience_memory_context(
 
 def _feedback_prompt(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    hypothesis_id: str | None = None,
+) -> dict[str, Any]:
     feedback = harness_state.load_feedback(workspace, hypothesis_id)
     has_feedback = bool(
         feedback.comments.strip()
@@ -336,16 +336,16 @@ def _feedback_prompt(
 
 def cmd_memory_context(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    hypothesis_id: str | None = None,
+) -> dict[str, Any]:
     return {"memory_context": _experience_memory_context(workspace, hypothesis_id)}
 
 
 def cmd_record_feedback(
     workspace: Path,
-    hypothesis_id: Optional[str],
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
+    hypothesis_id: str | None,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     feedback = UserFeedback.model_validate(payload)
     if hypothesis_id:
         feedback.hypothesis_id = feedback.hypothesis_id or hypothesis_id
@@ -361,7 +361,7 @@ def cmd_intake(
     workspace: Path,
     hypothesis_id: str,
     experiment_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     paths = experiment_paths(workspace, hypothesis_id, experiment_id)
     pres = presentation_paths(
         workspace / DIR_PRESENTATION, hypothesis_id, experiment_id
@@ -407,8 +407,8 @@ def cmd_intake(
 
 
 def cmd_write_plan(
-    workspace: Path, hypothesis_id: str, payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    workspace: Path, hypothesis_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
     if isinstance(payload, str):
         payload = harness_state.parse_payload_dict(payload)
     plan = harness_state.load_plan(workspace, hypothesis_id)
@@ -422,9 +422,9 @@ def cmd_write_plan(
 
 def cmd_record_attestation(
     workspace: Path,
-    hypothesis_id: Optional[str],
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
+    hypothesis_id: str | None,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     if isinstance(payload, str):
         payload = harness_state.parse_payload_dict(payload)
     att = PhaseAttestation.model_validate(payload)
@@ -464,10 +464,10 @@ def cmd_record_phase_artifacts(
     workspace: Path,
     hypothesis_id: str,
     phase: str,
-    artifacts: List[str],
+    artifacts: list[str],
     *,
     merge: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     if merge:
         existing = st.phase_artifacts.get(phase, [])
@@ -479,7 +479,7 @@ def cmd_record_phase_artifacts(
     return {"phase": phase, "artifacts": recorded, "merge": merge}
 
 
-def cmd_validate_plan(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
+def cmd_validate_plan(workspace: Path, hypothesis_id: str) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     plan = harness_state.load_plan(workspace, hypothesis_id)
     structural = validate_plan(
@@ -505,7 +505,7 @@ def cmd_validate_plan(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
 
 def cmd_validate_explore(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     plan = harness_state.load_plan(workspace, hypothesis_id)
     db = (
@@ -545,8 +545,8 @@ def cmd_validate_explore(
 
 
 def cmd_record_claim(
-    workspace: Path, hypothesis_id: str, payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    workspace: Path, hypothesis_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
     doc = harness_state.load_claims(workspace, hypothesis_id)
     claim = Claim.model_validate(payload)
     existing = {c.claim_id: i for i, c in enumerate(doc.claims)}
@@ -558,7 +558,7 @@ def cmd_record_claim(
     return {"claims": doc.model_dump(mode="json")}
 
 
-def cmd_validate_claims(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
+def cmd_validate_claims(workspace: Path, hypothesis_id: str) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     doc = harness_state.load_claims(workspace, hypothesis_id)
     structural = validate_claims(doc)
@@ -581,8 +581,8 @@ def cmd_validate_claims(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
 
 
 def cmd_record_contract(
-    workspace: Path, hypothesis_id: str, payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    workspace: Path, hypothesis_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
     if isinstance(payload, str):
         payload = harness_state.parse_payload_dict(payload)
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
@@ -600,7 +600,7 @@ def cmd_record_contract(
     return {"state": st.model_dump(mode="json")}
 
 
-def cmd_validate_refine(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
+def cmd_validate_refine(workspace: Path, hypothesis_id: str) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     prior = prior_phase_gate_issues(st, AnalysisPhase.refine)
     if prior:
@@ -637,9 +637,9 @@ def cmd_validate_chart(
     workspace: Path,
     hypothesis_id: str,
     *,
-    chart_path: Optional[str] = None,
-    code: Optional[str] = None,
-) -> Dict[str, Any]:
+    chart_path: str | None = None,
+    code: str | None = None,
+) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     if code:
         structural = validate_chart_script(code)
@@ -672,7 +672,7 @@ def cmd_validate_chart(
 
 def cmd_validate_report_quality(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     pres = presentation_paths(
         workspace / DIR_PRESENTATION, hypothesis_id, experiment_id
     )
@@ -689,8 +689,8 @@ def cmd_validate_report_quality(
 
 
 def cmd_record_report_review(
-    workspace: Path, hypothesis_id: str, experiment_id: str, payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    workspace: Path, hypothesis_id: str, experiment_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
     pres = presentation_paths(
         workspace / DIR_PRESENTATION, hypothesis_id, experiment_id
     )
@@ -708,8 +708,8 @@ def cmd_record_report_review(
 
 
 def cmd_record_synthesis_review(
-    workspace: Path, payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    workspace: Path, payload: dict[str, Any]
+) -> dict[str, Any]:
     syn = synthesis_paths(workspace)
     data = dict(payload)
     data["report_fingerprint"] = synthesis_content_fingerprint(syn.output_dir)
@@ -724,7 +724,7 @@ def cmd_record_synthesis_review(
 
 def cmd_sync_report_assets(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     pres = presentation_paths(
         workspace / DIR_PRESENTATION, hypothesis_id, experiment_id
     )
@@ -735,7 +735,7 @@ def cmd_sync_report_assets(
     return sync_report_assets_from_reports(pres.output_dir)
 
 
-def cmd_embed_interactive_eda(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
+def cmd_embed_interactive_eda(workspace: Path, hypothesis_id: str) -> dict[str, Any]:
     from agentsociety2.skills.analysis.harness.report_bundle import (
         cmd_embed_interactive_eda as embed_interactive_eda,
     )
@@ -748,7 +748,7 @@ def cmd_prepare_produce(
     hypothesis_id: str,
     experiment_id: str,
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     prior = prior_phase_gate_issues(st, AnalysisPhase.produce)
     if prior:
@@ -793,9 +793,9 @@ def cmd_prepare_produce(
     candidate.schema_version = PREPARE_PRODUCE_SCHEMA_VERSION
     candidate.hypothesis_id = hypothesis_id
     candidate.experiment_id = experiment_id
-    step_results: Dict[str, Any] = {}
-    executed_steps: List[str] = []
-    skipped_steps: List[str] = []
+    step_results: dict[str, Any] = {}
+    executed_steps: list[str] = []
+    skipped_steps: list[str] = []
     for item in plan:
         if item.action == "SKIP":
             skipped_steps.append(item.step_id)
@@ -853,7 +853,7 @@ def cmd_prepare_produce(
 
 def cmd_validate_release(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     pres = presentation_paths(
         workspace / DIR_PRESENTATION, hypothesis_id, experiment_id
     )
@@ -896,7 +896,7 @@ def cmd_validate_release(
     return out
 
 
-def cmd_validate_synthesis(workspace: Path) -> Dict[str, Any]:
+def cmd_validate_synthesis(workspace: Path) -> dict[str, Any]:
     syn_paths = synthesis_paths(workspace)
     st = harness_state.load_synthesis_state(workspace)
     if not st.synthesis_scope_hypothesis_ids:
@@ -938,7 +938,7 @@ def _phase_index(phase: AnalysisPhase) -> int:
     return HYPOTHESIS_PHASE_ORDER.index(phase)
 
 
-def _prior_phase(target: AnalysisPhase) -> Optional[AnalysisPhase]:
+def _prior_phase(target: AnalysisPhase) -> AnalysisPhase | None:
     idx = _phase_index(target)
     if idx == 0:
         return None
@@ -950,7 +950,7 @@ def cmd_advance(
     hypothesis_id: str,
     experiment_id: str,
     target: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         target_phase = AnalysisPhase(target)
     except ValueError:
@@ -982,10 +982,10 @@ def cmd_advance(
 
 def cmd_gate_status(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
-    run_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    out: Dict[str, Any] = {"workspace": str(workspace.resolve())}
+    hypothesis_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {"workspace": str(workspace.resolve())}
     if hypothesis_id:
         st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
         out["hypothesis"] = gate_status_hypothesis(st)
@@ -1015,15 +1015,15 @@ def cmd_gate_status(
 
 def cmd_status(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
-    run_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    hypothesis_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
     return cmd_gate_status(workspace, hypothesis_id, run_id)
 
 
 def cmd_run_loop(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     memory_context = _experience_memory_context(workspace, hypothesis_id)
     phase = st.current_phase.value
@@ -1070,7 +1070,7 @@ def cmd_run_loop(
         "hypothesis_id": hypothesis_id,
         "experiment_id": experiment_id,
     }
-    runs_by_operation: Dict[str, list[OperationRunReceipt]] = {}
+    runs_by_operation: dict[str, list[OperationRunReceipt]] = {}
     for spec in phase_operations:
         operation_runs = [
             item for item in relevant_runs if item.operation_id == spec.id
@@ -1109,8 +1109,8 @@ def cmd_run_loop(
         availability.operation_id: availability
         for availability in operation_availability
     }
-    available_operations: list[Dict[str, Any]] = []
-    blocked_operations: list[Dict[str, Any]] = []
+    available_operations: list[dict[str, Any]] = []
+    blocked_operations: list[dict[str, Any]] = []
     for spec in phase_operations:
         availability = availability_by_id[spec.id]
         operation_runs = runs_by_operation[spec.id]
@@ -1155,7 +1155,7 @@ def cmd_run_loop(
                 "retry_run_id": retry_run.run_id if retry_run else "",
             }
         )
-    completed_operations: list[Dict[str, Any]] = []
+    completed_operations: list[dict[str, Any]] = []
     for spec in phase_operations:
         completed = next(
             (
@@ -1261,8 +1261,8 @@ def _reflection_path_label(workspace: Path, path: Path) -> str:
         return str(path)
 
 
-def _attestation_evidence(st: HypothesisAnalysisState) -> List[str]:
-    evidence: List[str] = []
+def _attestation_evidence(st: HypothesisAnalysisState) -> list[str]:
+    evidence: list[str] = []
     for phase, att in sorted(st.phase_attestations.items()):
         evidence.extend(att.artifacts_read)
         evidence.extend(att.artifacts_written)
@@ -1271,8 +1271,8 @@ def _attestation_evidence(st: HypothesisAnalysisState) -> List[str]:
     return sorted(dict.fromkeys(str(item) for item in evidence if item))
 
 
-def _checkpoint_failures(st: HypothesisAnalysisState) -> List[ReflectionItem]:
-    failures: List[ReflectionItem] = []
+def _checkpoint_failures(st: HypothesisAnalysisState) -> list[ReflectionItem]:
+    failures: list[ReflectionItem] = []
     for phase, cp in sorted(st.phase_checkpoints.items()):
         if cp.gate_pass:
             continue
@@ -1322,12 +1322,12 @@ def _default_method_recipe(
 
 def cmd_draft_reflection(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     plan = harness_state.load_plan(workspace, hypothesis_id)
     claims_doc = harness_state.load_claims(workspace, hypothesis_id)
 
-    what_worked: List[ReflectionItem] = []
+    what_worked: list[ReflectionItem] = []
     passed = [
         phase for phase, cp in sorted(st.phase_checkpoints.items()) if cp.gate_pass
     ]
@@ -1380,9 +1380,9 @@ def cmd_draft_reflection(
 
 def cmd_record_reflection(
     workspace: Path,
-    hypothesis_id: Optional[str],
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
+    hypothesis_id: str | None,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     reflection = ReflectionReport.model_validate(payload)
     if hypothesis_id:
         reflection.hypothesis_id = reflection.hypothesis_id or hypothesis_id
@@ -1403,7 +1403,7 @@ def _review_reflection_payload(
     include_preferences: bool = False,
 ) -> ReflectionReview:
     issues = []
-    recommendations: List[str] = []
+    recommendations: list[str] = []
     if not (
         reflection.what_worked
         or reflection.what_failed
@@ -1477,9 +1477,9 @@ def _review_reflection_payload(
 
 def cmd_review_reflection(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
+    hypothesis_id: str | None = None,
     include_preferences: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     reflection = harness_state.load_reflection(workspace, hypothesis_id)
     feedback = harness_state.load_feedback(workspace, hypothesis_id)
     review = _review_reflection_payload(
@@ -1495,7 +1495,7 @@ def cmd_review_reflection(
     }
 
 
-def _append_jsonl(path: Path, records: List[Dict[str, Any]]) -> None:
+def _append_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     if not records:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1553,7 +1553,7 @@ def _has_feedback_record(feedback: UserFeedback) -> bool:
     )
 
 
-def _reflection_source_path(workspace: Path, hypothesis_id: Optional[str]) -> Path:
+def _reflection_source_path(workspace: Path, hypothesis_id: str | None) -> Path:
     return (
         synthesis_reflection_path(workspace)
         if hypothesis_id is None
@@ -1586,11 +1586,11 @@ def _promote_preference(
 
 def cmd_promote_reflection(
     workspace: Path,
-    hypothesis_id: Optional[str] = None,
+    hypothesis_id: str | None = None,
     include_preferences: bool = False,
     include_recipes: bool = True,
     include_lessons: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     reflection = harness_state.load_reflection(workspace, hypothesis_id)
     feedback = harness_state.load_feedback(workspace, hypothesis_id)
     review = _review_reflection_payload(
@@ -1630,7 +1630,7 @@ def cmd_promote_reflection(
             "recommended_next_step": "Edit reflection and promote again, or use --include-preferences after record-feedback.",
         }
 
-    lesson_records: List[Dict[str, Any]] = []
+    lesson_records: list[dict[str, Any]] = []
     if include_lessons and not already_promoted:
         for kind, items in (
             ("worked", reflection.what_worked),
@@ -1650,16 +1650,16 @@ def cmd_promote_reflection(
                 )
         _append_jsonl(project_lessons_path(workspace), lesson_records)
 
-    recipe_paths: List[str] = []
+    recipe_paths: list[str] = []
     if include_recipes and not already_promoted:
         recipe_paths = [
             _write_recipe_markdown(workspace, recipe, source_reflection)
             for recipe in reflection.reusable_methods
         ]
 
-    preference_keys: List[str] = []
+    preference_keys: list[str] = []
     if include_preferences:
-        merged_by_key: Dict[str, PreferenceCandidate] = {}
+        merged_by_key: dict[str, PreferenceCandidate] = {}
         for pref in [
             *reflection.user_preferences_observed,
             *feedback.preference_candidates,
@@ -1694,25 +1694,25 @@ def cmd_promote_reflection(
     }
 
 
-def cmd_build_report_context(workspace: Path, hypothesis_id: str) -> Dict[str, Any]:
+def cmd_build_report_context(workspace: Path, hypothesis_id: str) -> dict[str, Any]:
     from agentsociety2.skills.analysis.harness.report_bundle import write_report_bundle
 
     return write_report_bundle(workspace, hypothesis_id)
 
 
-def cmd_guidance(topic: str = "workflow") -> Dict[str, Any]:
+def cmd_guidance(topic: str = "workflow") -> dict[str, Any]:
     from agentsociety2.skills.analysis.harness.guidance import get_harness_guidance
 
     return {"guidance": get_harness_guidance(topic)}
 
 
-def cmd_payload_template(name: str) -> Dict[str, Any]:
+def cmd_payload_template(name: str) -> dict[str, Any]:
     from agentsociety2.skills.analysis.harness.guidance import get_payload_template
 
     return {"name": name, "payload": get_payload_template(name)}
 
 
-def cmd_chart_scaffold() -> Dict[str, Any]:
+def cmd_chart_scaffold() -> dict[str, Any]:
     from agentsociety2.skills.analysis.harness.guidance import get_chart_scaffold
 
     return {"scaffold": get_chart_scaffold()}
@@ -1720,5 +1720,5 @@ def cmd_chart_scaffold() -> Dict[str, Any]:
 
 def cmd_validate(
     workspace: Path, hypothesis_id: str, experiment_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return cmd_validate_synthesis(workspace)

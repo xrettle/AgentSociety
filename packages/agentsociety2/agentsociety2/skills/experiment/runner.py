@@ -8,10 +8,10 @@ by the agent society framework and extension scripts.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from agentsociety2.skills.experiment.models import ExperimentInfo, ExperimentStatus
 from agentsociety2.logger import get_logger
+from agentsociety2.skills.experiment.models import ExperimentInfo, ExperimentStatus
 
 logger = get_logger()
 
@@ -21,9 +21,9 @@ async def start_experiment(
     hypothesis_id: str,
     experiment_id: str,
     run_id: str = "run",
-    init_config_path: Optional[Path] = None,
-    steps_path: Optional[Path] = None,
-) -> Dict[str, Any]:
+    init_config_path: Path | None = None,
+    steps_path: Path | None = None,
+) -> dict[str, Any]:
     """Start an experiment
 
     :param workspace_path: Path to workspace directory
@@ -95,7 +95,7 @@ async def stop_experiment(
     hypothesis_id: str,
     experiment_id: str,
     run_id: str = "run",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Stop a running experiment
 
     :param workspace_path: Path to workspace directory
@@ -119,6 +119,7 @@ async def stop_experiment(
                 import json
                 import os
                 import signal
+
                 pid_data = json.loads(pid_content)
                 pid = pid_data.get("pid")
                 if pid:
@@ -126,14 +127,18 @@ async def stop_experiment(
                         os.kill(pid, signal.SIGTERM)
                         stopped = True
                     except OSError:
-                        logger.debug("Failed to send SIGTERM to pid %s", pid, exc_info=True)
+                        logger.debug(
+                            "Failed to send SIGTERM to pid %s", pid, exc_info=True
+                        )
         except (ValueError, OSError, json.JSONDecodeError):
             logger.debug("Failed to read pid file", exc_info=True)
 
     # Experiment lifecycle is managed externally
     return {
         "success": True,
-        "content": f"Stop signal sent for experiment {experiment_id}" if not stopped else f"Experiment {experiment_id} stopped (PID terminated)",
+        "content": f"Stop signal sent for experiment {experiment_id}"
+        if not stopped
+        else f"Experiment {experiment_id} stopped (PID terminated)",
         "hypothesis_id": hypothesis_id,
         "experiment_id": experiment_id,
         "run_id": run_id,
@@ -178,6 +183,7 @@ async def get_experiment_status(
             pid_content = pid_file.read_text().strip()
             if pid_content:
                 import json
+
                 pid_data = json.loads(pid_content)
                 pid = pid_data.get("pid")
                 pid_status = str(pid_data.get("status") or "").strip().lower()
@@ -194,12 +200,16 @@ async def get_experiment_status(
                 if pid and pid_status not in {"completed", "failed"}:
                     # Check if process is still alive
                     import os
+
                     try:
                         os.kill(pid, 0)  # Check if process exists
                         is_running = True
                         status = "running"
                     except OSError:
-                        if pid_status == "running" and status not in {"completed", "failed"}:
+                        if pid_status == "running" and status not in {
+                            "completed",
+                            "failed",
+                        }:
                             if (exp_paths["run"] / "replay" / "_schema.json").exists():
                                 status = "completed"
                             else:
@@ -234,8 +244,8 @@ async def get_experiment_status(
 
 async def list_experiments(
     workspace_path: Path,
-    hypothesis_id: Optional[str] = None,
-) -> List[ExperimentInfo]:
+    hypothesis_id: str | None = None,
+) -> list[ExperimentInfo]:
     """List experiments
 
     :param workspace_path: Path to workspace directory
@@ -245,11 +255,11 @@ async def list_experiments(
     Note:
         Uses simplified init structure: init/init_config.json, init/steps.yaml
     """
-    experiments: List[ExperimentInfo] = []
+    experiments: list[ExperimentInfo] = []
 
     def _check_experiment_status(
         exp_dir: Path,
-    ) -> tuple[bool, bool, bool, Optional[int], bool, Optional[str]]:
+    ) -> tuple[bool, bool, bool, int | None, bool, str | None]:
         """Helper to check experiment status
         Returns: (has_init, has_run, is_completed, pid, is_running, terminal_status)
 
@@ -265,12 +275,13 @@ async def list_experiments(
 
         pid = None
         is_running = False
-        terminal_status: Optional[str] = None
+        terminal_status: str | None = None
         pid_file = exp_dir / "run" / "pid.json"
         if pid_file.exists():
             try:
                 import json
                 import os
+
                 pid_content = pid_file.read_text().strip()
                 if pid_content:
                     pid_data = json.loads(pid_content)
@@ -321,7 +332,9 @@ async def list_experiments(
                                     or (
                                         "completed"
                                         if is_completed
-                                        else "configured" if has_init else "not_initialized"
+                                        else "configured"
+                                        if has_init
+                                        else "not_initialized"
                                     )
                                 )
                             ),
@@ -358,7 +371,9 @@ async def list_experiments(
                                         or (
                                             "completed"
                                             if is_completed
-                                            else "configured" if has_init else "not_initialized"
+                                            else "configured"
+                                            if has_init
+                                            else "not_initialized"
                                         )
                                     )
                                 ),

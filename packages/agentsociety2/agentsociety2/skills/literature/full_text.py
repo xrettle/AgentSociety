@@ -13,7 +13,7 @@ import re
 import shutil
 import socket
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
@@ -27,8 +27,7 @@ logger = get_logger()
 FullTextOutcome = Literal["downloaded", "no_candidate", "failed", "skipped"]
 
 USER_AGENT = (
-    "AgentSociety2 literature skill "
-    "(+https://github.com/tsinghua-fib-lab/agentsociety)"
+    "AgentSociety2 literature skill (+https://github.com/tsinghua-fib-lab/agentsociety)"
 )
 
 
@@ -59,7 +58,7 @@ def save_literature_index_dict(index_path: Path, data: dict[str, Any]) -> None:
     :param index_path: Path to ``literature_index.json``.
     :param data: Index document to serialize.
     """
-    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    data["updated_at"] = datetime.now(UTC).isoformat()
     index_path.write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -248,12 +247,18 @@ def _validate_public_url(url: str) -> None:
         return
 
     try:
-        addr_infos = socket.getaddrinfo(hostname, parsed.port or 0, type=socket.SOCK_STREAM)
+        addr_infos = socket.getaddrinfo(
+            hostname, parsed.port or 0, type=socket.SOCK_STREAM
+        )
     except socket.gaierror as exc:
-        raise FullTextDownloadError(f"DNS resolution failed for {hostname}: {exc}") from exc
+        raise FullTextDownloadError(
+            f"DNS resolution failed for {hostname}: {exc}"
+        ) from exc
 
     if not addr_infos:
-        raise FullTextDownloadError(f"DNS resolution returned no addresses for {hostname}")
+        raise FullTextDownloadError(
+            f"DNS resolution returned no addresses for {hostname}"
+        )
 
     for info in addr_infos:
         ip = ipaddress.ip_address(info[4][0])
@@ -266,7 +271,7 @@ def _validate_public_url(url: str) -> None:
 class _SafeRedirectHandler(HTTPRedirectHandler):
     """Re-validate every redirect hop before following it."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
         _validate_public_url(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -322,7 +327,7 @@ def record_full_text(
     """
     info: dict[str, Any] = {
         "status": status,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }
     if file_path:
         info["file_path"] = file_path
@@ -573,7 +578,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         extra = entry_extra_fields(entry)
         full_text = nested_dict(extra, "full_text")
         full_text["enriched"] = True
-        full_text["enriched_at"] = datetime.now(timezone.utc).isoformat()
+        full_text["enriched_at"] = datetime.now(UTC).isoformat()
         extra["full_text"] = full_text
         save_literature_index_dict(index_path, data)
         print(f"Marked entry {args.entry} as enriched")
@@ -631,7 +636,8 @@ def build_parser() -> argparse.ArgumentParser:
     mark.set_defaults(func=command_mark)
 
     enrich = subparsers.add_parser(
-        "enrich", help="List or mark entries enriched via web research"
+        "enrich",
+        help="List or mark entries whose notes were manually supplemented (no PDF)",
     )
     enrich.add_argument(
         "--entry", type=int, help="1-based literature entry number to mark as enriched"

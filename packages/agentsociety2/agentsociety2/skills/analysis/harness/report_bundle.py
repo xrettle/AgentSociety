@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Optional
 
+from agentsociety2.skills.analysis.harness import state as harness_state
 from agentsociety2.skills.analysis.harness.layout import hypothesis_presentation_dir
 from agentsociety2.skills.analysis.harness.models import AnalysisPhase
 from agentsociety2.skills.analysis.harness.schemas import (
@@ -11,7 +11,6 @@ from agentsociety2.skills.analysis.harness.schemas import (
     EvidenceKind,
     EvidenceSource,
 )
-from agentsociety2.skills.analysis.harness import state as harness_state
 
 _EXCERPT_MAX = 1200
 _TEXT_SUFFIXES = {".md", ".txt", ".json", ".sql", ".csv"}
@@ -71,12 +70,12 @@ def _read_excerpt(path: Path) -> str:
 
 
 def _add_source(
-    sources: List[EvidenceSource],
+    sources: list[EvidenceSource],
     workspace: Path,
     path: Path,
     *,
     phase: str = "",
-    kind: Optional[EvidenceKind] = None,
+    kind: EvidenceKind | None = None,
     report_section: str = "",
     label: str = "",
 ) -> None:
@@ -104,7 +103,7 @@ def build_evidence_index(workspace: Path, hypothesis_id: str) -> EvidenceIndex:
     pres = hypothesis_presentation_dir(workspace, hypothesis_id)
     st = harness_state.load_hypothesis_state(workspace, hypothesis_id)
     claims_doc = harness_state.load_claims(workspace, hypothesis_id)
-    sources: List[EvidenceSource] = []
+    sources: list[EvidenceSource] = []
 
     for claim in claims_doc.claims:
         sources.append(
@@ -166,7 +165,7 @@ def build_evidence_index(workspace: Path, hypothesis_id: str) -> EvidenceIndex:
                 kind="chart",
             )
 
-    section_map: dict[str, List[str]] = {
+    section_map: dict[str, list[str]] = {
         "overview": [],
         "data": [],
         "findings": [],
@@ -189,9 +188,11 @@ def render_report_context_md(index: EvidenceIndex, *, pres_dir: Path) -> str:
     lines = [
         "# Report context (auto-generated)",
         "",
-        "Use this digest when drafting `report_zh.md` / `report_en.md` and "
-        "`report_zh.html` / `report_en.html`. "
-        "Synthesize tool outputs into prose — do not paste raw EDA wholesale.",
+        (
+            "Use this digest when drafting `report_zh.md` / `report_en.md` and "
+            "`report_zh.html` / `report_en.html`. "
+            "Synthesize tool outputs into prose — do not paste raw EDA wholesale."
+        ),
         "",
     ]
     for section_id in ("overview", "data", "findings", "conclusions", "appendix"):

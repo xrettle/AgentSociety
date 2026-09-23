@@ -3,7 +3,6 @@ from __future__ import annotations
 import html
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 from agentsociety2.skills.analysis.chart_export import (
     REPORT_TOOL_LINKS,
@@ -19,7 +18,7 @@ EDA_INTERACTIVE_END = "<!-- EDA_INTERACTIVE_END -->"
 _SECTION_TAG_RE = re.compile(r"<(/?)section\b[^>]*>", re.IGNORECASE)
 _DATA_ID_RE = re.compile(r"\bid\s*=\s*(['\"])data\1", re.IGNORECASE)
 
-_REPORT_TAB_META: Dict[str, Tuple[str, str, str, str]] = {
+_REPORT_TAB_META: dict[str, tuple[str, str, str, str]] = {
     "summary": ("数据摘要", "Summary", "static", ""),
     "hub": ("探索中心", "Exploration hub", "eda_hub.html", "featured"),
     "pygwalker": ("拖拽探索", "PyGWalker", "eda_pygwalker.html", ""),
@@ -30,8 +29,8 @@ _REPORT_TAB_META: Dict[str, Tuple[str, str, str, str]] = {
     "missingno": ("缺失结构", "Missingness", "eda_missingno.html", ""),
 }
 
-_TOOL_ICONS: Dict[str, str] = {e["key"]: e["icon"] for e in REPORT_TOOL_LINKS}
-_TOOL_DESC: Dict[str, Tuple[str, str]] = {
+_TOOL_ICONS: dict[str, str] = {e["key"]: e["icon"] for e in REPORT_TOOL_LINKS}
+_TOOL_DESC: dict[str, tuple[str, str]] = {
     e["key"]: (e["desc_zh"], e["desc_en"]) for e in REPORT_TOOL_LINKS
 }
 
@@ -50,7 +49,7 @@ def _quick_stats_excerpt(data_dir: Path) -> str:
 
 def _tool_cards_html(data_dir: Path, *, lang: str) -> str:
     zh = lang.startswith("zh")
-    cards: List[str] = []
+    cards: list[str] = []
     for spec in REPORT_TOOL_LINKS:
         path = data_dir / spec["file"]
         if not path.is_file():
@@ -79,7 +78,7 @@ def _tool_cards_html(data_dir: Path, *, lang: str) -> str:
     )
 
 
-def discover_eda_tabs(data_dir: Path) -> List[Tuple[str, str, str]]:
+def discover_eda_tabs(data_dir: Path) -> list[tuple[str, str, str]]:
     data_dir = data_dir.resolve()
     has_any = False
     for _tid, _zh, _en, filename, _feat in (
@@ -94,7 +93,7 @@ def discover_eda_tabs(data_dir: Path) -> List[Tuple[str, str, str]]:
     if not has_any:
         return []
 
-    tabs: List[Tuple[str, str, str]] = []
+    tabs: list[tuple[str, str, str]] = []
     has_hub = (data_dir / "eda_hub.html").is_file()
 
     if (data_dir / "eda_quick_stats.md").is_file() or has_any:
@@ -139,9 +138,9 @@ def build_interactive_eda_section(
         )
 
     title = "交互式探索" if zh else "Interactive exploration"
-    tab_buttons: List[str] = []
-    tab_panels: List[str] = []
-    has_hub = any(t[0] == "hub" for t in tabs)
+    tab_buttons: list[str] = []
+    tab_panels: list[str] = []
+    any(t[0] == "hub" for t in tabs)
 
     for idx, (tab_id, mode, filename) in enumerate(tabs):
         active = " active" if idx == 0 else ""
@@ -180,9 +179,7 @@ def build_interactive_eda_section(
             body += excerpt or (
                 f'<p class="iframe-hint">{"见「探索中心」或下方工具卡片。" if zh else "See Exploration hub or tool cards below."}</p>'
             )
-            if has_hub:
-                body += _tool_cards_html(data_dir, lang=lang)
-            elif not has_hub:
+            if True:
                 body += _tool_cards_html(data_dir, lang=lang)
         elif mode == "iframe":
             desc_zh, desc_en = (
@@ -222,7 +219,7 @@ def build_interactive_eda_section(
         f'  <h3 class="eda-section-title">{title}</h3>\n'
         f'  <div class="tab-root">\n'
         f'  <div class="tab-bar" role="tablist">{"".join(tab_buttons)}</div>\n'
-        f'{"".join(tab_panels)}\n'
+        f"{''.join(tab_panels)}\n"
         f"  </div>\n"
         f"</div>\n"
         f"{html_tab_switcher_script()}"
@@ -232,7 +229,7 @@ def build_interactive_eda_section(
 def _section_bounds_with_id(
     report_html: str,
     section_id_pattern: re.Pattern[str],
-) -> Tuple[int, int, int, int] | None:
+) -> tuple[int, int, int, int] | None:
     """Return opening start/end and closing start/end for one balanced section."""
 
     tags = list(_SECTION_TAG_RE.finditer(report_html))
@@ -318,7 +315,7 @@ def embed_interactive_eda_in_html(report_html: str, section_html: str) -> str:
     return report_html
 
 
-def embed_interactive_eda_in_reports(presentation_dir: Path) -> Dict[str, object]:
+def embed_interactive_eda_in_reports(presentation_dir: Path) -> dict[str, object]:
     presentation_dir = presentation_dir.resolve()
     data_dir = presentation_dir / "data"
     if not data_dir.is_dir():
@@ -331,7 +328,7 @@ def embed_interactive_eda_in_reports(presentation_dir: Path) -> Dict[str, object
     section_en = build_interactive_eda_section(data_dir, lang="en")
     snippet_path.write_text(section_zh, encoding="utf-8")
 
-    updated: List[str] = []
+    updated: list[str] = []
     targets = {
         "report_zh.html": section_zh,
         "report_en.html": section_en,

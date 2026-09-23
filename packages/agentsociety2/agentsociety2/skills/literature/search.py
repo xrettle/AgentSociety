@@ -7,25 +7,26 @@ download open-access PDFs into the workspace index.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Any, List, Literal, Optional
+from typing import Any, Literal
+
 from litellm import AllMessageValues
 
-from agentsociety2.skills.literature.models import LiteratureEntry, LiteratureIndex
-from agentsociety2.skills.literature.formatter import (
-    sanitize_filename,
-    format_article_as_markdown,
-)
 from agentsociety2.config import build_client_for_role, get_model_name
-from agentsociety2.skills.literature.core import search_literature
-from agentsociety2.skills.literature.full_text import download_open_access_pdfs
 from agentsociety2.logger import get_logger
+from agentsociety2.skills.literature.core import search_literature
+from agentsociety2.skills.literature.formatter import (
+    format_article_as_markdown,
+    sanitize_filename,
+)
+from agentsociety2.skills.literature.full_text import download_open_access_pdfs
+from agentsociety2.skills.literature.models import LiteratureEntry, LiteratureIndex
 
 logger = get_logger()
 
 
-async def _default_acompletion(messages: List[AllMessageValues]):
+async def _default_acompletion(messages: list[AllMessageValues]):
     dispatcher = build_client_for_role("default")
     return await dispatcher.call(
         model=get_model_name("default"),
@@ -37,14 +38,14 @@ async def _default_acompletion(messages: List[AllMessageValues]):
 async def search_literature_and_save(
     query: str,
     workspace_path: Path,
-    router: Optional[Any] = None,
+    router: Any | None = None,
     limit: int = 10,
-    year_from: Optional[int] = None,
-    year_to: Optional[int] = None,
-    sources: Optional[List[Literal["local", "arxiv", "crossref", "openalex"]]] = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    sources: list[Literal["local", "arxiv", "crossref", "openalex"]] | None = None,
     enable_multi_query: bool = False,
     download_full_text: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Search for literature and save results to workspace
 
     :param query: Search query (supports Chinese, will be translated to English)
@@ -61,7 +62,7 @@ async def search_literature_and_save(
     :returns: Dictionary with search results and saved file information
     """
     # Build call kwargs
-    call_kwargs: Dict[str, Any] = {
+    call_kwargs: dict[str, Any] = {
         "query": query,
     }
     if router is not None:
@@ -91,8 +92,8 @@ async def search_literature_and_save(
     articles = result.get("articles", [])
     total = result.get("total", len(articles))
 
-    saved_files: List[str] = []
-    full_text_stats: Dict[str, int] = {}
+    saved_files: list[str] = []
+    full_text_stats: dict[str, int] = {}
     if articles and workspace_path:
         try:
             saved_files = await _save_literature_to_workspace(
@@ -129,7 +130,7 @@ async def generate_summary(
     query: str,
     articles: list,
     total: int,
-    router: Optional[Any] = None,
+    router: Any | None = None,
 ) -> str:
     """Generate a summary using LLM to guide users on next steps
 
@@ -185,7 +186,7 @@ Please generate a helpful summary and guidance for the user. The summary should:
 
 Format the response as markdown with clear sections. Keep it concise but informative (around 150-200 words)."""
 
-        messages: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        messages: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         if router is None:
             response = await _default_acompletion(messages)
@@ -218,9 +219,9 @@ Format the response as markdown with clear sections. Keep it concise but informa
 
 
 async def _save_literature_to_workspace(
-    result: Dict[str, Any],
+    result: dict[str, Any],
     workspace_path: Path,
-) -> List[str]:
+) -> list[str]:
     """Save literature search results to workspace papers directory
 
     :param result: Literature search result dictionary
@@ -236,9 +237,7 @@ async def _save_literature_to_workspace(
     papers_dir.mkdir(parents=True, exist_ok=True)
 
     saved_files = []
-    timestamp = (
-        datetime.now(timezone.utc).isoformat().replace(":", "-").replace(".", "-")[:19]
-    )
+    timestamp = datetime.now(UTC).isoformat().replace(":", "-").replace(".", "-")[:19]
 
     articles = result.get("articles", [])
     json_entries = []
@@ -266,7 +265,7 @@ async def _save_literature_to_workspace(
                 "file_type": "markdown",
                 "source": "literature_search",
                 "query": result.get("query"),
-                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "saved_at": datetime.now(UTC).isoformat(),
             }
 
             # Add other fields to extra_fields
@@ -305,7 +304,7 @@ async def _save_literature_to_workspace(
 
         # Create or update index
         if existing_index is None:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             existing_index = LiteratureIndex(
                 entries=[],
                 created_at=now,
@@ -325,9 +324,12 @@ async def _save_literature_to_workspace(
         for entry in json_entries:
             # Check for duplicates using title or DOI
             is_duplicate = False
-            if entry.title and entry.title.strip().lower() in existing_by_title:
-                is_duplicate = True
-            elif entry.doi and entry.doi.strip().lower() in existing_by_doi:
+            if (
+                entry.title
+                and entry.title.strip().lower() in existing_by_title
+                or entry.doi
+                and entry.doi.strip().lower() in existing_by_doi
+            ):
                 is_duplicate = True
 
             if not is_duplicate:
@@ -340,7 +342,7 @@ async def _save_literature_to_workspace(
                     existing_by_doi[entry.doi.strip().lower()] = idx
 
         # Update update time
-        existing_index.updated_at = datetime.now(timezone.utc).isoformat()
+        existing_index.updated_at = datetime.now(UTC).isoformat()
 
         # Save updated JSON
         with open(json_filepath, "w", encoding="utf-8") as f:
@@ -409,7 +411,7 @@ def format_search_results(articles: list, total: int, query: str) -> str:
     return "\n".join(content_parts)
 
 
-def load_literature_index(workspace_path: Path) -> Optional[LiteratureIndex]:
+def load_literature_index(workspace_path: Path) -> LiteratureIndex | None:
     """Load literature index from workspace
 
     :param workspace_path: Path to workspace directory

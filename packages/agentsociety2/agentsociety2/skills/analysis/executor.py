@@ -8,7 +8,7 @@ import platform
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -24,7 +24,7 @@ class ExecutionResult:
     success: bool
     stdout: str = ""
     stderr: str = ""
-    artifacts: List[str] = field(default_factory=list)
+    artifacts: list[str] = field(default_factory=list)
     generated_code: str = ""
     error: str = ""
 
@@ -36,7 +36,7 @@ class ToolInfo:
     name: str
     description: str
     tool_type: str = "builtin"
-    parameters: List[str] = field(default_factory=list)
+    parameters: list[str] = field(default_factory=list)
 
 
 class ToolResult(BaseModel):
@@ -44,7 +44,7 @@ class ToolResult(BaseModel):
 
     success: bool
     content: str
-    error: Optional[str] = None
+    error: str | None = None
     data: Any = None
 
 
@@ -53,8 +53,8 @@ class ToolRegistry:
 
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
-        self._tools: Dict[str, ToolInfo] = {}
-        self._tool_classes: Dict[str, Type] = {}
+        self._tools: dict[str, ToolInfo] = {}
+        self._tool_classes: dict[str, type] = {}
         self._register_builtin_tools()
 
     def _register_builtin_tools(self) -> None:
@@ -82,10 +82,10 @@ class ToolRegistry:
             )
             self._tool_classes[name] = tool_class
 
-    def list_tools(self) -> Dict[str, ToolInfo]:
+    def list_tools(self) -> dict[str, ToolInfo]:
         return self._tools.copy()
 
-    async def execute_tool(self, name: str, parameters: Dict[str, Any]) -> ToolResult:
+    async def execute_tool(self, name: str, parameters: dict[str, Any]) -> ToolResult:
         if name not in self._tool_classes:
             return ToolResult(
                 success=False,
@@ -104,7 +104,7 @@ class GlobTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         pattern = arguments.get("pattern", "")
         path_arg = arguments.get("path", ".")
 
@@ -146,7 +146,7 @@ class ListDirectoryTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         rel_path = arguments.get("path", ".").strip()
         ignore_patterns = arguments.get("ignore", [])
 
@@ -192,7 +192,7 @@ class ReadFileTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         file_path = arguments.get("path", "").strip()
         limit = arguments.get("limit")
 
@@ -230,7 +230,7 @@ class WriteFileTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         file_path = arguments.get("path", "").strip()
         content = arguments.get("content", "")
         create_directories = arguments.get("create_directories", False)
@@ -262,7 +262,7 @@ class SearchFileContentTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         pattern = arguments.get("pattern", "")
         path_arg = arguments.get("path", ".")
         case_sensitive = arguments.get("case_sensitive", False)
@@ -301,7 +301,7 @@ class ReplaceTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         file_path = arguments.get("path", "").strip()
         old_text = arguments.get("old_text", "")
         new_text = arguments.get("new_text", "")
@@ -341,7 +341,7 @@ class RunShellCommandTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         command = (arguments.get("command") or "").strip()
         directory = arguments.get("directory")
 
@@ -419,7 +419,7 @@ class WriteTodoTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         todos_data = arguments.get("todos", [])
         if not isinstance(todos_data, list):
             return ToolResult(
@@ -467,7 +467,7 @@ class LoadLiteratureTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         path = arguments.get("path", "papers/literature_index.json")
         target_file = (self.workspace_path / path).resolve()
 
@@ -494,7 +494,7 @@ class LiteratureSearchTool:
     def __init__(self, workspace_path: Path):
         self.workspace_path = Path(workspace_path)
 
-    async def execute(self, arguments: Dict[str, Any]) -> ToolResult:
+    async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         from agentsociety2.skills.literature import search_literature_and_save
 
         query = arguments.get("query", "")

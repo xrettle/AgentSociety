@@ -2,27 +2,26 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import List, Optional
 
 from agentsociety2.skills.analysis.harness.json_io import (
     load_model_from_file,
     save_model_to_file,
+)
+from agentsociety2.skills.analysis.harness.models import ValidationResult
+from agentsociety2.skills.analysis.harness.paths import (
+    hypothesis_report_review_path,
+    synthesis_report_review_path,
 )
 from agentsociety2.skills.analysis.harness.schemas import (
     ReportQualityReview,
     ReviewVerdict,
     SynthesisQualityReview,
 )
-from agentsociety2.skills.analysis.harness.models import ValidationResult
 from agentsociety2.skills.analysis.harness.validators._helpers import (
     ValidationIssue,
     blocked,
     issue,
     passed,
-)
-from agentsociety2.skills.analysis.harness.paths import (
-    hypothesis_report_review_path,
-    synthesis_report_review_path,
 )
 
 MIN_PASS_SCORE = 4
@@ -45,7 +44,7 @@ SYNTHESIS_DIMENSION_KEYS = (
 
 
 def report_content_fingerprint(presentation_dir: Path) -> str:
-    parts: List[bytes] = []
+    parts: list[bytes] = []
     for name in (
         "report_zh.md",
         "report_en.md",
@@ -60,7 +59,7 @@ def report_content_fingerprint(presentation_dir: Path) -> str:
 
 
 def synthesis_content_fingerprint(synthesis_dir: Path) -> str:
-    parts: List[bytes] = []
+    parts: list[bytes] = []
     for name in (
         "synthesis_report_zh.md",
         "synthesis_report_en.md",
@@ -89,14 +88,14 @@ def save_synthesis_review(workspace: Path, review: SynthesisQualityReview) -> Pa
 
 def load_report_review(
     workspace: Path, hypothesis_id: str
-) -> Optional[ReportQualityReview]:
+) -> ReportQualityReview | None:
     path = hypothesis_report_review_path(workspace, hypothesis_id)
     if not path.exists():
         return None
     return load_model_from_file(path, ReportQualityReview)
 
 
-def load_synthesis_review(workspace: Path) -> Optional[SynthesisQualityReview]:
+def load_synthesis_review(workspace: Path) -> SynthesisQualityReview | None:
     path = synthesis_report_review_path(workspace)
     if not path.exists():
         return None
@@ -108,7 +107,7 @@ def validate_report_review(
     hypothesis_id: str,
     presentation_dir: Path,
 ) -> ValidationResult:
-    issues: List[ValidationIssue] = []
+    issues: list[ValidationIssue] = []
     path = hypothesis_report_review_path(workspace, hypothesis_id)
     if not path.exists():
         issues.append(
@@ -197,7 +196,7 @@ def validate_report_review(
 
 
 def validate_synthesis_review(workspace: Path, synthesis_dir: Path) -> ValidationResult:
-    issues: List[ValidationIssue] = []
+    issues: list[ValidationIssue] = []
     path = synthesis_report_review_path(workspace)
     if not path.exists():
         issues.append(

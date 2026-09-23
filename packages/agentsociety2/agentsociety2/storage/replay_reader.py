@@ -235,7 +235,9 @@ class ReplayReader:
         self, dataset: dict[str, Any], order_by: str | None
     ) -> list[str]:
         available = set(self._get_column_names(dataset))
-        order_columns = [order_by] if order_by else list(dataset.get("default_order") or [])
+        order_columns = (
+            [order_by] if order_by else list(dataset.get("default_order") or [])
+        )
         if not order_columns:
             return []
         invalid = [column for column in order_columns if column not in available]
@@ -294,7 +296,9 @@ class ReplayReader:
             return _loads_json(value, value)
         return _json_safe(value)
 
-    def normalize_row(self, dataset: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    def normalize_row(
+        self, dataset: dict[str, Any], row: dict[str, Any]
+    ) -> dict[str, Any]:
         column_map = self._get_column_map(dataset)
         return {
             key: self._normalize_value(column_map.get(key), value)
@@ -312,7 +316,9 @@ class ReplayReader:
         filters: list[str],
     ) -> str:
         table_name = _quote_identifier(self._ensure_view(dataset))
-        select_list = ", ".join(_quote_identifier(column) for column in selected_columns)
+        select_list = ", ".join(
+            _quote_identifier(column) for column in selected_columns
+        )
         where_sql = f" WHERE {' AND '.join(filters)}" if filters else ""
 
         if latest_per_entity:
@@ -477,7 +483,9 @@ class ReplayReader:
         self, dataset: dict[str, Any], column: str, *, order: bool = True
     ) -> list[Any]:
         if column not in set(self._get_column_names(dataset)):
-            raise ValueError(f"Unknown column for dataset '{dataset['dataset_id']}': {column}")
+            raise ValueError(
+                f"Unknown column for dataset '{dataset['dataset_id']}': {column}"
+            )
         table_name = _quote_identifier(self._ensure_view(dataset))
         column_sql = _quote_identifier(column)
         sql = f"SELECT DISTINCT {column_sql} FROM {table_name} WHERE {column_sql} IS NOT NULL"
@@ -487,28 +495,42 @@ class ReplayReader:
 
     def count_distinct(self, dataset: dict[str, Any], column: str) -> int:
         if column not in set(self._get_column_names(dataset)):
-            raise ValueError(f"Unknown column for dataset '{dataset['dataset_id']}': {column}")
+            raise ValueError(
+                f"Unknown column for dataset '{dataset['dataset_id']}': {column}"
+            )
         table_name = _quote_identifier(self._ensure_view(dataset))
-        row = self._connection().execute(
-            f"SELECT count(DISTINCT {_quote_identifier(column)}) FROM {table_name}"
-        ).fetchone()
+        row = (
+            self._connection()
+            .execute(
+                f"SELECT count(DISTINCT {_quote_identifier(column)}) FROM {table_name}"
+            )
+            .fetchone()
+        )
         return int(row[0] or 0)
 
     def min_value(self, dataset: dict[str, Any], column: str) -> Any:
         if column not in set(self._get_column_names(dataset)):
-            raise ValueError(f"Unknown column for dataset '{dataset['dataset_id']}': {column}")
+            raise ValueError(
+                f"Unknown column for dataset '{dataset['dataset_id']}': {column}"
+            )
         table_name = _quote_identifier(self._ensure_view(dataset))
-        return self._connection().execute(
-            f"SELECT min({_quote_identifier(column)}) FROM {table_name}"
-        ).fetchone()[0]
+        return (
+            self._connection()
+            .execute(f"SELECT min({_quote_identifier(column)}) FROM {table_name}")
+            .fetchone()[0]
+        )
 
     def max_value(self, dataset: dict[str, Any], column: str) -> Any:
         if column not in set(self._get_column_names(dataset)):
-            raise ValueError(f"Unknown column for dataset '{dataset['dataset_id']}': {column}")
+            raise ValueError(
+                f"Unknown column for dataset '{dataset['dataset_id']}': {column}"
+            )
         table_name = _quote_identifier(self._ensure_view(dataset))
-        return self._connection().execute(
-            f"SELECT max({_quote_identifier(column)}) FROM {table_name}"
-        ).fetchone()[0]
+        return (
+            self._connection()
+            .execute(f"SELECT max({_quote_identifier(column)}) FROM {table_name}")
+            .fetchone()[0]
+        )
 
 
 __all__ = ["ReplayReader"]

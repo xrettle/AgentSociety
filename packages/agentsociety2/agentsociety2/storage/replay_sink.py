@@ -27,11 +27,12 @@ import os
 import sys
 import threading
 import zlib
+from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from agentsociety2.storage.replay_metadata import ReplayDatasetSpec
 from agentsociety2.storage.table_schema import ColumnDef, TableSchema
@@ -115,9 +116,9 @@ class ReplaySink:
             self._dir.mkdir(parents=True, exist_ok=True)
 
     # ---- back-compat: the old SQLite writer had an async init() ----
-    async def init(self) -> None:  # noqa: D401
+    async def init(self) -> None:
         """No-op (kept for API compatibility with the legacy writer)."""
-        return None
+        return
 
     # ------------------------------------------------------------------
     # Row writes
@@ -275,8 +276,7 @@ class ReplayWriter(ReplaySink):
 
     def __init__(self, db_path: str | Path, *, enabled: bool = True) -> None:
         path = str(db_path)
-        if path.endswith(".db"):
-            path = path[: -len(".db")]
+        path = path.removesuffix(".db")
         super().__init__(path, enabled=enabled)
 
 

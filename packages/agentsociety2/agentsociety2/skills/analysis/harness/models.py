@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,28 +66,28 @@ class TableCheck(BaseModel):
 
     table: str
     min_rows: int = 1
-    columns: List[str] = Field(default_factory=list)
+    columns: list[str] = Field(default_factory=list)
 
 
 class AnalysisPlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     research_question: str = ""
-    primary_metrics: List[str] = Field(default_factory=list)
-    target_tables: List[str] = Field(default_factory=list)
-    confirmatory_claims: List[str] = Field(default_factory=list)
+    primary_metrics: list[str] = Field(default_factory=list)
+    target_tables: list[str] = Field(default_factory=list)
+    confirmatory_claims: list[str] = Field(default_factory=list)
     exploratory_notes: str = ""
     simulation_limitations: str = ""
     eda_profile: EdaProfile = "bundle"
-    eda_profiles: List[EdaProfile] = Field(default_factory=list)
-    table_checks: List[TableCheck] = Field(default_factory=list)
+    eda_profiles: list[EdaProfile] = Field(default_factory=list)
+    table_checks: list[TableCheck] = Field(default_factory=list)
 
-    def resolved_eda_profiles(self) -> List[EdaProfile]:
+    def resolved_eda_profiles(self) -> list[EdaProfile]:
         if self.eda_profiles:
             return list(self.eda_profiles)
         return [self.eda_profile]
 
-    synthesis_scope_hypothesis_ids: List[str] = Field(default_factory=list)
+    synthesis_scope_hypothesis_ids: list[str] = Field(default_factory=list)
 
 
 class Claim(BaseModel):
@@ -124,9 +124,9 @@ class FigureContract(BaseModel):
     axes_grouping: str = ""
     legend_strategy: str = ""
     reviewer_check: str = ""
-    caption_requirements: List[str] = Field(default_factory=list)
+    caption_requirements: list[str] = Field(default_factory=list)
     presentation_mode: Literal["static", "plotly", "altair"] = "static"
-    output_files: List[str] = Field(default_factory=list)
+    output_files: list[str] = Field(default_factory=list)
 
 
 class ValidationIssue(BaseModel):
@@ -143,7 +143,7 @@ class ValidationResult(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     status: Literal["PASS", "BLOCKED"] = "BLOCKED"
-    issues: List[ValidationIssue] = Field(default_factory=list)
+    issues: list[ValidationIssue] = Field(default_factory=list)
     recommended_next_step: str = ""
 
 
@@ -162,12 +162,12 @@ class PhaseAttestation(BaseModel):
 
     phase: str
     status: AttestationStatus = AttestationStatus.DONE
-    key_findings: List[str] = Field(default_factory=list)
-    artifacts_read: List[str] = Field(default_factory=list)
-    artifacts_written: List[str] = Field(default_factory=list)
-    blocking_reason: Optional[str] = None
-    recommended_next_step: Optional[str] = None
-    rubric: Dict[str, Any] = Field(default_factory=dict)
+    key_findings: list[str] = Field(default_factory=list)
+    artifacts_read: list[str] = Field(default_factory=list)
+    artifacts_written: list[str] = Field(default_factory=list)
+    blocking_reason: str | None = None
+    recommended_next_step: str | None = None
+    rubric: dict[str, Any] = Field(default_factory=dict)
     artifact_fingerprint: str = ""
     completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -178,7 +178,7 @@ class ReflectionItem(BaseModel):
     item_id: str = ""
     title: str
     content: str
-    evidence: List[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
     confidence: Literal["low", "medium", "high"] = "medium"
 
 
@@ -190,9 +190,9 @@ class PreferenceCandidate(ReflectionItem):
 
 class MethodRecipeCandidate(ReflectionItem):
     recipe_id: str = ""
-    applies_when: List[str] = Field(default_factory=list)
-    recommended_steps: List[str] = Field(default_factory=list)
-    pitfalls: List[str] = Field(default_factory=list)
+    applies_when: list[str] = Field(default_factory=list)
+    recommended_steps: list[str] = Field(default_factory=list)
+    pitfalls: list[str] = Field(default_factory=list)
 
 
 class ReflectionReport(BaseModel):
@@ -203,12 +203,12 @@ class ReflectionReport(BaseModel):
     hypothesis_id: str = ""
     experiment_id: str = ""
     source: Literal["hypothesis", "synthesis", "manual"] = "hypothesis"
-    what_worked: List[ReflectionItem] = Field(default_factory=list)
-    what_failed: List[ReflectionItem] = Field(default_factory=list)
-    reusable_methods: List[MethodRecipeCandidate] = Field(default_factory=list)
-    user_preferences_observed: List[PreferenceCandidate] = Field(default_factory=list)
-    promotion_candidates: List[str] = Field(default_factory=list)
-    caveats: List[str] = Field(default_factory=list)
+    what_worked: list[ReflectionItem] = Field(default_factory=list)
+    what_failed: list[ReflectionItem] = Field(default_factory=list)
+    reusable_methods: list[MethodRecipeCandidate] = Field(default_factory=list)
+    user_preferences_observed: list[PreferenceCandidate] = Field(default_factory=list)
+    promotion_candidates: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -220,12 +220,12 @@ class UserFeedback(BaseModel):
     feedback_id: str = ""
     hypothesis_id: str = ""
     experiment_id: str = ""
-    rating: Optional[int] = Field(default=None, ge=1, le=5)
-    satisfied: Optional[bool] = None
+    rating: int | None = Field(default=None, ge=1, le=5)
+    satisfied: bool | None = None
     comments: str = ""
-    requested_changes: List[str] = Field(default_factory=list)
-    preference_candidates: List[PreferenceCandidate] = Field(default_factory=list)
-    lesson_candidates: List[ReflectionItem] = Field(default_factory=list)
+    requested_changes: list[str] = Field(default_factory=list)
+    preference_candidates: list[PreferenceCandidate] = Field(default_factory=list)
+    lesson_candidates: list[ReflectionItem] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -235,8 +235,8 @@ class ReflectionReview(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     verdict: Literal["PASS", "NEEDS_REVISION"] = "NEEDS_REVISION"
-    issues: List[ValidationIssue] = Field(default_factory=list)
-    recommendations: List[str] = Field(default_factory=list)
+    issues: list[ValidationIssue] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
     reviewed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -246,7 +246,7 @@ class PromotedPreference(BaseModel):
     key: str
     category: str = "workflow"
     value: str
-    evidence: List[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
     confidence: Literal["low", "medium", "high"] = "medium"
     source_reflection: str = ""
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -255,8 +255,8 @@ class PromotedPreference(BaseModel):
 class MemoryIndex(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    preferences: Dict[str, PromotedPreference] = Field(default_factory=dict)
-    promoted_reflections: List[str] = Field(default_factory=list)
+    preferences: dict[str, PromotedPreference] = Field(default_factory=dict)
+    promoted_reflections: list[str] = Field(default_factory=list)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -270,8 +270,8 @@ class PhaseCheckpoint(BaseModel):
     attestation_pass: bool = False
     attestation_required: bool = True
     gate_pass: bool = False
-    structural_issues: List[str] = Field(default_factory=list)
-    completed_at: Optional[datetime] = None
+    structural_issues: list[str] = Field(default_factory=list)
+    completed_at: datetime | None = None
 
 
 class GateReport(BaseModel):
@@ -281,12 +281,12 @@ class GateReport(BaseModel):
     status: Literal["PASS", "BLOCKED"] = "BLOCKED"
     structural_pass: bool = False
     attestation_pass: bool = False
-    structural_issues: List[ValidationIssue] = Field(default_factory=list)
-    attestation_issues: List[ValidationIssue] = Field(default_factory=list)
-    issues: List[ValidationIssue] = Field(default_factory=list)
+    structural_issues: list[ValidationIssue] = Field(default_factory=list)
+    attestation_issues: list[ValidationIssue] = Field(default_factory=list)
+    issues: list[ValidationIssue] = Field(default_factory=list)
     recommended_next_step: str = ""
-    rubric_keys: List[str] = Field(default_factory=list)
-    checkpoint: Optional[PhaseCheckpoint] = None
+    rubric_keys: list[str] = Field(default_factory=list)
+    checkpoint: PhaseCheckpoint | None = None
 
 
 class HypothesisAnalysisState(BaseModel):
@@ -302,11 +302,11 @@ class HypothesisAnalysisState(BaseModel):
         default=0,
         description="0 = no chart cap; set N>0 only when user requests a hard budget",
     )
-    figure_contracts: List[FigureContract] = Field(default_factory=list)
-    phase_attestations: Dict[str, PhaseAttestation] = Field(default_factory=dict)
-    phase_checkpoints: Dict[str, PhaseCheckpoint] = Field(default_factory=dict)
-    phase_artifacts: Dict[str, List[str]] = Field(default_factory=dict)
-    validation_history: List[ValidationRecord] = Field(default_factory=list)
+    figure_contracts: list[FigureContract] = Field(default_factory=list)
+    phase_attestations: dict[str, PhaseAttestation] = Field(default_factory=dict)
+    phase_checkpoints: dict[str, PhaseCheckpoint] = Field(default_factory=dict)
+    phase_artifacts: dict[str, list[str]] = Field(default_factory=dict)
+    validation_history: list[ValidationRecord] = Field(default_factory=list)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -314,11 +314,11 @@ class SynthesisAnalysisState(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     current_phase: Literal["synthesis"] = "synthesis"
-    synthesis_scope_hypothesis_ids: List[str] = Field(default_factory=list)
+    synthesis_scope_hypothesis_ids: list[str] = Field(default_factory=list)
     synthesis_question: str = ""
     workspace_release: ReleaseStatus = ReleaseStatus.not_started
-    phase_attestation: Optional[PhaseAttestation] = None
-    validation_history: List[ValidationRecord] = Field(default_factory=list)
+    phase_attestation: PhaseAttestation | None = None
+    validation_history: list[ValidationRecord] = Field(default_factory=list)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -326,4 +326,4 @@ class ClaimsDocument(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     hypothesis_id: str = ""
-    claims: List[Claim] = Field(default_factory=list)
+    claims: list[Claim] = Field(default_factory=list)

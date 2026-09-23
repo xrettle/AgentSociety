@@ -81,6 +81,7 @@ log/
 # Documentation
 # =========================================
 docs/_build/
+packages/agentsociety/docs/_build/
 packages/agentsociety2/docs/_build/
 docs_v1/_build/
 *.mo
@@ -184,6 +185,9 @@ packages/agentsociety2/docs/locale/gettext/
 
 # Temporary examples
 examples/
+
+# Local example run directories under the AS2 package
+packages/agentsociety2/run_*/
 
 # =========================================
 # Pattern Exceptions

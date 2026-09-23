@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import tempfile
-from typing import Any, Type, TypeVar
+from pathlib import Path
+from typing import Any, TypeVar
 
 import json_repair
 from pydantic import BaseModel, ValidationError
@@ -47,7 +47,7 @@ def loads_json_file(path: Path) -> Any:
     return loads_json_text(path.read_text(encoding="utf-8"))
 
 
-def load_model_from_text(text: str, model: Type[T]) -> T:
+def load_model_from_text(text: str, model: type[T]) -> T:
     try:
         raw = loads_json_text(text)
         return model.model_validate(raw)
@@ -55,7 +55,7 @@ def load_model_from_text(text: str, model: Type[T]) -> T:
         raise ValueError(f"invalid JSON for {model.__name__}: {exc}") from exc
 
 
-def load_model_from_file(path: Path, model: Type[T]) -> T:
+def load_model_from_file(path: Path, model: type[T]) -> T:
     try:
         raw = loads_json_file(path)
         return model.model_validate(raw)

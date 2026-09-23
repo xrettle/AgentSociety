@@ -4,29 +4,32 @@
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from workspace .env file
-workspace_root = Path(__file__).resolve().parents[4]
+
+def _workspace_root() -> Path:
+    raw = os.environ.get("AGENTSOCIETY_WORKSPACE")
+    if raw:
+        return Path(raw).expanduser().resolve()
+    here = Path(__file__).resolve()
+    for candidate in (here.parents[4], here.parents[5]):
+        if (candidate / ".env").exists() or (candidate / ".agentsociety").exists():
+            return candidate
+    return here.parents[4]
+
+
+workspace_root = _workspace_root()
 env_file = workspace_root / ".env"
 if env_file.exists():
-    load_dotenv(env_file)
-
-# Add the workspace root to Python path
-import sys
+    load_dotenv(env_file, override=True)
 
 sys.path.insert(0, str(workspace_root / "packages" / "agentsociety2"))
 
 
 def _import_hypothesis_api():
-    """Lazy import of agentsociety2.skills.hypothesis.
-
-    Kept inside a function so this script's --help and argument parsing
-    work even if the agentsociety2 package is not installed in the active
-    Python interpreter; the import error is only raised when an actual
-    command needs to call into the framework.
-    """
+    """按需导入 hypothesis API，保证未安装时仍能解析 --help。"""
     try:
         from agentsociety2.skills.hypothesis import (
             add_hypothesis,

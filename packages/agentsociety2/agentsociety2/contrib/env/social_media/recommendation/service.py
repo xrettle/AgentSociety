@@ -4,11 +4,11 @@
 
 import asyncio
 import time
-from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass
 
 from agentsociety2.logger import get_logger
-from .algorithms.core import RecommenderAlgorithm, RatingMatrix
+
+from .algorithms.core import RatingMatrix, RecommenderAlgorithm
 
 
 @dataclass
@@ -20,6 +20,7 @@ class ServiceConfig:
     :param max_batch_size: 最大批量推荐大小,默认 100
     :param timeout: 请求超时时间 (秒),默认 10秒
     """
+
     cache_ttl: int = 300
     max_batch_size: int = 100
     timeout: float = 10.0
@@ -31,9 +32,7 @@ class RecommendationService:
     """
 
     def __init__(
-        self,
-        algorithm: RecommenderAlgorithm,
-        config: ServiceConfig = ServiceConfig()
+        self, algorithm: RecommenderAlgorithm, config: ServiceConfig = ServiceConfig()
     ):
         """
         初始化推荐服务
@@ -45,7 +44,7 @@ class RecommendationService:
         self._config = config
 
         # 缓存: cache_key -> (timestamp, result)
-        self._cache: Dict[str, Tuple[float, List[Tuple[int, float]]]] = {}
+        self._cache: dict[str, tuple[float, list[tuple[int, float]]]] = {}
 
         # 锁保护模型访问
         self._lock = asyncio.Lock()
@@ -82,19 +81,15 @@ class RecommendationService:
 
         :returns: 预测评分 (1.0-5.0)
         """
-        return await asyncio.to_thread(
-            self._algorithm.predict,
-            user_id,
-            item_id
-        )
+        return await asyncio.to_thread(self._algorithm.predict, user_id, item_id)
 
     async def recommend(
         self,
         user_id: int,
         n: int = 20,
         exclude_rated: bool = True,
-        exclude_ids: Optional[Set[int]] = None
-    ) -> List[Tuple[int, float]]:
+        exclude_ids: set[int] | None = None,
+    ) -> list[tuple[int, float]]:
         """
         生成推荐 (带缓存)
 
@@ -117,27 +112,22 @@ class RecommendationService:
 
         # 调用算法生成推荐
         result = await asyncio.to_thread(
-            self._algorithm.recommend,
-            user_id,
-            n,
-            exclude_set
+            self._algorithm.recommend, user_id, n, exclude_set
         )
 
         # 更新缓存
         self._cache[cache_key] = (time.time(), result)
 
-        get_logger().debug(
-            f"为用户 {user_id} 生成 {len(result)} 条推荐"
-        )
+        get_logger().debug(f"为用户 {user_id} 生成 {len(result)} 条推荐")
 
         return result
 
     async def batch_recommend(
         self,
-        user_ids: List[int],
+        user_ids: list[int],
         n: int = 20,
-        exclude_ids: Optional[Dict[int, Set[int]]] = None
-    ) -> Dict[int, List[Tuple[int, float]]]:
+        exclude_ids: dict[int, set[int]] | None = None,
+    ) -> dict[int, list[tuple[int, float]]]:
         """
         批量生成推荐
 
@@ -151,19 +141,14 @@ class RecommendationService:
 
         # 并发执行推荐
         tasks = [
-            self.recommend(
-                user_id=uid,
-                n=n,
-                exclude_ids=exclude_dict.get(uid)
-            )
+            self.recommend(user_id=uid, n=n, exclude_ids=exclude_dict.get(uid))
             for uid in user_ids
         ]
 
         results = await asyncio.gather(*tasks)
 
         return {
-            user_id: result
-            for user_id, result in zip(user_ids, results, strict=False)
+            user_id: result for user_id, result in zip(user_ids, results, strict=False)
         }
 
     async def save_model(self, path: str) -> None:
@@ -191,7 +176,7 @@ class RecommendationService:
 
         get_logger().info(f"模型已从 {path} 加载")
 
-    def get_algorithm_info(self) -> Dict[str, any]:
+    def get_algorithm_info(self) -> dict[str, any]:
         """
         获取算法信息
 
@@ -204,7 +189,7 @@ class RecommendationService:
         self._cache.clear()
         get_logger().info("推荐缓存已清空")
 
-    def get_cache_stats(self) -> Dict[str, any]:
+    def get_cache_stats(self) -> dict[str, any]:
         """
         获取缓存统计
 
@@ -212,12 +197,13 @@ class RecommendationService:
         """
         current_time = time.time()
         valid_entries = sum(
-            1 for timestamp, _ in self._cache.values()
+            1
+            for timestamp, _ in self._cache.values()
             if current_time - timestamp < self._config.cache_ttl
         )
 
         return {
-            'total_entries': len(self._cache),
-            'valid_entries': valid_entries,
-            'cache_ttl': self._config.cache_ttl
+            "total_entries": len(self._cache),
+            "valid_entries": valid_entries,
+            "cache_ttl": self._config.cache_ttl,
         }

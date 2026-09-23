@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { isExtensionZh } from './i18n';
 
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
 const MAX_ROWS = 5000;
@@ -52,7 +53,7 @@ export class CsvViewer {
   private static currentPanel: vscode.WebviewPanel | undefined;
 
   public static async show(filePath: string): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const lower = filePath.toLowerCase();
     const delim = lower.endsWith('.tsv') ? '\t' : ',';
 

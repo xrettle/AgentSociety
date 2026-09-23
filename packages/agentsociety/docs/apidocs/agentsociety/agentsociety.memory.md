@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 1
 
-agentsociety.memory.memory
 agentsociety.memory.const
+agentsociety.memory.memory
 ```
 
 ## Package Contents

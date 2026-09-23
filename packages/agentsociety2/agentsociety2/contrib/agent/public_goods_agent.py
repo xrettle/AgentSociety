@@ -221,12 +221,15 @@ This agent participates in a multi-round Public Goods Game. Each round, players 
             "State the integer amount first, followed by a brief 1-2 sentence explanation."
         )
 
-        contribution = 0  # Default contribution (free-riding strategy)
-        explanation = "LLM call or parsing failed"
+        contribution = 0
+        explanation = ""
 
         try:
             response = await self.acompletion(
-                [{"role": "user", "content": prompt}], stream=False
+                [{"role": "user", "content": prompt}],
+                stream=False,
+                max_retries=5,
+                max_delay=90.0,
             )
 
             if not response or not response.choices or len(response.choices) == 0:
@@ -293,11 +296,9 @@ This agent participates in a multi-round Public Goods Game. Each round, players 
         except Exception as e:
             error_message = f"Parsing/call failed: {type(e).__name__} - {e!s}"
             self._logger.error(f"[{self.name}] [ERROR] {error_message}")
-
-            contribution = 0
-            explanation = (
-                f"[CRITICAL FAILURE] {error_message}, using default selection: 0"
-            )
+            raise RuntimeError(
+                f"[{self.name}] LLM decision failed: {error_message}"
+            ) from e
 
         self._logger.debug(f"[{self.name}] [DEBUG] Final selection: {contribution}")
         return contribution, explanation
@@ -390,4 +391,4 @@ This agent participates in a multi-round Public Goods Game. Each round, players 
         if not agent_names:
             return [f"Agent {chr(65 + i)}" for i in range(self.num_agents)]
 
-        return sorted(list(agent_names))
+        return sorted(agent_names)

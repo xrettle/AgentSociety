@@ -1,26 +1,25 @@
 #!/usr/bin/env python
-# ruff: noqa: F841
-# -*- coding: utf-8 -*-
 """
 Tragedy of the Commons Game - V2 Framework Implementation
 Main entry point for running Commons Tragedy game using V2 framework
 """
-import os
-import json
-from collections import defaultdict
-from pathlib import Path
+
 import asyncio
-from datetime import datetime
+import json
 import logging
+import os
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
 
 # Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 # V2 framework imports
+from agentsociety2.contrib.env.commons_tragedy import CommonsTragedyEnv
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
-from agentsociety2.contrib.env.commons_tragedy import CommonsTragedyEnv
 
 # Ensure results directory exists
 os.makedirs("result_commons_tragedy", exist_ok=True)
@@ -28,16 +27,19 @@ os.makedirs("result_commons_tragedy", exist_ok=True)
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("llm_api_log.txt"),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("llm_api_log.txt"), logging.StreamHandler()],
 )
 
 
-def calculate_and_print_statistics(per_game_payoffs, total_extractions, round_extractions, 
-                                   pool_resources_history, agent_names, save_dir):
+def calculate_and_print_statistics(
+    per_game_payoffs,
+    total_extractions,
+    round_extractions,
+    pool_resources_history,
+    agent_names,
+    save_dir,
+):
     """Calculate and print statistics"""
     try:
         # Calculate total payoffs
@@ -47,12 +49,16 @@ def calculate_and_print_statistics(per_game_payoffs, total_extractions, round_ex
                 total_payoffs[name] += payoffs.get(name, 0)
 
         # Calculate average extraction
-        average_extraction = sum(total_extractions) / len(total_extractions) if total_extractions else 0
+        average_extraction = (
+            sum(total_extractions) / len(total_extractions) if total_extractions else 0
+        )
 
         # Calculate average extraction per round
         round_avg_extractions = {}
         for round_num, extractions in round_extractions.items():
-            round_avg_extractions[round_num] = sum(extractions) / len(extractions) if extractions else 0
+            round_avg_extractions[round_num] = (
+                sum(extractions) / len(extractions) if extractions else 0
+            )
 
         # Print statistics
         print("\n===== Extraction Statistics =====")
@@ -62,7 +68,9 @@ def calculate_and_print_statistics(per_game_payoffs, total_extractions, round_ex
 
         print("\nRound average extractions:")
         for round_num in sorted(round_avg_extractions.keys()):
-            print(f"  Round {round_num}: {round_avg_extractions[round_num]:.2f} units/agent")
+            print(
+                f"  Round {round_num}: {round_avg_extractions[round_num]:.2f} units/agent"
+            )
 
         print("\nTotal payoffs across all games:")
         for name in agent_names:
@@ -78,13 +86,13 @@ def calculate_and_print_statistics(per_game_payoffs, total_extractions, round_ex
             "round_average_extractions": round_avg_extractions,
             "total_payoffs": total_payoffs,
             "overall_total_payoff": overall_total,
-            "pool_resources_history": pool_resources_history
+            "pool_resources_history": pool_resources_history,
         }
 
         # Save statistics to file
         stats_file_path = os.path.join(save_dir, "statistics.json")
         try:
-            with open(stats_file_path, 'w', encoding='utf-8') as f:
+            with open(stats_file_path, "w", encoding="utf-8") as f:
                 json.dump(statistics, f, indent=2, ensure_ascii=False, default=str)
             logging.info(f"Statistics saved to {stats_file_path}")
         except Exception as e:
@@ -100,7 +108,9 @@ def calculate_and_print_statistics(per_game_payoffs, total_extractions, round_ex
 async def main():
     """Main entry point for Commons Tragedy game using V2 framework"""
     # ------- Create main results directory and current experiment directory -------
-    experiment_time = input("Please enter experiment folder name (e.g., 'ToC_v2_test1'): ").strip()
+    experiment_time = input(
+        "Please enter experiment folder name (e.g., 'ToC_v2_test1'): "
+    ).strip()
     if not experiment_time:
         experiment_time = datetime.now().strftime("%m%d_%H%M%S_ToC_v2")
     base_result_dir = "result_commons_tragedy"
@@ -152,7 +162,7 @@ async def main():
         env_module = CommonsTragedyEnv(
             num_agents=NUM_AGENTS,
             initial_pool_resources=INITIAL_POOL_RESOURCES,
-            max_extraction_per_agent=MAX_EXTRACTION_PER_AGENT
+            max_extraction_per_agent=MAX_EXTRACTION_PER_AGENT,
         )
 
         # Create environment router
@@ -171,11 +181,12 @@ async def main():
             # Create replay writer for this game
             game_run_dir = Path(experiment_result_dir) / f"game_{game_num}"
             game_run_dir.mkdir(parents=True, exist_ok=True)
-            
+
             from agentsociety2.storage import ReplayWriter
+
             replay_writer = ReplayWriter(game_run_dir / "replay.db")
             await replay_writer.init()
-            
+
             society = AgentSociety(
                 agent_specs=agent_specs,
                 agent_class_name="CommonsTragedyAgent",
@@ -189,34 +200,39 @@ async def main():
             log_records = []
             current_game_pool_history = []
             game_payoffs = {name: 0 for name in agent_names}
-            game_round_results = []
+            _game_round_results = []
 
             # ------- Round loop -------
             for round_num in range(1, NUM_ROUNDS + 1):
                 print(f"\n--- Round {round_num} of Game {game_num} ---")
-                
+
                 # Get current pool resources before round
                 ctx = {}
                 ctx, pool_response = await env_router.ask(
                     ctx,
                     "Please call get_pool_resources() to get the current pool resources.",
-                    readonly=True
+                    readonly=True,
                 )
-                
+
                 # Parse pool resources
                 import re
+
                 pool_before = INITIAL_POOL_RESOURCES
                 try:
-                    json_match = re.search(r'\{[^}]+\}', pool_response)
+                    json_match = re.search(r"\{[^}]+\}", pool_response)
                     if json_match:
                         data = json.loads(json_match.group(0))
                         if isinstance(data, dict):
-                            pool_before = data.get("current_pool_resources", INITIAL_POOL_RESOURCES)
+                            pool_before = data.get(
+                                "current_pool_resources", INITIAL_POOL_RESOURCES
+                            )
                 except Exception:
                     pass
-                
+
                 print(f"Resource pool before round: {pool_before} units")
-                logging.info(f"Game {game_num} Round {round_num} started, resource pool: {pool_before} units")
+                logging.info(
+                    f"Game {game_num} Round {round_num} started, resource pool: {pool_before} units"
+                )
 
                 try:
                     # Execute one step - agents will submit extractions via step() method
@@ -224,15 +240,18 @@ async def main():
                     # Society.step() will call all agents' step() first, then environment's step()
                     await asyncio.wait_for(
                         society.step(tick=1),  # tick=1 for one round
-                        timeout=300.0  # 5 minute timeout per round
+                        timeout=300.0,  # 5 minute timeout per round
                     )
-                    
+
                     # After step, directly access environment module's round history
                     # This is more reliable than parsing string responses
                     latest_round = None
                     try:
                         # Directly access the environment module's round history
-                        if env_module.round_history and len(env_module.round_history) > 0:
+                        if (
+                            env_module.round_history
+                            and len(env_module.round_history) > 0
+                        ):
                             # Find the round matching current round_num
                             for r in reversed(env_module.round_history):
                                 if r.get("round") == round_num:
@@ -242,10 +261,13 @@ async def main():
                             if latest_round is None:
                                 latest_round = env_module.round_history[-1]
                         else:
-                            logging.warning(f"Game {game_num} Round {round_num}: No round history available")
+                            logging.warning(
+                                f"Game {game_num} Round {round_num}: No round history available"
+                            )
                     except Exception as e:
                         logging.warning(f"Failed to get round history: {e}")
                         import traceback
+
                         traceback.print_exc()
 
                     if latest_round:
@@ -269,37 +291,58 @@ async def main():
                         agent_round_data = {}
                         for agent_name in agent_names:
                             agent_round_data[agent_name] = {
-                                "actual_extraction": actual_extractions.get(agent_name, 0),
-                                "payoff": payoffs.get(agent_name, 0)
+                                "actual_extraction": actual_extractions.get(
+                                    agent_name, 0
+                                ),
+                                "payoff": payoffs.get(agent_name, 0),
                             }
-                            print(f"{agent_name}: Extracted {actual_extractions.get(agent_name, 0)} units "
-                                  f"({payoffs.get(agent_name, 0)} points)")
+                            print(
+                                f"{agent_name}: Extracted {actual_extractions.get(agent_name, 0)} units "
+                                f"({payoffs.get(agent_name, 0)} points)"
+                            )
 
-                        log_records.append({
-                            "round": round_num,
-                            "pool_before_round": pool_before,
-                            "current_pool_after_round": pool_after,
-                            "agents_data": agent_round_data,
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        print(f"Resource pool after round {round_num}: {pool_after} units")
-                        logging.info(f"Game {game_num} Round {round_num} ended, remaining resource pool: {pool_after} units")
+                        log_records.append(
+                            {
+                                "round": round_num,
+                                "pool_before_round": pool_before,
+                                "current_pool_after_round": pool_after,
+                                "agents_data": agent_round_data,
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
+                        print(
+                            f"Resource pool after round {round_num}: {pool_after} units"
+                        )
+                        logging.info(
+                            f"Game {game_num} Round {round_num} ended, remaining resource pool: {pool_after} units"
+                        )
                     else:
-                        logging.warning(f"Game {game_num} Round {round_num}: Could not parse round result from history")
+                        logging.warning(
+                            f"Game {game_num} Round {round_num}: Could not parse round result from history"
+                        )
 
-                except asyncio.TimeoutError:
-                    logging.error(f"Game {game_num} Round {round_num} execution timeout")
-                    print(f"[Error] Round {round_num} execution timeout, skipping this round")
+                except TimeoutError:
+                    logging.error(
+                        f"Game {game_num} Round {round_num} execution timeout"
+                    )
+                    print(
+                        f"[Error] Round {round_num} execution timeout, skipping this round"
+                    )
                     continue
                 except Exception as e:
-                    logging.error(f"Game {game_num} Round {round_num} execution error: {e}")
-                    print(f"[Error] Round {round_num} execution error: {str(e)}")
+                    logging.error(
+                        f"Game {game_num} Round {round_num} execution error: {e}"
+                    )
+                    print(f"[Error] Round {round_num} execution error: {e!s}")
                     import traceback
+
                     traceback.print_exc()
                     continue
 
             # ------- Save each game's logs -------
-            game_log_path = os.path.join(experiment_result_dir, f"game_{game_num}_logs.json")
+            game_log_path = os.path.join(
+                experiment_result_dir, f"game_{game_num}_logs.json"
+            )
             try:
                 with open(game_log_path, "w", encoding="utf-8") as f:
                     json.dump(log_records, f, indent=2, ensure_ascii=False)
@@ -327,8 +370,11 @@ async def main():
     print("\n========== All Games Summary ==========")
     for idx, payoffs in enumerate(per_game_payoffs, 1):
         total_game_payoff_sum = sum(payoffs.values())
-        print(f"Game {idx}: " + ", ".join(
-            [f"{name}={pts} points" for name, pts in payoffs.items()]) + f", Total = {total_game_payoff_sum} points")
+        print(
+            f"Game {idx}: "
+            + ", ".join([f"{name}={pts} points" for name, pts in payoffs.items()])
+            + f", Total = {total_game_payoff_sum} points"
+        )
 
     print("\nTotal payoffs across all games:")
     overall_total_payoff_sum = sum(total_payoffs.values())
@@ -343,7 +389,7 @@ async def main():
         round_extractions,
         pool_resources_history_per_game,
         agent_names,
-        experiment_result_dir
+        experiment_result_dir,
     )
 
     if statistics:
@@ -353,11 +399,13 @@ async def main():
     summary_path = os.path.join(experiment_result_dir, "experiment_summary.json")
     try:
         summary_data = experiment_config.copy()
-        summary_data.update({
-            "total_payoffs": dict(total_payoffs),
-            "per_game_payoffs": per_game_payoffs,
-            "statistics": statistics
-        })
+        summary_data.update(
+            {
+                "total_payoffs": dict(total_payoffs),
+                "per_game_payoffs": per_game_payoffs,
+                "statistics": statistics,
+            }
+        )
         with open(summary_path, "w", encoding="utf-8") as f:
             json.dump(summary_data, f, ensure_ascii=False, indent=2)
         logging.info(f"Experiment summary saved to: {summary_path}")
@@ -376,4 +424,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Program error occurred: {e}")
         import traceback
+
         traceback.print_exc()

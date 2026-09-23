@@ -5,14 +5,14 @@ Two-Tier Plan-and-Execute Router Implementation
 
 import json
 import re
-from typing import Tuple, Dict, Any, List
+from typing import Any
 
 import json_repair
 from litellm import AllMessageValues
 
-from agentsociety2.logger import get_logger
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.router_base import RouterBase
+from agentsociety2.logger import get_logger
 
 __all__ = ["TwoTierPlanExecuteRouter"]
 
@@ -40,11 +40,11 @@ class TwoTierPlanExecuteRouter(RouterBase):
         )
 
         # 预收集模块信息和工具信息
-        self._module_info: Dict[str, Dict[str, Any]] = {}
-        self._module_tools: Dict[str, List[Dict[str, Any]]] = {}
-        self._module_readonly_tools: Dict[str, List[Dict[str, Any]]] = {}
-        self._tool_name_to_module: Dict[str, EnvBase] = {}
-        self._tool_name_to_tool_obj: Dict[str, Any] = {}
+        self._module_info: dict[str, dict[str, Any]] = {}
+        self._module_tools: dict[str, list[dict[str, Any]]] = {}
+        self._module_readonly_tools: dict[str, list[dict[str, Any]]] = {}
+        self._tool_name_to_module: dict[str, EnvBase] = {}
+        self._tool_name_to_tool_obj: dict[str, Any] = {}
 
         self._collect_module_info()
 
@@ -93,7 +93,7 @@ class TwoTierPlanExecuteRouter(RouterBase):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """
         使用双层Plan-and-Execute模式处理指令。
 
@@ -115,7 +115,10 @@ class TwoTierPlanExecuteRouter(RouterBase):
 
             if not self.env_modules:
                 get_logger().warning("No environment modules available")
-                results = {"status": "fail", "reason": "No environment modules available"}
+                results = {
+                    "status": "fail",
+                    "reason": "No environment modules available",
+                }
                 return (
                     results,
                     "No environment modules available to handle the request.",
@@ -124,7 +127,7 @@ class TwoTierPlanExecuteRouter(RouterBase):
             results = {}
             step_count = 0
             used_modules = set()
-            execution_log: List[Dict[str, Any]] = []  # 记录执行历史
+            execution_log: list[dict[str, Any]] = []  # 记录执行历史
             error = None
 
             while step_count < self.max_steps:
@@ -197,7 +200,9 @@ class TwoTierPlanExecuteRouter(RouterBase):
 
             # 构建过程文本
             process_text = (
-                json.dumps(execution_log, indent=2, default=str) if execution_log else ""
+                json.dumps(execution_log, indent=2, default=str)
+                if execution_log
+                else ""
             )
             # 使用基类的generate_final_answer生成最终答案
             final_answer, determined_status = await self.generate_final_answer(
@@ -213,7 +218,7 @@ class TwoTierPlanExecuteRouter(RouterBase):
 
     async def _select_module_and_plan(
         self, instruction: str, ctx: dict, used_modules: set, readonly: bool
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """第一层：选择模块并制定计划"""
         # 构建可用模块列表
         modules_list = [
@@ -288,7 +293,7 @@ Return a JSON object with:
 
 Your selection and plan:"""
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         try:
             response = await self.acompletion_with_system_prompt(
@@ -313,7 +318,7 @@ Your selection and plan:"""
                     )
 
             # Fallback: 返回第一个未使用的模块，空计划
-            for module_name in self._module_info.keys():
+            for module_name in self._module_info:
                 if module_name not in used_modules:
                     return {"module": module_name, "plan": []}
 
@@ -324,7 +329,7 @@ Your selection and plan:"""
                 f"TwoTierPlanExecuteRouter: Failed to select module and plan: {e!s}"
             )
             # Fallback
-            for module_name in self._module_info.keys():
+            for module_name in self._module_info:
                 if module_name not in used_modules:
                     return {"module": module_name, "plan": []}
             return {}
@@ -357,7 +362,9 @@ Your selection and plan:"""
             try:
                 return json_repair.loads(json_match.group())
             except Exception:
-                get_logger().debug("Failed to parse JSON object from text", exc_info=True)
+                get_logger().debug(
+                    "Failed to parse JSON object from text", exc_info=True
+                )
 
         # 尝试直接解析
         try:
@@ -368,8 +375,8 @@ Your selection and plan:"""
         return {}
 
     async def _execute_module_plan(
-        self, module_name: str, plan: List[Dict[str, Any]], ctx: dict, readonly: bool
-    ) -> Dict[str, Any]:
+        self, module_name: str, plan: list[dict[str, Any]], ctx: dict, readonly: bool
+    ) -> dict[str, Any]:
         """第二层：执行模块计划"""
         results = {}
 
@@ -454,14 +461,14 @@ Your selection and plan:"""
 {json.dumps(results, indent=2, default=str)}
 
 ## Unused Modules
-{', '.join(unused_modules)}
+{", ".join(unused_modules)}
 
 ## Question
 Do you need to use more modules to complete the task? Answer with "yes" or "no" only.
 
 Answer:"""
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         try:
             response = await self.acompletion_with_system_prompt(

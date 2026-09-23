@@ -1,12 +1,11 @@
-# ruff: noqa: E402,F841
-
 import asyncio
 import json
 import logging
 import os
 import pickle
-import numpy as np
 from datetime import datetime
+
+import numpy as np
 from dotenv import load_dotenv
 
 # Disable telemetry before any imports
@@ -16,14 +15,14 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 # load_dotenv(".env.openrouter")
 load_dotenv()
 
-from agentsociety2.contrib.env.mobility_space import MobilitySpace
+from agentsociety2.agent import PersonAgent
 from agentsociety2.contrib.env.event_space import EventSpace
+from agentsociety2.contrib.env.mobility_space import MobilitySpace
 from agentsociety2.contrib.env.simple_social_space import SimpleSocialSpace
 from agentsociety2.contrib.env.social_media import SocialMediaSpace
-from agentsociety2.agent import PersonAgent
 from agentsociety2.env import CodeGenRouter
+from agentsociety2.logger import get_logger, setup_logging
 from agentsociety2.society import AgentSociety
-from agentsociety2.logger import setup_logging, get_logger
 
 
 def _setup_debugpy_if_enabled(logger) -> None:
@@ -42,36 +41,36 @@ def _setup_debugpy_if_enabled(logger) -> None:
         logger.info("debugpy enabled, waiting for debugger attach at %s:%s", host, port)
         debugpy.wait_for_client()
         logger.info("debugger attached, continuing simulation startup")
-    except Exception as e:
-        logger.exception("failed to initialize debugpy: %s", e)
+    except Exception:
+        logger.exception("failed to initialize debugpy")
         raise
 
 
 def _calculate_gyration_radius(trajectories: list) -> float:
     """
     计算回旋半径（Radius of Gyration）
-    
+
     回旋半径是从轨迹质心到各个位置点的平均距离的均方根。
-    
+
     Args:
         trajectories: 轨迹列表，每个元素是 (x, y) 坐标对
-    
+
     Returns:
         回旋半径（单位：米）
     """
     if len(trajectories) == 0:
         return 0.0
-    
+
     trajectories = np.array(trajectories)
     # 计算轨迹的质心
     centroid = trajectories.mean(axis=0)
-    
+
     # 计算每个点到质心的距离
     distances = np.linalg.norm(trajectories - centroid, axis=1)
-    
+
     # 计算均方根距离（回旋半径）
-    gyration_radius = np.sqrt(np.mean(distances ** 2))
-    
+    gyration_radius = np.sqrt(np.mean(distances**2))
+
     return float(gyration_radius)
 
 
@@ -87,12 +86,12 @@ async def main(
     - 模拟起点：当日早上 00:00:00 (UTC)
     - 时间步长：15 分钟 = 900 秒
     - 总步数：97 步（覆盖 24+ 小时）
-    
+
     环境模块：
     1. 移动模块（MobilitySpace）：管理 agent 的地理位置和轨迹
     2. 事件模块（EventSpace）：处理环境中的事件
     3. 社交媒体模块（SocialMediaSpace）：处理社交交互和媒体内容
-    
+
     数据统计：
     - 轨迹数据：每个agent的移动轨迹（(x, y) 坐标列表）
     - 访问的AOI：每个agent访问过的AOI集合
@@ -197,12 +196,12 @@ async def main(
     # print(person)
     # input("Press Enter to continue...")
     event_space = EventSpace()
-    
+
     # 创建社交媒体环境
     logger.info("\n【初始化社交媒体模块】")
     social_media_data_dir = os.getenv(
         "SOCIAL_MEDIA_DATA_DIR",
-        os.path.join(os.path.expanduser("~/.agentsociety"), "social_media_data")
+        os.path.join(os.path.expanduser("~/.agentsociety"), "social_media_data"),
     )
     logger.info(f"  ✓ 社交媒体数据目录: {social_media_data_dir}")
     social_media_env = SocialMediaSpace(data_dir=social_media_data_dir)
@@ -226,7 +225,9 @@ async def main(
     agents = [PersonAgent(**args) for args in agent_args]
 
     society = AgentSociety(
-        agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+        agent_specs=[
+            {"id": a.id, "profile": a._profile, "config": a._config} for a in agents
+        ],
         agent_class_name="PersonAgent",
         env_router=env_router,
         start_t=START_TIME,
@@ -237,39 +238,41 @@ async def main(
 
     # ==================== 提取移动相关数据 ====================
     logger.info("\n【步骤5/5】提取移动统计数据...")
-    
+
     # 从 MobilitySpace 环境中获取移动相关数据
     trajectories_dict = mobility_env.get_all_persons_trajectories()
     visited_aois_dict = mobility_env.get_all_persons_visited_aois()
-    
+
     # 计算各项指标
     gyration_radius_list = []
     daily_location_numbers_list = []
     trajectory_lengths = []
-    
+
     for agent_id in actual_agent_ids:
         # 获取该agent的轨迹
         trajectory = trajectories_dict.get(agent_id, [])
         visited_aois = visited_aois_dict.get(agent_id, set())
-        
+
         # 计算回旋半径
         gr = _calculate_gyration_radius(trajectory)
         gyration_radius_list.append(gr)
-        
+
         # 计算访问的唯一AOI数量
         dln = len(visited_aois)
         daily_location_numbers_list.append(dln)
-        
+
         # 记录轨迹长度
         trajectory_lengths.append(len(trajectory))
-        
+
         logger.info(f"  Agent {agent_id}:")
         logger.info(f"    - 轨迹点数: {len(trajectory)}")
         logger.info(f"    - 访问AOI数: {dln}")
         logger.info(f"    - 回旋半径: {gr:.2f} 米")
         if len(visited_aois) > 0:
-            logger.info(f"    - 访问的AOI ID: {sorted(visited_aois)[:5]}{'...' if len(visited_aois) > 5 else ''}")
-    
+            logger.info(
+                f"    - 访问的AOI ID: {sorted(visited_aois)[:5]}{'...' if len(visited_aois) > 5 else ''}"
+            )
+
     # 转换为 numpy 数组
     results = {
         "gyration_radius": np.array(gyration_radius_list, dtype=np.float64),
@@ -277,24 +280,32 @@ async def main(
         "trajectories": trajectories_dict,  # 保留原始轨迹数据
         "visited_aois": visited_aois_dict,  # 保留访问的AOI数据
     }
-    
+
     logger.info("\n  ✓ 数据提取完成")
     logger.info(f"    - gyration_radius shape: {results['gyration_radius'].shape}")
-    logger.info(f"    - gyration_radius mean: {results['gyration_radius'].mean():.2f} 米")
+    logger.info(
+        f"    - gyration_radius mean: {results['gyration_radius'].mean():.2f} 米"
+    )
     logger.info(f"    - gyration_radius std: {results['gyration_radius'].std():.2f} 米")
-    logger.info(f"    - daily_location_numbers shape: {results['daily_location_numbers'].shape}")
-    logger.info(f"    - daily_location_numbers mean: {results['daily_location_numbers'].mean():.2f}")
-    logger.info(f"    - daily_location_numbers max: {results['daily_location_numbers'].max()}")
-    
+    logger.info(
+        f"    - daily_location_numbers shape: {results['daily_location_numbers'].shape}"
+    )
+    logger.info(
+        f"    - daily_location_numbers mean: {results['daily_location_numbers'].mean():.2f}"
+    )
+    logger.info(
+        f"    - daily_location_numbers max: {results['daily_location_numbers'].max()}"
+    )
+
     # ==================== 保存结果 ====================
     logger.info("\n【保存结果】")
-    
+
     output_dir = "benchmark_results"
     os.makedirs(output_dir, exist_ok=True)
-    
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     result_file = os.path.join(output_dir, f"daily_mobility_results_{timestamp}.pkl")
-    
+
     # 准备保存的数据
     save_data = {
         "results": {
@@ -310,14 +321,14 @@ async def main(
             "time_step_minutes": TIME_STEP_MINUTES,
             "start_time": START_TIME.isoformat(),
             "timestamp": timestamp,
-        }
+        },
     }
-    
+
     with open(result_file, "wb") as f:
         pickle.dump(save_data, f)
-    
+
     logger.info(f"  ✓ 结果已保存到: {result_file}")
-    
+
     # 同时保存为JSON格式以便查看
     json_file = os.path.join(output_dir, f"daily_mobility_results_{timestamp}.json")
     json_data = {
@@ -325,14 +336,15 @@ async def main(
             "gyration_radius": results["gyration_radius"].tolist(),
             "daily_location_numbers": results["daily_location_numbers"].tolist(),
         },
-        "metadata": save_data["metadata"]
+        "metadata": save_data["metadata"],
     }
     with open(json_file, "w") as f:
         json.dump(json_data, f, indent=2)
-    
+
     logger.info(f"  ✓ JSON格式结果已保存到: {json_file}")
 
     await society.close()
+
 
 async def main_social(
     logger,
@@ -365,7 +377,7 @@ async def main_social(
     TOTAL_STEPS = 97
 
     # 用于存储需要清理的环境
-    mobility_env = None
+    _mobility_env = None
     env_router = None
     agents = []
 
@@ -429,7 +441,7 @@ async def main_social(
     # 创建 MobilitySpace 环境
     # 使用相对路径而不是硬编码的 /root 路径
     home_dir = os.path.join(os.path.expanduser("~"), "agentsociety_data")
-    map_path = os.path.join(home_dir, "beijing.pb")
+    _map_path = os.path.join(home_dir, "beijing.pb")
     os.makedirs(home_dir, exist_ok=True)
 
     social_env = SimpleSocialSpace(
@@ -454,7 +466,9 @@ async def main_social(
     agents = [PersonAgent(**args) for args in agent_args]
 
     society = AgentSociety(
-        agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+        agent_specs=[
+            {"id": a.id, "profile": a._profile, "config": a._config} for a in agents
+        ],
         agent_class_name="PersonAgent",
         env_router=env_router,
         start_t=START_TIME,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -27,11 +27,11 @@ def _loads_json(raw: Any, default: Any) -> Any:
     return default
 
 
-def _get_column_map(dataset: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def _get_column_map(dataset: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {column["column_name"]: column for column in dataset.get("columns", [])}
 
 
-def _normalize_dataset_value(column: Optional[Dict[str, Any]], value: Any) -> Any:
+def _normalize_dataset_value(column: dict[str, Any] | None, value: Any) -> Any:
     if value is None:
         return None
     sqlite_type = str((column or {}).get("sqlite_type") or "").upper()
@@ -43,8 +43,8 @@ def _normalize_dataset_value(column: Optional[Dict[str, Any]], value: Any) -> An
 
 
 def normalize_dataset_row(
-    dataset: Dict[str, Any], row: Dict[str, Any]
-) -> Dict[str, Any]:
+    dataset: dict[str, Any], row: dict[str, Any]
+) -> dict[str, Any]:
     """Normalize a raw dataset row into a JSON-safe dict."""
 
     column_map = _get_column_map(dataset)
@@ -56,7 +56,9 @@ def normalize_dataset_row(
 
 def _translate_reader_error(error: Exception) -> HTTPException:
     if isinstance(error, KeyError):
-        return HTTPException(status_code=404, detail=f"Dataset '{error.args[0]}' not found")
+        return HTTPException(
+            status_code=404, detail=f"Dataset '{error.args[0]}' not found"
+        )
     if isinstance(error, ValueError):
         return HTTPException(status_code=400, detail=str(error))
     return HTTPException(status_code=500, detail=str(error))
@@ -71,27 +73,27 @@ async def _to_thread_http(func, *args, **kwargs):
         raise _translate_reader_error(e) from e
 
 
-async def load_dataset_catalog(reader: ReplayReader) -> List[Dict[str, Any]]:
+async def load_dataset_catalog(reader: ReplayReader) -> list[dict[str, Any]]:
     """Load all replay datasets with column metadata."""
 
     return await _to_thread_http(reader.load_dataset_catalog)
 
 
-async def get_dataset_by_id(
-    reader: ReplayReader, dataset_id: str
-) -> Dict[str, Any]:
+async def get_dataset_by_id(reader: ReplayReader, dataset_id: str) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(reader.get_dataset_by_id, dataset_id)
     except KeyError as e:
-        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found") from e
+        raise HTTPException(
+            status_code=404, detail=f"Dataset '{dataset_id}' not found"
+        ) from e
 
 
 async def find_dataset_by_capability(
     reader: ReplayReader,
     capability: str,
     *,
-    kind: Optional[str] = None,
-) -> Dict[str, Any]:
+    kind: str | None = None,
+) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(
             reader.find_dataset_by_capability, capability, kind=kind
@@ -105,20 +107,20 @@ async def find_dataset_by_capability(
 
 async def fetch_dataset_rows(
     reader: ReplayReader,
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     *,
-    order_by: Optional[str] = None,
+    order_by: str | None = None,
     desc: bool = False,
-    step: Optional[int] = None,
-    entity_id: Optional[int] = None,
-    start_step: Optional[int] = None,
-    end_step: Optional[int] = None,
-    max_step: Optional[int] = None,
-    columns: Optional[List[str]] = None,
+    step: int | None = None,
+    entity_id: int | None = None,
+    start_step: int | None = None,
+    end_step: int | None = None,
+    max_step: int | None = None,
+    columns: list[str] | None = None,
     latest_per_entity: bool = False,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     offset: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch dataset rows with metadata-driven filtering and JSON-safe values."""
 
     return await _to_thread_http(
@@ -140,13 +142,13 @@ async def fetch_dataset_rows(
 
 async def count_dataset_rows(
     reader: ReplayReader,
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     *,
-    step: Optional[int] = None,
-    entity_id: Optional[int] = None,
-    start_step: Optional[int] = None,
-    end_step: Optional[int] = None,
-    max_step: Optional[int] = None,
+    step: int | None = None,
+    entity_id: int | None = None,
+    start_step: int | None = None,
+    end_step: int | None = None,
+    max_step: int | None = None,
     latest_per_entity: bool = False,
 ) -> int:
     """Count dataset rows using the same filtering semantics as fetch_dataset_rows."""
@@ -165,20 +167,20 @@ async def count_dataset_rows(
 
 async def query_dataset_rows(
     reader: ReplayReader,
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     *,
     page: int,
     page_size: int,
-    order_by: Optional[str] = None,
+    order_by: str | None = None,
     desc: bool = False,
-    step: Optional[int] = None,
-    entity_id: Optional[int] = None,
-    start_step: Optional[int] = None,
-    end_step: Optional[int] = None,
-    max_step: Optional[int] = None,
-    columns: Optional[List[str]] = None,
+    step: int | None = None,
+    entity_id: int | None = None,
+    start_step: int | None = None,
+    end_step: int | None = None,
+    max_step: int | None = None,
+    columns: list[str] | None = None,
     latest_per_entity: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Query rows from a dataset using metadata-driven filtering."""
 
     return await _to_thread_http(
@@ -200,7 +202,7 @@ async def query_dataset_rows(
 
 async def distinct_dataset_values(
     reader: ReplayReader,
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     column: str,
     *,
     order: bool = True,
@@ -209,18 +211,18 @@ async def distinct_dataset_values(
 
 
 async def count_dataset_distinct(
-    reader: ReplayReader, dataset: Dict[str, Any], column: str
+    reader: ReplayReader, dataset: dict[str, Any], column: str
 ) -> int:
     return await _to_thread_http(reader.count_distinct, dataset, column)
 
 
 async def min_dataset_value(
-    reader: ReplayReader, dataset: Dict[str, Any], column: str
+    reader: ReplayReader, dataset: dict[str, Any], column: str
 ) -> Any:
     return await _to_thread_http(reader.min_value, dataset, column)
 
 
 async def max_dataset_value(
-    reader: ReplayReader, dataset: Dict[str, Any], column: str
+    reader: ReplayReader, dataset: dict[str, Any], column: str
 ) -> Any:
     return await _to_thread_http(reader.max_value, dataset, column)

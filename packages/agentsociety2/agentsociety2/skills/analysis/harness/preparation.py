@@ -5,7 +5,7 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -46,7 +46,7 @@ class PreparationStepRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input_fingerprint: str
-    output_fingerprints: Dict[str, str] = Field(default_factory=dict)
+    output_fingerprints: dict[str, str] = Field(default_factory=dict)
     completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -57,7 +57,7 @@ class PreparationManifest(BaseModel):
     operation: Literal["prepare-produce"] = "prepare-produce"
     hypothesis_id: str
     experiment_id: str
-    steps: Dict[str, PreparationStepRecord] = Field(default_factory=dict)
+    steps: dict[str, PreparationStepRecord] = Field(default_factory=dict)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -286,8 +286,8 @@ def preparation_step_output_paths(
 def collect_output_fingerprints(
     workspace: Path,
     paths: list[Path],
-) -> Dict[str, str]:
-    fingerprints: Dict[str, str] = {}
+) -> dict[str, str]:
+    fingerprints: dict[str, str] = {}
     for path in paths:
         if not path.is_file():
             raise FileNotFoundError(f"prepare-produce output missing: {path}")
@@ -299,7 +299,7 @@ def collect_output_fingerprints(
 
 def _recorded_outputs_status(
     workspace: Path,
-    outputs: Dict[str, str],
+    outputs: dict[str, str],
 ) -> tuple[bool, str]:
     if not outputs:
         return False, "no_recorded_outputs"

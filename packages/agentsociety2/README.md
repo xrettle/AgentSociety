@@ -68,6 +68,7 @@ from agentsociety2.env import CodeGenRouter
 from agentsociety2.contrib.env import SimpleSocialSpace
 from agentsociety2.society import AgentSociety
 
+
 async def main():
     # Declare agent metadata (id / profile / config); agents are NOT instantiated here.
     # AgentSociety batch-creates their workspaces during init().
@@ -110,6 +111,7 @@ async def main():
     # Close the society
     await society.close()
 
+
 if __name__ == "__main__":
     asyncio.run(main())
 ```
@@ -118,6 +120,7 @@ if __name__ == "__main__":
 
 ```python
 from agentsociety2.env import EnvBase, tool
+
 
 class MyCustomEnvironment(EnvBase):
     """A custom environment module."""
@@ -131,6 +134,7 @@ class MyCustomEnvironment(EnvBase):
     def set_mood(self, agent_id: int, mood: str) -> str:
         """Change the mood of an agent."""
         return f"Agent {agent_id}'s mood is now {mood}."
+
 
 # Use the custom module
 from agentsociety2.env import CodeGenRouter
@@ -148,16 +152,23 @@ from agentsociety2.env import CodeGenRouter
 from agentsociety2.contrib.env import SimpleSocialSpace
 from agentsociety2.society import AgentSociety
 
+
 async def main():
     # Declare agent metadata
     agent_specs = [
-        {"id": i, "profile": {"name": f"Player{i}", "personality": "friendly"}, "config": {}}
+        {
+            "id": i,
+            "profile": {"name": f"Player{i}", "personality": "friendly"},
+            "config": {},
+        }
         for i in range(1, 4)
     ]
     names = [(s["id"], s["profile"]["name"]) for s in agent_specs]
 
     # Create environment router (replay is enabled by default -> run/replay/)
-    env_router = CodeGenRouter(env_modules=[SimpleSocialSpace(agent_id_name_pairs=names)])
+    env_router = CodeGenRouter(
+        env_modules=[SimpleSocialSpace(agent_id_name_pairs=names)]
+    )
 
     # Create the society
     society = AgentSociety(
@@ -178,6 +189,7 @@ async def main():
     print(f"Result: {result}")
 
     await society.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -257,6 +269,7 @@ await writer.init()
 
 # Environment modules can register and write their own replay tables.
 from agentsociety2.storage import ColumnDef, TableSchema
+
 schema = TableSchema(
     name="custom_metrics",
     columns=[
@@ -336,14 +349,16 @@ cp .env.example .env
 
 ## Examples
 
-The `examples/` directory contains ready-to-run examples:
+The `examples/` directory (under this package) contains ready-to-run examples:
 
-- `basics/`: Basic agent and environment usage (workspace `agent_specs` + `run_dir`)
+- `basics/`: Basic agent and environment usage (workspace `agent_specs` + `run_dir`);
+  `02_custom_env_module.py` uses contrib `WeatherEnvironment`
 - `games/`: Classic game theory simulations
   - Prisoner's Dilemma (`01_prisoners_dilemma.py`)
   - Public Goods Game (`02_public_goods.py`)
   - Reputation Game (`reputation_game.py`)
-- `advanced/`: Custom agents and multi-router setups
+- `advanced/`: Multi-router comparison and contrib `SpecialistAgent`
+  (`01_custom_agent.py`); production-style runs use `create_env_router_proxy`
 
 Longer batch scripts (Trust Game, Volunteer's Dilemma, Commons Tragedy, etc.) live under
 `experiments/env_main_*_v2.py`.

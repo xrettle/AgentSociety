@@ -108,13 +108,12 @@ def validate_chart_script(code: str) -> ValidationResult:
             path = _attribute_path(node.func)
             func_name = path.rsplit(".", 1)[-1]
 
-            if path in matplotlib_aliases or path == "use":
-                if node.args and "Agg" in _constant_strings(node.args[0]):
-                    has_agg = True
-            elif any(path == f"{alias}.use" for alias in matplotlib_aliases):
-                if node.args and "Agg" in _constant_strings(node.args[0]):
-                    has_agg = True
-            elif any(path == f"{alias}.switch_backend" for alias in pyplot_aliases):
+            if (
+                path in matplotlib_aliases
+                or path == "use"
+                or any(path == f"{alias}.use" for alias in matplotlib_aliases)
+                or any(path == f"{alias}.switch_backend" for alias in pyplot_aliases)
+            ):
                 if node.args and "Agg" in _constant_strings(node.args[0]):
                     has_agg = True
 
@@ -172,11 +171,12 @@ def validate_chart_script(code: str) -> ValidationResult:
                 if _attribute_path(sub.value).endswith("rcParams"):
                     if isinstance(sub.slice, ast.Constant):
                         key = str(sub.slice.value)
-                        if key == "svg.fonttype" and isinstance(
-                            node.value, ast.Constant
+                        if (
+                            key == "svg.fonttype"
+                            and isinstance(node.value, ast.Constant)
+                            and str(node.value.value) == "none"
                         ):
-                            if str(node.value.value) == "none":
-                                has_svg_fonttype = True
+                            has_svg_fonttype = True
                         if key == "font.family":
                             has_font_family = True
                         if key == "font.sans-serif":

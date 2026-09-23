@@ -22,23 +22,23 @@
 """
 
 from agentsociety2.registry.base import ModuleRegistry, get_registry
-from agentsociety2.registry.modules import (
-    get_registered_env_modules,
-    get_registered_agent_modules,
-    get_env_module_class,
-    get_agent_module_class,
-    list_all_modules,
-    reload_modules,
-    register_scanned_custom_modules,
-    scan_and_register_custom_modules,
-    discover_and_register_builtin_modules,
-)
 from agentsociety2.registry.models import (
-    EnvModuleInitConfig,
     AgentInitConfig,
-    CreateInstanceRequest,
     AskRequest,
+    CreateInstanceRequest,
+    EnvModuleInitConfig,
     InterventionRequest,
+)
+from agentsociety2.registry.modules import (
+    discover_and_register_builtin_modules,
+    get_agent_module_class,
+    get_env_module_class,
+    get_registered_agent_modules,
+    get_registered_env_modules,
+    list_all_modules,
+    register_scanned_custom_modules,
+    reload_modules,
+    scan_and_register_custom_modules,
 )
 
 __all__ = [

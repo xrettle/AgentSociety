@@ -185,11 +185,13 @@ def test_add_from_identifier_duplicate_by_doi(tmp_path: Path) -> None:
 def test_add_from_identifier_lookup_failure(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    with patch(
-        "agentsociety2.skills.literature.ingest.lookup_identifier",
-        side_effect=ValueError("Not a DOI: 'nope'"),
+    with (
+        patch(
+            "agentsociety2.skills.literature.ingest.lookup_identifier",
+            side_effect=ValueError("Not a DOI: 'nope'"),
+        ),
+        pytest.raises(ValueError, match="Not a DOI"),
     ):
-        with pytest.raises(ValueError, match="Not a DOI"):
-            add_from_identifier(workspace, "nope")
+        add_from_identifier(workspace, "nope")
     _, index = load_or_create_index(workspace)
     assert index.entries == []

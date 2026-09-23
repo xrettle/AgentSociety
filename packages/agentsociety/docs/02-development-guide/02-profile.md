@@ -39,7 +39,7 @@
 - `persona` (str): 智能体人格角色
 - `background_story` (str): 智能体背景故事
 - `age` (int): 智能体年龄
-- `id` (int): 智能体ID，推荐设置为从1开始的连续整数，在实验设置中可用于[筛选智能体](../03-config/05-exp.md#target_agent)
+- `id` (int): 智能体ID，推荐设置为从1开始的连续整数，在实验设置中可用于{ref}`筛选智能体 <target_agent>`
 
 上述信息将存储在智能体的Key-Value形式的`Status Memory`中，在运行过程中被按需提取以加入大模型请求中来影响大模型的决策行为。
 其中`background_story`在默认的智能体实现中总是加入大模型提示词中，因此编写合适的背景故事是构建智能体画像的最关键的环节。

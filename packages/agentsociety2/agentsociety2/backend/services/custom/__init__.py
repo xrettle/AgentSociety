@@ -19,7 +19,7 @@ __all__ = [
     "CompatibilityIssue",
     "CustomModuleJsonGenerator",
     "CustomModuleScanner",
-    "ScanDiagnostic",
     "SafeModuleTester",
+    "ScanDiagnostic",
     "ValidationCheck",
 ]

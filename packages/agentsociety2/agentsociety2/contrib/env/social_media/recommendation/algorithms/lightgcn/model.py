@@ -4,15 +4,14 @@ LightGCN 推荐算法实现
 基于 PyTorch 的轻量级图卷积网络算法
 """
 
-from typing import List, Tuple, Set, Dict, Optional
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 from torch.utils.data import DataLoader, TensorDataset
 
 from agentsociety2.logger import get_logger
-from ..core import RecommenderAlgorithm, RatingMatrix
+
+from ..core import RatingMatrix, RecommenderAlgorithm
 from .config import LightGCNConfig
 
 
@@ -56,7 +55,7 @@ class LightGCNModel(nn.Module):
         """
         self.Graph = graph
 
-    def propagate(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def propagate(self) -> tuple[torch.Tensor, torch.Tensor]:
         """
         进行 LightGCN 的多层传播，返回最终的 (user_emb, item_emb)
         """
@@ -104,19 +103,19 @@ class LightGCNRecommender(RecommenderAlgorithm):
         :param config: LightGCN算法配置
         """
         self.config = config
-        self.model: Optional[LightGCNModel] = None
+        self.model: LightGCNModel | None = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # ID映射
-        self.user_index_map: Optional[Dict[int, int]] = None
-        self.item_index_map: Optional[Dict[int, int]] = None
-        self.index_user_map: Optional[Dict[int, int]] = None
-        self.index_item_map: Optional[Dict[int, int]] = None
+        self.user_index_map: dict[int, int] | None = None
+        self.item_index_map: dict[int, int] | None = None
+        self.index_user_map: dict[int, int] | None = None
+        self.index_item_map: dict[int, int] | None = None
         self.n_users: int = 0
         self.n_items: int = 0
 
         # 热门物品（用于冷启动）
-        self._popular_items: List[Tuple[int, float]] = []
+        self._popular_items: list[tuple[int, float]] = []
 
         get_logger().info(
             f"LightGCNRecommender 初始化: embedding_dim={config.embedding_dim}, "
@@ -160,21 +159,31 @@ class LightGCNRecommender(RecommenderAlgorithm):
         train_items = []
         train_labels = []
 
-        for user_id, item_id, rating in zip(data.user_ids, data.item_ids, data.ratings, strict=False):
+        for user_id, item_id, rating in zip(
+            data.user_ids, data.item_ids, data.ratings, strict=False
+        ):
             if user_id in self.user_index_map and item_id in self.item_index_map:
                 train_users.append(self.user_index_map[user_id])
                 train_items.append(self.item_index_map[item_id])
-                train_labels.append(1.0 if rating >= 3.0 else 0.0)  # 使用rating >= 3.0作为正样本
+                train_labels.append(
+                    1.0 if rating >= 3.0 else 0.0
+                )  # 使用rating >= 3.0作为正样本
 
         train_dataset = TensorDataset(
             torch.tensor(train_users, dtype=torch.long),
             torch.tensor(train_items, dtype=torch.long),
-            torch.tensor(train_labels, dtype=torch.float32)
+            torch.tensor(train_labels, dtype=torch.float32),
         )
-        train_loader = DataLoader(train_dataset, batch_size=self.config.batch_size, shuffle=True)
+        train_loader = DataLoader(
+            train_dataset, batch_size=self.config.batch_size, shuffle=True
+        )
 
         # 5. 优化器和损失函数
-        optimizer = optim.Adam(self.model.parameters(), lr=self.config.learning_rate, weight_decay=self.config.reg)
+        optimizer = optim.Adam(
+            self.model.parameters(),
+            lr=self.config.learning_rate,
+            weight_decay=self.config.reg,
+        )
         criterion = nn.BCEWithLogitsLoss()
 
         # 6. 训练循环
@@ -222,7 +231,9 @@ class LightGCNRecommender(RecommenderAlgorithm):
         user_indices = []
         item_indices = []
 
-        for user_id, item_id, rating in zip(data.user_ids, data.item_ids, data.ratings, strict=False):
+        for user_id, item_id, rating in zip(
+            data.user_ids, data.item_ids, data.ratings, strict=False
+        ):
             if rating >= 3.0:  # 使用rating >= 3.0作为正反馈
                 if user_id in self.user_index_map and item_id in self.item_index_map:
                     user_indices.append(self.user_index_map[user_id])
@@ -256,7 +267,7 @@ class LightGCNRecommender(RecommenderAlgorithm):
         )
         return graph.coalesce()
 
-    def _get_final_embeddings(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_final_embeddings(self) -> tuple[torch.Tensor, torch.Tensor]:
         """获取最终的用户和物品嵌入"""
         assert self.model is not None
         self.model.eval()
@@ -297,11 +308,8 @@ class LightGCNRecommender(RecommenderAlgorithm):
         return max(1.0, min(5.0, rating))
 
     def recommend(
-        self,
-        user_id: int,
-        n: int,
-        exclude_ids: Set[int]
-    ) -> List[Tuple[int, float]]:
+        self, user_id: int, n: int, exclude_ids: set[int]
+    ) -> list[tuple[int, float]]:
         """
         为用户生成推荐列表
 
@@ -347,35 +355,35 @@ class LightGCNRecommender(RecommenderAlgorithm):
             raise RuntimeError("模型尚未训练,无法保存")
 
         checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'user_index_map': self.user_index_map,
-            'item_index_map': self.item_index_map,
-            'index_user_map': self.index_user_map,
-            'index_item_map': self.index_item_map,
-            'popular_items': self._popular_items,
-            'config': self.config,
-            'n_users': self.n_users,
-            'n_items': self.n_items,
+            "model_state_dict": self.model.state_dict(),
+            "user_index_map": self.user_index_map,
+            "item_index_map": self.item_index_map,
+            "index_user_map": self.index_user_map,
+            "index_item_map": self.index_item_map,
+            "popular_items": self._popular_items,
+            "config": self.config,
+            "n_users": self.n_users,
+            "n_items": self.n_items,
         }
 
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             torch.save(checkpoint, f)  # nosec: internal checkpoint save
 
         get_logger().info(f"LightGCN 模型已保存到 {path}")
 
     def load(self, path: str) -> None:
         """从文件加载模型"""
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             checkpoint = torch.load(f, weights_only=False)  # nosec: internal checkpoint loading
 
-        self.config = checkpoint['config']
-        self.user_index_map = checkpoint['user_index_map']
-        self.item_index_map = checkpoint['item_index_map']
-        self.index_user_map = checkpoint['index_user_map']
-        self.index_item_map = checkpoint['index_item_map']
-        self._popular_items = checkpoint['popular_items']
-        self.n_users = checkpoint['n_users']
-        self.n_items = checkpoint['n_items']
+        self.config = checkpoint["config"]
+        self.user_index_map = checkpoint["user_index_map"]
+        self.item_index_map = checkpoint["item_index_map"]
+        self.index_user_map = checkpoint["index_user_map"]
+        self.index_item_map = checkpoint["index_item_map"]
+        self._popular_items = checkpoint["popular_items"]
+        self.n_users = checkpoint["n_users"]
+        self.n_items = checkpoint["n_items"]
 
         # 重建模型（需要重新构建图，但这里简化处理，假设图会在fit时重建）
         self.model = LightGCNModel(
@@ -385,7 +393,7 @@ class LightGCNRecommender(RecommenderAlgorithm):
             n_layers=self.config.n_layers,
         ).to(self.device)
 
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 
         get_logger().info(f"LightGCN 模型已从 {path} 加载")
@@ -393,7 +401,7 @@ class LightGCNRecommender(RecommenderAlgorithm):
 
     def _compute_popular_items(self, data: RatingMatrix) -> None:
         """计算热门物品（用于冷启动）"""
-        item_ratings: Dict[int, List[float]] = {}
+        item_ratings: dict[int, list[float]] = {}
 
         for item_id, rating in zip(data.item_ids, data.ratings, strict=False):
             if item_id not in item_ratings:
@@ -425,4 +433,3 @@ class LightGCNRecommender(RecommenderAlgorithm):
             self._popular_items = []
 
         get_logger().debug(f"计算了 {len(self._popular_items)} 个热门物品")
-

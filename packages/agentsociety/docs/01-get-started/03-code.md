@@ -4,7 +4,7 @@
 
 ---
 
-这里假设已经完成[安装](./02-installation.md)，并准备好了[地图文件](./02-installation.md#使用前准备)。
+这里假设已经完成[安装](./02-installation.md)，并准备好了{ref}`地图文件 <prep>`。
 地图文件的存储路径为`./agentsociety_data/beijing.pb`。
 
 (cli)=

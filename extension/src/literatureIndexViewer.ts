@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { filePathToAtReference } from './atReference';
 import { openWorkspaceFile } from './openWorkspaceFile';
+import { isExtensionZh } from './i18n';
 import {
   downloadLiteraturePdfs,
   exportLiteratureBibtex,
@@ -75,7 +76,7 @@ export class LiteratureIndexViewer {
     indexPath: string,
     identifier: string
   ): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const raw = identifier.trim();
     if (!workspaceFolder || !raw) {
@@ -121,7 +122,7 @@ export class LiteratureIndexViewer {
     panel: vscode.WebviewPanel,
     indexPath: string
   ): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
@@ -219,7 +220,7 @@ export class LiteratureIndexViewer {
     indexPath: string,
     entryIds?: number[]
   ): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
@@ -257,7 +258,7 @@ export class LiteratureIndexViewer {
     indexPath: string,
     entryIds: number[]
   ): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder || entryIds.length === 0) {
       vscode.window.showWarningMessage(
@@ -298,7 +299,7 @@ export class LiteratureIndexViewer {
     entryIds?: number[],
     mode: 'copy' | 'file' = 'copy'
   ): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
@@ -347,7 +348,7 @@ export class LiteratureIndexViewer {
     panel: vscode.WebviewPanel,
     indexPath: string
   ): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       vscode.window.showWarningMessage(isZh ? '请先打开工作区。' : 'Open a workspace first.');
@@ -401,7 +402,7 @@ export class LiteratureIndexViewer {
       const content = fs.readFileSync(filePath, 'utf-8');
       data = JSON.parse(content);
     } catch (error: any) {
-      const isZh = vscode.env.language.startsWith('zh');
+      const isZh = isExtensionZh();
       vscode.window.showErrorMessage(isZh ? `无法读取文献索引: ${error.message}` : `Could not read literature index: ${error.message}`);
       return;
     }
@@ -417,7 +418,7 @@ export class LiteratureIndexViewer {
     // 创建新的 webview 面板
     const panel = vscode.window.createWebviewPanel(
       'literatureIndexViewer',
-      vscode.env.language.startsWith('zh') ? '文献索引预览' : 'Literature Index',
+      isExtensionZh() ? '文献索引预览' : 'Literature Index',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -452,7 +453,7 @@ export class LiteratureIndexViewer {
               await openWorkspaceFile(candidatePath);
             }
           } catch (error: any) {
-            const isZh = vscode.env.language.startsWith('zh');
+            const isZh = isExtensionZh();
             vscode.window.showErrorMessage(isZh ? `无法打开文件: ${error.message}` : `Could not open file: ${error.message}`);
           }
         } else if (message.command === 'openUrl') {
@@ -475,14 +476,14 @@ export class LiteratureIndexViewer {
                 : '';
           if (atReference) {
             vscode.env.clipboard.writeText(atReference);
-            const isZh = vscode.env.language.startsWith('zh');
+            const isZh = isExtensionZh();
             vscode.window.showInformationMessage(isZh ? `已复制: ${atReference}` : `Copied: ${atReference}`);
           }
         } else if (message.command === 'copyText') {
           const text = typeof message.text === 'string' ? message.text : '';
           if (text) {
             await vscode.env.clipboard.writeText(text);
-            const isZh = vscode.env.language.startsWith('zh');
+            const isZh = isExtensionZh();
             const count = typeof message.count === 'number' ? message.count : undefined;
             vscode.window.showInformationMessage(
               count
@@ -490,7 +491,7 @@ export class LiteratureIndexViewer {
                 : (isZh ? '已复制到剪贴板' : 'Copied to clipboard')
             );
           } else {
-            const isZh = vscode.env.language.startsWith('zh');
+            const isZh = isExtensionZh();
             vscode.window.showWarningMessage(
               typeof message.emptyMessage === 'string' && message.emptyMessage
                 ? message.emptyMessage
@@ -516,13 +517,13 @@ export class LiteratureIndexViewer {
           try {
             this.refreshPanel(panel, filePath);
           } catch (error: any) {
-            const isZh = vscode.env.language.startsWith('zh');
+            const isZh = isExtensionZh();
             vscode.window.showErrorMessage(
               isZh ? `刷新失败: ${error.message}` : `Refresh failed: ${error.message}`
             );
           }
         } else if (message.command === 'deleteEntry') {
-          const isZh = vscode.env.language.startsWith('zh');
+          const isZh = isExtensionZh();
           const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
           const entryId = typeof message.entryId === 'string' ? message.entryId : '';
           const title = typeof message.title === 'string' && message.title ? message.title : entryId;
@@ -617,7 +618,7 @@ export class LiteratureIndexViewer {
     const total = entries.length;
 
     // 获取当前语言
-    const isChinese = vscode.env.language.startsWith('zh');
+    const isChinese = isExtensionZh();
     const jsonForScript = (value: unknown) =>
       JSON.stringify(value).replace(/</g, '\\u003c');
 
@@ -1257,7 +1258,7 @@ export class LiteratureIndexViewer {
         const fullTextLabel = fullTextStatus === 'downloaded'
           ? (isChinese ? '已下载原文 PDF' : 'Full-text PDF downloaded')
           : fullTextEnriched
-            ? (isChinese ? '原文不可下载，笔记已通过搜索补充' : 'PDF unavailable, note enriched via web search')
+            ? (isChinese ? '原文不可下载，笔记已人工补充' : 'PDF unavailable; note manually supplemented')
             : fullTextStatus === 'no_candidate'
               ? (isChinese ? '未找到开放 PDF' : 'No open PDF found')
               : fullTextStatus === 'failed'

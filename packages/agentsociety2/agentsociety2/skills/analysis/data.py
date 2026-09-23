@@ -4,21 +4,21 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agentsociety2.logger import get_logger
 from agentsociety2.storage.replay_reader import ReplayReader
 
 from .models import (
-    DIR_REPLAY,
-    ExperimentContext,
-    ExperimentDesign,
-    ExperimentStatus,
     DIR_ARTIFACTS,
+    DIR_REPLAY,
     FILE_EXPERIMENT_MD,
     FILE_HYPOTHESIS_MD,
     FILE_PID,
     FILE_SQLITE,
+    ExperimentContext,
+    ExperimentDesign,
+    ExperimentStatus,
 )
 
 logger = get_logger()
@@ -33,6 +33,7 @@ def _sanitize_id(raw: str) -> str:
     """仅保留安全字符，防止路径穿越。"""
     s = (raw or "").strip()
     import re
+
     s = re.sub(r"[^a-zA-Z0-9_-]", "", s)
     return s or "unknown"
 
@@ -54,37 +55,41 @@ def _resolve_replay_dir(path: Path) -> Path | None:
 # 数据结构
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class DatabaseSchema:
     """数据库 Schema 信息"""
-    tables: List[str]
-    columns: Dict[str, List[Dict[str, Any]]]  # table_name -> [{name, type, ...}]
-    row_counts: Dict[str, int]
+
+    tables: list[str]
+    columns: dict[str, list[dict[str, Any]]]  # table_name -> [{name, type, ...}]
+    row_counts: dict[str, int]
     markdown: str = ""
 
 
 @dataclass
 class DataStats:
     """数据统计摘要"""
-    numeric_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    categorical_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    sample_data: Dict[str, List[Dict]] = field(default_factory=dict)
+
+    numeric_stats: dict[str, dict[str, Any]] = field(default_factory=dict)
+    categorical_stats: dict[str, dict[str, Any]] = field(default_factory=dict)
+    sample_data: dict[str, list[dict]] = field(default_factory=dict)
     quick_stats_md: str = ""
 
 
 @dataclass
 class DataSummary:
     """完整数据摘要"""
-    db_path: Optional[str] = None
-    schema: Optional[DatabaseSchema] = None
-    stats: Optional[DataStats] = None
+
+    db_path: str | None = None
+    schema: DatabaseSchema | None = None
+    stats: DataStats | None = None
 
     @property
-    def tables(self) -> List[str]:
+    def tables(self) -> list[str]:
         return self.schema.tables if self.schema else []
 
     @property
-    def row_counts(self) -> Dict[str, int]:
+    def row_counts(self) -> dict[str, int]:
         return self.schema.row_counts if self.schema else {}
 
     @property
@@ -96,21 +101,22 @@ class DataSummary:
         return self.stats.quick_stats_md if self.stats else ""
 
     @property
-    def numeric_stats(self) -> Dict[str, Dict[str, Any]]:
+    def numeric_stats(self) -> dict[str, dict[str, Any]]:
         return self.stats.numeric_stats if self.stats else {}
 
     @property
-    def categorical_stats(self) -> Dict[str, Dict[str, Any]]:
+    def categorical_stats(self) -> dict[str, dict[str, Any]]:
         return self.stats.categorical_stats if self.stats else {}
 
     @property
-    def sample_data(self) -> Dict[str, List[Dict]]:
+    def sample_data(self) -> dict[str, list[dict]]:
         return self.stats.sample_data if self.stats else {}
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # DataReader: 数据库读取和理解
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class DataReader:
     """Replay/数据库读取和理解"""
@@ -125,8 +131,8 @@ class DataReader:
             return DatabaseSchema(tables=[], columns={}, row_counts={})
         reader = ReplayReader(self.replay_dir)
         try:
-            columns_by_table: Dict[str, List[Dict[str, Any]]] = {}
-            row_counts: Dict[str, int] = {}
+            columns_by_table: dict[str, list[dict[str, Any]]] = {}
+            row_counts: dict[str, int] = {}
             for dataset in reader.load_dataset_catalog():
                 table = dataset["table_name"]
                 dataset_meta = {
@@ -144,7 +150,9 @@ class DataReader:
                     )
                 }
                 pk_columns = {
-                    key for key in (dataset.get("entity_key"), dataset.get("step_key")) if key
+                    key
+                    for key in (dataset.get("entity_key"), dataset.get("step_key"))
+                    if key
                 }
                 columns_by_table[table] = [
                     {
@@ -217,9 +225,9 @@ class DataReader:
 
     def read_sample_data(
         self,
-        tables: Optional[List[str]] = None,
+        tables: list[str] | None = None,
         limit: int = 5,
-    ) -> Dict[str, List[Dict]]:
+    ) -> dict[str, list[dict]]:
         """读取样本数据"""
         if self.replay_dir is not None:
             reader = ReplayReader(self.replay_dir)
@@ -230,7 +238,7 @@ class DataReader:
                 }
                 if tables is None:
                     tables = list(datasets_by_table.keys())
-                result: Dict[str, List[Dict]] = {}
+                result: dict[str, list[dict]] = {}
                 for table in tables:
                     dataset = datasets_by_table.get(table)
                     if dataset is None:
@@ -257,7 +265,9 @@ class DataReader:
                 cursor.execute(f"SELECT COUNT(*) FROM {_quote_identifier(table)}")
                 if cursor.fetchone()[0] == 0:
                     continue
-                cursor.execute(f"SELECT * FROM {_quote_identifier(table)} LIMIT {limit}")
+                cursor.execute(
+                    f"SELECT * FROM {_quote_identifier(table)} LIMIT {limit}"
+                )
                 cols = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
                 result[table] = [dict(zip(cols, row, strict=False)) for row in rows]
@@ -320,15 +330,17 @@ class DataReader:
 
     def _format_schema_markdown(
         self,
-        schema: Dict[str, List[Dict[str, Any]]],
-        row_counts: Dict[str, int],
+        schema: dict[str, list[dict[str, Any]]],
+        row_counts: dict[str, int],
     ) -> str:
         if not schema:
             return "Schema not available"
         lines: list[str] = []
         for table_name, columns in schema.items():
             dataset = columns[0].get("dataset") if columns else None
-            dataset_id = dataset.get("dataset_id") if isinstance(dataset, dict) else table_name
+            dataset_id = (
+                dataset.get("dataset_id") if isinstance(dataset, dict) else table_name
+            )
             lines.append(f"### Dataset: `{dataset_id}`")
             lines.append(f"- Table: `{table_name}`")
             lines.append(f"- Rows: {row_counts.get(table_name, 0)}")
@@ -363,7 +375,7 @@ class DataReader:
     def _compute_replay_numeric_stats(
         self,
         schema: DatabaseSchema,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         if self.replay_dir is None:
             return {}
         reader = ReplayReader(self.replay_dir)
@@ -372,12 +384,12 @@ class DataReader:
                 dataset["table_name"]: dataset
                 for dataset in reader.load_dataset_catalog()
             }
-            result: Dict[str, Dict[str, Any]] = {}
+            result: dict[str, dict[str, Any]] = {}
             for table in schema.tables:
                 dataset = datasets_by_table.get(table)
                 if dataset is None or schema.row_counts.get(table, 0) == 0:
                     continue
-                table_stats: Dict[str, Any] = {}
+                table_stats: dict[str, Any] = {}
                 for col in schema.columns.get(table, []):
                     if col.get("type", "").upper() not in (
                         "INTEGER",
@@ -403,7 +415,7 @@ class DataReader:
     def _compute_replay_categorical_stats(
         self,
         schema: DatabaseSchema,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         if self.replay_dir is None:
             return {}
         reader = ReplayReader(self.replay_dir)
@@ -412,14 +424,19 @@ class DataReader:
                 dataset["table_name"]: dataset
                 for dataset in reader.load_dataset_catalog()
             }
-            result: Dict[str, Dict[str, Any]] = {}
+            result: dict[str, dict[str, Any]] = {}
             for table in schema.tables:
                 dataset = datasets_by_table.get(table)
                 if dataset is None or schema.row_counts.get(table, 0) == 0:
                     continue
-                table_stats: Dict[str, Any] = {}
+                table_stats: dict[str, Any] = {}
                 for col in schema.columns.get(table, []):
-                    if col.get("type", "").upper() not in ("TEXT", "VARCHAR", "CHAR", "STRING"):
+                    if col.get("type", "").upper() not in (
+                        "TEXT",
+                        "VARCHAR",
+                        "CHAR",
+                        "STRING",
+                    ):
                         continue
                     name = col["name"]
                     values = reader.distinct_values(dataset, name)[:5]
@@ -437,7 +454,7 @@ class DataReader:
         self,
         conn,
         schema: DatabaseSchema,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """计算数值列统计"""
         cursor = conn.cursor()
         result = {}
@@ -449,7 +466,8 @@ class DataReader:
             numeric_cols = [
                 col["name"]
                 for col in schema.columns.get(table, [])
-                if col.get("type", "").upper() in ("INTEGER", "REAL", "FLOAT", "DOUBLE", "NUMERIC")
+                if col.get("type", "").upper()
+                in ("INTEGER", "REAL", "FLOAT", "DOUBLE", "NUMERIC")
             ]
             if not numeric_cols:
                 continue
@@ -459,7 +477,9 @@ class DataReader:
             for col in numeric_cols:
                 try:
                     c = _quote_identifier(col)
-                    cursor.execute(f"SELECT MIN({c}), MAX({c}), AVG({c}), COUNT({c}) FROM {t}")
+                    cursor.execute(
+                        f"SELECT MIN({c}), MAX({c}), AVG({c}), COUNT({c}) FROM {t}"
+                    )
                     row = cursor.fetchone()
                     if row and row[3] > 0:
                         table_stats[col] = {
@@ -469,7 +489,11 @@ class DataReader:
                             "count": row[3],
                         }
                 except sqlite3.Error:
-                    logger.debug("Failed to compute aggregate stats for table %s", table, exc_info=True)
+                    logger.debug(
+                        "Failed to compute aggregate stats for table %s",
+                        table,
+                        exc_info=True,
+                    )
             if table_stats:
                 result[table] = table_stats
 
@@ -479,7 +503,7 @@ class DataReader:
         self,
         conn,
         schema: DatabaseSchema,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """计算分类列统计"""
         cursor = conn.cursor()
         result = {}
@@ -513,10 +537,16 @@ class DataReader:
                     if unique_count > 0:
                         table_stats[col] = {
                             "unique_count": unique_count,
-                            "top_values": [(v[0], v[1]) for v in top_values] if top_values else [],
+                            "top_values": [(v[0], v[1]) for v in top_values]
+                            if top_values
+                            else [],
                         }
                 except sqlite3.Error:
-                    logger.debug("Failed to compute column stats for table %s", table, exc_info=True)
+                    logger.debug(
+                        "Failed to compute column stats for table %s",
+                        table,
+                        exc_info=True,
+                    )
             if table_stats:
                 result[table] = table_stats
 
@@ -525,9 +555,9 @@ class DataReader:
     def _format_quick_stats(
         self,
         schema: DatabaseSchema,
-        numeric_stats: Dict,
-        categorical_stats: Dict,
-        sample_data: Optional[Dict[str, List[Dict]]] = None,
+        numeric_stats: dict,
+        categorical_stats: dict,
+        sample_data: dict[str, list[dict]] | None = None,
     ) -> str:
         """格式化快速统计为 Markdown"""
         sample_data = sample_data or {}
@@ -541,9 +571,13 @@ class DataReader:
             rows = schema.row_counts.get(table, 0)
             cols = schema.columns.get(table, [])
             dataset = cols[0].get("dataset") if cols else None
-            dataset_id = dataset.get("dataset_id") if isinstance(dataset, dict) else table
+            dataset_id = (
+                dataset.get("dataset_id") if isinstance(dataset, dict) else table
+            )
             title = dataset.get("title") if isinstance(dataset, dict) else None
-            description = dataset.get("description") if isinstance(dataset, dict) else None
+            description = (
+                dataset.get("description") if isinstance(dataset, dict) else None
+            )
             lines.append(f"### Dataset: `{dataset_id}` ({rows} rows)")
             lines.append(f"- Table: `{table}`")
             if title:
@@ -576,7 +610,9 @@ class DataReader:
                 col_meta = {col["name"]: col for col in cols}
                 for col, stats in categorical_stats[table].items():
                     top = stats.get("top_values", [])[:3]
-                    top_str = ", ".join([f"'{v[0]}'({v[1]})" for v in top if v[0] is not None])
+                    top_str = ", ".join(
+                        [f"'{v[0]}'({v[1]})" for v in top if v[0] is not None]
+                    )
                     label = col_meta.get(col, {}).get("title") or col
                     detail = col_meta.get(col, {}).get("description")
                     lines.append(
@@ -593,6 +629,7 @@ class DataReader:
 # ─────────────────────────────────────────────────────────────────────────
 # ContextLoader: 实验上下文加载
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class ContextLoader:
     """实验上下文加载"""
@@ -665,7 +702,7 @@ class ContextLoader:
 
         return ExperimentDesign(**design_data)
 
-    def _load_duration(self, run_path: Path) -> Optional[float]:
+    def _load_duration(self, run_path: Path) -> float | None:
         """从 pid.json 读取运行时长"""
         import json_repair
 
@@ -678,8 +715,8 @@ class ContextLoader:
             start_s = data.get("start_time")
             end_s = data.get("end_time")
             if start_s and end_s:
-                start = datetime.fromisoformat(start_s.replace("Z", "+00:00"))
-                end = datetime.fromisoformat(end_s.replace("Z", "+00:00"))
+                start = datetime.fromisoformat(start_s)
+                end = datetime.fromisoformat(end_s)
                 return (end - start).total_seconds()
         except Exception:
             logger.debug("Failed to parse simulation duration", exc_info=True)
@@ -688,14 +725,14 @@ class ContextLoader:
     def _analyze_status(
         self,
         run_path: Path,
-    ) -> Tuple[ExperimentStatus, float, List[str]]:
+    ) -> tuple[ExperimentStatus, float, list[str]]:
         """分析实验状态"""
         import json_repair
 
         replay_dir = run_path / DIR_REPLAY
         legacy_db_path = run_path / FILE_SQLITE
         pid_file = run_path / FILE_PID
-        errors: List[str] = []
+        errors: list[str] = []
         status = ExperimentStatus.UNKNOWN
         completion = 0.0
 
@@ -722,11 +759,11 @@ class ContextLoader:
 
         return status, completion, errors
 
-    def _collect_runtime_failures(self, run_path: Path) -> List[str]:
+    def _collect_runtime_failures(self, run_path: Path) -> list[str]:
         """收集运行时失败信号"""
         import re
 
-        failures: List[str] = []
+        failures: list[str] = []
 
         # 检查 artifacts 目录
         artifacts_dir = run_path / DIR_ARTIFACTS
@@ -735,7 +772,10 @@ class ContextLoader:
                 try:
                     txt = md_path.read_text(encoding="utf-8")
                     lowered = txt.lower()
-                    if "planning failed" in lowered or "invalid json response" in lowered:
+                    if (
+                        "planning failed" in lowered
+                        or "invalid json response" in lowered
+                    ):
                         failures.append(f"Artifact failure in {md_path.name}")
                 except OSError:
                     continue
@@ -753,7 +793,8 @@ class ContextLoader:
                     if re.search(r"\bERROR\b|\bCRITICAL\b", ln)
                 ]
                 non_ignorable = [
-                    ln for ln in error_lines
+                    ln
+                    for ln in error_lines
                     if "litellm" not in ln.lower() and "deprecation" not in ln.lower()
                 ]
                 if non_ignorable:

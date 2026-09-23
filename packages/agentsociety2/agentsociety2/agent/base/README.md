@@ -191,8 +191,7 @@ class MinimalAgent(AgentBase):
         )
         # 把最近的 observation 拼进 user 消息
         obs_text = "\n".join(
-            f"- [{o.get('action')}] {o.get('observation')}"
-            for o in observations
+            f"- [{o.get('action')}] {o.get('observation')}" for o in observations
         )
         user = question or f"Observations:\n{obs_text}\nDecide next action."
         return [

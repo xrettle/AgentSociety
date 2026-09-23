@@ -6,6 +6,7 @@
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { isExtensionZh } from './i18n';
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_PRETTY_RENDER_BYTES = 2 * 1024 * 1024;
@@ -20,7 +21,7 @@ export class JsonViewer {
   public static async show(filePath: string, title?: string): Promise<void> {
     let data: any = {};
     let error: string | null = null;
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
 
     try {
       const stat = fs.statSync(filePath);
@@ -71,7 +72,7 @@ export class JsonViewer {
     error: string | null,
     filePath: string
   ): void {
-    const isChinese = vscode.env.language.startsWith('zh');
+    const isChinese = isExtensionZh();
     panel.webview.html = this.getHtml(data, error, filePath, isChinese);
   }
 

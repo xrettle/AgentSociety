@@ -312,12 +312,12 @@ msgstr "Validation script"
 
 #: ../../module_and_parameter_management.md:234
 msgid ""
-"``extension/skills/agentsociety-experiment-"
-"config/scripts/validate_config.py`` 用于对生成的配置做端到端校验。"
+"``ags experiment-config validate``（技能脚本 "
+"``agentsociety-experiment-config/.../scripts/config.py``）用于对生成的配置做端到端校验。"
 msgstr ""
-"``extension/skills/agentsociety-experiment-"
-"config/scripts/validate_config.py`` is used for end-to-end verification of "
-"the generated configuration."
+"``ags experiment-config validate`` (skill script "
+"``agentsociety-experiment-config/.../scripts/config.py``) is used for "
+"end-to-end verification of the generated configuration."
 
 #: ../../module_and_parameter_management.md:236
 msgid "**验证内容：**"

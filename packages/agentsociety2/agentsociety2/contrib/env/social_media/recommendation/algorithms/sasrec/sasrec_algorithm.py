@@ -2,14 +2,15 @@
 SASRec推荐算法包装类
 """
 
-from typing import List, Tuple, Set, Dict, Optional
 from collections import defaultdict
+
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 from agentsociety2.logger import get_logger
-from ..core import RecommenderAlgorithm, RatingMatrix
+
+from ..core import RatingMatrix, RecommenderAlgorithm
 from .sasrec_config import SASRecConfig
 from .sasrec_model import SASRec
 
@@ -26,18 +27,18 @@ class SASRecRecommender(RecommenderAlgorithm):
         :param config: SASRec算法配置
         """
         self.config = config
-        self.model: Optional[SASRec] = None
+        self.model: SASRec | None = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # ID映射（原始ID ↔ 内部索引）
-        self._user_map: Dict[int, int] = {}
-        self._item_map: Dict[int, int] = {}
+        self._user_map: dict[int, int] = {}
+        self._item_map: dict[int, int] = {}
 
         # 用户行为序列（存储每个用户的历史物品ID列表）
-        self._user_sequences: Dict[int, List[int]] = {}
+        self._user_sequences: dict[int, list[int]] = {}
 
         # 热门物品（用于冷启动）
-        self._popular_items: List[Tuple[int, float]] = []
+        self._popular_items: list[tuple[int, float]] = []
 
         get_logger().info(
             f"SASRecRecommender 初始化: hidden={config.hidden_units}, "
@@ -84,11 +85,11 @@ class SASRecRecommender(RecommenderAlgorithm):
         optimizer = torch.optim.Adam(
             self.model.parameters(),
             lr=self.config.learning_rate,
-            weight_decay=self.config.weight_decay
+            weight_decay=self.config.weight_decay,
         )
         criterion = nn.BCEWithLogitsLoss()
 
-        best_loss = float('inf')
+        best_loss = float("inf")
         patience_counter = 0
 
         self.model.train()
@@ -118,8 +119,7 @@ class SASRecRecommender(RecommenderAlgorithm):
             # 评估和早停
             if (epoch + 1) % self.config.eval_interval == 0:
                 get_logger().debug(
-                    f"Epoch {epoch + 1}/{self.config.max_epochs}, "
-                    f"Loss: {avg_loss:.4f}"
+                    f"Epoch {epoch + 1}/{self.config.max_epochs}, Loss: {avg_loss:.4f}"
                 )
 
                 if avg_loss < best_loss:
@@ -172,7 +172,7 @@ class SASRecRecommender(RecommenderAlgorithm):
             logit = self.model.forward_eval(
                 user_ids=None,  # SASRec不使用user_id
                 target_item=item_tensor,
-                log_seqs=seq_tensor
+                log_seqs=seq_tensor,
             )
 
         # Sigmoid转换到[0,1]，然后映射到[1,5]
@@ -182,11 +182,8 @@ class SASRecRecommender(RecommenderAlgorithm):
         return max(1.0, min(5.0, rating))
 
     def recommend(
-        self,
-        user_id: int,
-        n: int,
-        exclude_ids: Set[int]
-    ) -> List[Tuple[int, float]]:
+        self, user_id: int, n: int, exclude_ids: set[int]
+    ) -> list[tuple[int, float]]:
         """
         为用户生成推荐列表
 
@@ -216,15 +213,14 @@ class SASRecRecommender(RecommenderAlgorithm):
         with torch.no_grad():
             seq_tensor = torch.LongTensor([user_seq]).to(self.device)
             logits = self.model.predict_all(
-                user_ids=None,
-                log_seqs=seq_tensor
+                user_ids=None, log_seqs=seq_tensor
             )  # [1, item_num]
 
             # Sigmoid转换
             scores = torch.sigmoid(logits).squeeze(0).cpu().numpy()
 
         # 构建候选列表（排除已交互物品）
-        all_scores: List[Tuple[int, float]] = []
+        all_scores: list[tuple[int, float]] = []
         for original_item_id, internal_idx in self._item_map.items():
             if original_item_id in exclude_ids:
                 continue
@@ -249,15 +245,15 @@ class SASRecRecommender(RecommenderAlgorithm):
             raise RuntimeError("模型尚未训练,无法保存")
 
         checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'user_map': self._user_map,
-            'item_map': self._item_map,
-            'user_sequences': self._user_sequences,
-            'popular_items': self._popular_items,
-            'config': self.config
+            "model_state_dict": self.model.state_dict(),
+            "user_map": self._user_map,
+            "item_map": self._item_map,
+            "user_sequences": self._user_sequences,
+            "popular_items": self._popular_items,
+            "config": self.config,
         }
 
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             torch.save(checkpoint, f)  # nosec: internal checkpoint save
 
         get_logger().info(f"SASRec 模型已保存到 {path}")
@@ -268,18 +264,18 @@ class SASRecRecommender(RecommenderAlgorithm):
 
         :param path: 模型文件路径
         """
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             checkpoint = torch.load(f, weights_only=False)  # nosec: internal checkpoint loading
 
-        self.config = checkpoint['config']
-        self._user_map = checkpoint['user_map']
-        self._item_map = checkpoint['item_map']
-        self._user_sequences = checkpoint['user_sequences']
-        self._popular_items = checkpoint['popular_items']
+        self.config = checkpoint["config"]
+        self._user_map = checkpoint["user_map"]
+        self._item_map = checkpoint["item_map"]
+        self._user_sequences = checkpoint["user_sequences"]
+        self._popular_items = checkpoint["popular_items"]
 
         # 重建模型
         self.model = SASRec(self.config).to(self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 
         get_logger().info(f"SASRec 模型已从 {path} 加载")
@@ -303,7 +299,7 @@ class SASRecRecommender(RecommenderAlgorithm):
         # 截断到maxlen（保留最近的N个）
         for user_id, seq in user_sequences.items():
             if len(seq) > self.config.maxlen:
-                user_sequences[user_id] = seq[-self.config.maxlen:]
+                user_sequences[user_id] = seq[-self.config.maxlen :]
 
         self._user_sequences = dict(user_sequences)
 
@@ -312,7 +308,7 @@ class SASRecRecommender(RecommenderAlgorithm):
             f"平均长度: {np.mean([len(s) for s in self._user_sequences.values()]):.1f}"
         )
 
-    def _get_user_sequence(self, user_id: int) -> List[int]:
+    def _get_user_sequence(self, user_id: int) -> list[int]:
         """
         获取用户的行为序列（padding到maxlen）
 
@@ -331,11 +327,13 @@ class SASRecRecommender(RecommenderAlgorithm):
             padded_seq = [0] * padding_len + seq
         else:
             # 取最近的maxlen个
-            padded_seq = seq[-self.config.maxlen:]
+            padded_seq = seq[-self.config.maxlen :]
 
         return padded_seq
 
-    def _prepare_training_data(self) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    def _prepare_training_data(
+        self,
+    ) -> list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
         准备训练数据：序列 → 下一个物品
 
@@ -370,15 +368,14 @@ class SASRecRecommender(RecommenderAlgorithm):
         batch_size = self.config.batch_size
         batches = []
         for i in range(0, len(train_data), batch_size):
-            batch = train_data[i:i + batch_size]
+            batch = train_data[i : i + batch_size]
             seqs = torch.LongTensor([x[0] for x in batch])
             targets = torch.LongTensor([x[1] for x in batch])
             labels = torch.FloatTensor([x[2] for x in batch])
             batches.append((seqs, targets, labels))
 
         get_logger().debug(
-            f"生成了 {len(train_data)} 个训练样本, "
-            f"{len(batches)} 个批次"
+            f"生成了 {len(train_data)} 个训练样本, {len(batches)} 个批次"
         )
 
         return batches
@@ -391,7 +388,7 @@ class SASRecRecommender(RecommenderAlgorithm):
 
         :param data: 评分矩阵
         """
-        item_ratings: Dict[int, List[float]] = defaultdict(list)
+        item_ratings: dict[int, list[float]] = defaultdict(list)
 
         for item_id, rating in zip(data.item_ids, data.ratings, strict=False):
             item_ratings[item_id].append(rating)

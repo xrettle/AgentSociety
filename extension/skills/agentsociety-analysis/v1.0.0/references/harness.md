@@ -7,7 +7,7 @@ The harness splits work into **structural** (Python) and **attestation** (LLM) l
 | Phase     | Validator checks                                                            |
 | --------- | --------------------------------------------------------------------------- |
 | frame     | `analysis_plan.yaml` via Pydantic                                           |
-| explore   | `sqlite.db`, target tables, `phase_artifacts.explore` paths exist           |
+| explore   | `run/replay/_schema.json`（或 legacy `sqlite.db`）、目标 datasets/tables、`phase_artifacts.explore` 路径存在 |
 | claims    | `claims.json` shape, confirmatory claim present, user-approved confirmatory |
 | refine    | contracts + validated chart files on disk; per-chart `validate-chart`       |
 | produce   | bilingual MD/HTML, `report_outline.json`, manifests, asset graph            |

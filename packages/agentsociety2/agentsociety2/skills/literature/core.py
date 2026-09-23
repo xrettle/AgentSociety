@@ -9,13 +9,14 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
-from agentsociety2.config import Config, build_client_for_role, get_model_name
-from agentsociety2.skills.literature.mcp_client import call_literature_search_mcp
-from agentsociety2.logger import get_logger
 from litellm import AllMessageValues
 from litellm.router import Router
+
+from agentsociety2.config import Config, build_client_for_role, get_model_name
+from agentsociety2.logger import get_logger
+from agentsociety2.skills.literature.mcp_client import call_literature_search_mcp
 
 logger = get_logger()
 
@@ -36,7 +37,7 @@ def is_chinese_text(text: str) -> bool:
     return False
 
 
-async def _default_acompletion(messages: List[AllMessageValues]):
+async def _default_acompletion(messages: list[AllMessageValues]):
     dispatcher = build_client_for_role("default")
     return await dispatcher.call(
         model=get_model_name("default"),
@@ -45,7 +46,7 @@ async def _default_acompletion(messages: List[AllMessageValues]):
     )
 
 
-async def translate_to_english(text: str, router: Optional[Router] = None) -> str:
+async def translate_to_english(text: str, router: Router | None = None) -> str:
     """
     使用LLM将中文文本翻译成英文
 
@@ -62,7 +63,7 @@ Chinese text:
 
 English translation:"""
 
-        messages: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        messages: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         if router is None:
             response = await _default_acompletion(messages)
@@ -91,7 +92,7 @@ English translation:"""
         return text
 
 
-def _split_query_by_keywords(query: str) -> List[str]:
+def _split_query_by_keywords(query: str) -> list[str]:
     """
     基于关键词和连接词进行简单的查询拆分（备用方法）
     尽量保持原查询的短语结构
@@ -140,8 +141,8 @@ def _split_query_by_keywords(query: str) -> List[str]:
 
 
 async def split_query_into_subtopics(
-    query: str, router: Optional[Router] = None
-) -> List[str]:
+    query: str, router: Router | None = None
+) -> list[str]:
     """
     使用LLM将复杂查询拆分为多个子主题，尽量按照查询的字面意思拆分，不扩展原意
 
@@ -182,7 +183,7 @@ Please output ONLY a JSON array of subtopics, with no additional text.
 
 Subtopic array:"""
 
-        messages: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        messages: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         if router is None:
             response = await _default_acompletion(messages)
@@ -254,8 +255,8 @@ Subtopic array:"""
 
 
 def merge_literature_results(
-    results: List[Dict[str, Any]], query: str
-) -> Optional[Dict[str, Any]]:
+    results: list[dict[str, Any]], query: str
+) -> dict[str, Any] | None:
     """
     合并多个文献搜索结果，去重并合并
 
@@ -344,21 +345,21 @@ def merge_literature_results(
 async def search_literature(
     query: str,
     limit: int = 10,
-    router: Optional[Router] = None,
-    year_from: Optional[int] = None,
-    year_to: Optional[int] = None,
-    sources: Optional[List[LiteratureSource]] = None,
-    similarity_threshold: Optional[float] = None,
-    vector_similarity_weight: Optional[float] = None,
-    chunk_content_limit: Optional[int] = None,
-    relevant_content_limit: Optional[int] = None,
-    max_chunks_per_article: Optional[int] = None,
+    router: Router | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    sources: list[LiteratureSource] | None = None,
+    similarity_threshold: float | None = None,
+    vector_similarity_weight: float | None = None,
+    chunk_content_limit: int | None = None,
+    relevant_content_limit: int | None = None,
+    max_chunks_per_article: int | None = None,
     return_chunks: bool = True,
     enable_multi_query: bool = False,
-    mcp_url: Optional[str] = None,
-    api_key: Optional[str] = None,
+    mcp_url: str | None = None,
+    api_key: str | None = None,
     timeout: int = 120,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Search academic literature through the MCP gateway.
 
     :param query: Search query; Chinese text is translated to English when detected.
@@ -471,19 +472,19 @@ async def search_literature(
 async def _search_literature_single(
     query: str,
     limit: int,
-    year_from: Optional[int],
-    year_to: Optional[int],
-    sources: Optional[List[LiteratureSource]],
-    similarity_threshold: Optional[float],
-    vector_similarity_weight: Optional[float],
-    chunk_content_limit: Optional[int],
-    relevant_content_limit: Optional[int],
-    max_chunks_per_article: Optional[int],
+    year_from: int | None,
+    year_to: int | None,
+    sources: list[LiteratureSource] | None,
+    similarity_threshold: float | None,
+    vector_similarity_weight: float | None,
+    chunk_content_limit: int | None,
+    relevant_content_limit: int | None,
+    max_chunks_per_article: int | None,
     return_chunks: bool,
     mcp_url: str,
     api_key: str,
     timeout: int,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Run a single MCP literature search request.
 
     :param query: English search query sent to the gateway.
@@ -502,7 +503,7 @@ async def _search_literature_single(
     :param timeout: Request timeout in seconds.
     :returns: Normalized result dict or ``None`` on timeout or error.
     """
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "query": query,
         "limit": limit,
     }
@@ -538,7 +539,7 @@ async def _search_literature_single(
         total_articles = converted_result.get("total", 0)
         logger.info(f"MCP 搜索成功，找到 {total_articles} 篇相关文献")
         return converted_result
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("MCP 文献搜索请求超时")
         return None
     except Exception as e:
@@ -550,7 +551,7 @@ async def _search_literature_single(
         return None
 
 
-def _convert_api_response(response: Dict[str, Any], query: str) -> Dict[str, Any]:
+def _convert_api_response(response: dict[str, Any], query: str) -> dict[str, Any]:
     """Map MCP search JSON (``results``) to the internal ``articles`` shape.
 
     :param response: Raw MCP search response.

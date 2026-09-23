@@ -2,10 +2,11 @@
 Self-Enhancement Experiment Environment
 Environment for Self-Enhancement (SE) experiment based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -31,9 +32,15 @@ class GetRankingsResponse(BaseModel):
     """Response model for get_my_rankings() function"""
 
     agent_id: int = Field(..., description="Agent ID")
-    rankings: Dict[str, int] = Field(..., description="Dictionary of dimension -> percentile")
-    completed_dimensions: List[str] = Field(..., description="List of completed dimensions")
-    remaining_dimensions: List[str] = Field(..., description="List of remaining dimensions")
+    rankings: dict[str, int] = Field(
+        ..., description="Dictionary of dimension -> percentile"
+    )
+    completed_dimensions: list[str] = Field(
+        ..., description="List of completed dimensions"
+    )
+    remaining_dimensions: list[str] = Field(
+        ..., description="List of remaining dimensions"
+    )
 
 
 # Valid dimensions for SE experiment
@@ -52,6 +59,11 @@ VALID_DIMENSIONS = [
 class SelfEnhancementEnv(EnvBase):
     """Environment for Self-Enhancement (SE) experiment based on AgentSociety2"""
 
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
+
     _agent_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("rankings", "JSON", nullable=False),
         ColumnDef("completed_dimensions", "INTEGER", nullable=False),
@@ -59,7 +71,7 @@ class SelfEnhancementEnv(EnvBase):
 
     def __init__(
         self,
-        agent_ids: List[int],
+        agent_ids: list[int],
     ):
         """
         Initialize the Self-Enhancement environment.
@@ -72,7 +84,7 @@ class SelfEnhancementEnv(EnvBase):
         self.num_agents = len(agent_ids)
 
         # Store rankings: agent_id -> dimension -> percentile
-        self._rankings: Dict[int, Dict[str, int]] = {
+        self._rankings: dict[int, dict[str, int]] = {
             agent_id: {} for agent_id in agent_ids
         }
 
@@ -136,7 +148,9 @@ class SelfEnhancementEnv(EnvBase):
     @classmethod
     def description(cls) -> str:
         """Return a short module description."""
-        return "Self-Enhancement experiment environment for self-evaluation assessments."
+        return (
+            "Self-Enhancement experiment environment for self-evaluation assessments."
+        )
 
     @tool(readonly=False)
     async def submit_ranking(
@@ -165,7 +179,9 @@ class SelfEnhancementEnv(EnvBase):
 
             # Validate percentile
             if not isinstance(percentile, int):
-                raise ValueError(f"Percentile must be an integer, got {type(percentile).__name__}")
+                raise ValueError(
+                    f"Percentile must be an integer, got {type(percentile).__name__}"
+                )
             percentile = max(0, min(100, percentile))  # Clamp to 0-100
 
             # Check if already submitted
@@ -186,10 +202,11 @@ class SelfEnhancementEnv(EnvBase):
 
             # Debug log
             import sys
+
             print(
                 f"[ENV DEBUG] Agent {agent_id} submitted {dimension_upper}: {percentile} "
                 f"({completed}/{len(VALID_DIMENSIONS)} completed)",
-                file=sys.stderr
+                file=sys.stderr,
             )
 
             return SubmitRankingResponse(
@@ -226,7 +243,7 @@ class SelfEnhancementEnv(EnvBase):
             )
 
     @tool(readonly=True, kind="statistics")
-    async def get_all_rankings(self) -> Dict[int, Dict[str, int]]:
+    async def get_all_rankings(self) -> dict[int, dict[str, int]]:
         """
         Get all rankings for all agents (statistics function).
 
@@ -272,15 +289,15 @@ class SelfEnhancementEnv(EnvBase):
         )
         self._step_counter += 1
 
-    def get_results(self) -> Dict[int, Dict[str, int]]:
+    def get_results(self) -> dict[int, dict[str, int]]:
         """
         Get all rankings results (synchronous method for result extraction).
 
         :returns: Dictionary mapping agent_id to their rankings dictionary.
         """
         return {
-            agent_id: rankings.copy()
-            for agent_id, rankings in self._rankings.items()
+            agent_id: rankings.copy() for agent_id, rankings in self._rankings.items()
         }
+
 
 __all__ = ["VALID_DIMENSIONS", "SelfEnhancementEnv"]

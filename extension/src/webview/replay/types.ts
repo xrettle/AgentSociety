@@ -30,6 +30,11 @@ export interface ExperimentInfo {
   start_time: string | null;
   end_time: string | null;
   agent_count: number;
+  run_status?: string | null;
+  pid_step_count?: number | null;
+  simulation_time?: string | null;
+  registered_datasets?: number;
+  nonempty_snapshot_tables?: number;
 }
 
 /** Playback state */

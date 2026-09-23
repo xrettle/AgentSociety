@@ -46,7 +46,7 @@ HOME。``ExperimentRunner`` 会在其中创建以下结构：
    └── agents/
        └── agent_0001/
            ├── config.json              # 静态配置（create 时写一次）
-           ├── AGENT.json               # 动态自描述快照（每步 to_workspace 更新）
+           ├── AGENT.json               # 动态自描述快照（含 world_description；每步 to_workspace 更新）
            ├── AGENT_MEMORY.md          # 运行时会话摘要
            ├── memory/episodes.jsonl    # event-level memories
            ├── state/
@@ -277,7 +277,7 @@ DuckDB view。它保留后端使用的 metadata-driven 查询语义：
 ``<run_dir>/agents/agent_<id>/`` 中常用文件：
 
 * ``config.json`` — agent 静态配置。
-* ``AGENT.json`` — 动态自描述快照（每步 ``to_workspace`` 更新）。
+* ``AGENT.json`` — 动态自描述快照（含 ``world_description``；每步 ``to_workspace`` 更新）。
 * ``AGENT_MEMORY.md`` — 运行时会话摘要。
 * ``memory/episodes.jsonl`` — event-level memories。
 * ``state/*.json`` — 内置状态以及用户自定义状态文件。

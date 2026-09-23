@@ -1,31 +1,33 @@
-"""Multi-Router Example.
+"""Multi-Router note + CodeGen production path demo.
 
-Compares ReAct / PlanExecute / CodeGen routers with the same agent_specs setup.
+Production env routing uses CodeGen inside a Ray ``EnvRouterProxy``.
+This example only exercises that path with a stable ``list_agents`` ask.
 """
 
 from __future__ import annotations
 
 import os
+import sys
+import time
+from pathlib import Path
 
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
-from typing import Any
 
-from agentsociety2.contrib.env import SimpleSocialSpace
-from agentsociety2.env import CodeGenRouter, PlanExecuteRouter, ReActRouter
+from agentsociety2.env import create_env_router_proxy
 from agentsociety2.society import AgentSociety
 
+_EXAMPLES_ROOT = Path(__file__).resolve().parents[1]
+if str(_EXAMPLES_ROOT) not in sys.path:
+    sys.path.insert(0, str(_EXAMPLES_ROOT))
+from _checks import fresh_run_dir, require_no_critical_failures
 
-async def demonstrate_router(
-    router_class: type[Any],
-    router_name: str,
-    question: str,
-    run_dir: Path,
-) -> None:
+
+async def main() -> None:
+    run_dir = fresh_run_dir(Path("run_router_codegen"))
     agent_specs = [
         {
             "id": 1,
@@ -37,8 +39,12 @@ async def demonstrate_router(
             "config": {},
         }
     ]
-    names = [(spec["id"], spec["profile"]["name"]) for spec in agent_specs]
-    env_router = router_class(env_modules=[SimpleSocialSpace(agent_id_name_pairs=names)])
+    names = [(1, "Tester")]
+    env_router = await create_env_router_proxy(
+        ["SimpleSocialSpace"],
+        {"SimpleSocialSpace": {"agent_id_name_pairs": names}},
+        run_dir=run_dir,
+    )
     society = AgentSociety(
         agent_specs=agent_specs,
         agent_class_name="PersonAgent",
@@ -48,39 +54,23 @@ async def demonstrate_router(
     )
     await society.init()
 
-    print(f"\n--- {router_name} ---")
+    print("=== CodeGen Router (production EnvRouterProxy path) ===\n")
+    question = "Use list_agents. What is the name of the only agent?"
     print(f"Question: {question}")
+    t0 = time.perf_counter()
     response = await society.ask(question)
-    print(f"Response: {str(response)[:200]}...")
+    wall = time.perf_counter() - t0
+    print(f"Response: {response}")
+    stats = society.all_token_stats()
     await society.close()
-
-
-async def main() -> None:
-    print("=== Multi-Router Comparison ===\n")
-    question = (
-        "I have 10 apples. I give 3 to Alice and 2 to Bob. "
-        "Then Alice gives me back 1 apple. How many apples do I have now? "
-        "Show your work step by step."
-    )
-
-    await demonstrate_router(
-        ReActRouter,
-        "ReAct Router (Reasoning + Acting)",
-        question,
-        Path("run_router_react"),
-    )
-    await demonstrate_router(
-        PlanExecuteRouter,
-        "Plan-Execute Router (Plan then Execute)",
-        question,
-        Path("run_router_plan_execute"),
-    )
-    await demonstrate_router(
-        CodeGenRouter,
-        "CodeGen Router (Generate Code)",
-        question,
-        Path("run_router_codegen"),
-    )
+    require_no_critical_failures(run_dir)
+    ok = "tester" in str(response).lower()
+    print(f"Token stats: {stats}")
+    print(f"WALL_SEC={wall:.2f}")
+    print(f"SUCCESS={ok}")
+    if not ok:
+        print("ERROR: expected answer to mention Tester", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -19,17 +19,16 @@ API端点：
 from __future__ import annotations
 
 import os
-from typing import Dict, Any
+from typing import Any
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from agentsociety2.backend.path_security import resolve_workspace_root
-
 from agentsociety2.logger import get_logger
 from agentsociety2.registry import (
-    get_registry,
-    get_registered_env_modules,
     get_registered_agent_modules,
+    get_registered_env_modules,
+    get_registry,
     scan_and_register_custom_modules,
 )
 
@@ -66,8 +65,8 @@ def _load_custom_modules_if_needed() -> None:
 
 @router.get("/agent_classes")
 async def get_agent_classes(
-    include_custom: bool = Query(True, description="是否包含自定义模块")
-) -> Dict[str, Any]:
+    include_custom: bool = Query(True, description="是否包含自定义模块"),
+) -> dict[str, Any]:
     """
     获取所有可用的Agent类列表
 
@@ -121,8 +120,8 @@ async def get_agent_classes(
 
 @router.get("/env_module_classes")
 async def get_env_module_classes(
-    include_custom: bool = Query(True, description="是否包含自定义模块")
-) -> Dict[str, Any]:
+    include_custom: bool = Query(True, description="是否包含自定义模块"),
+) -> dict[str, Any]:
     """
     获取所有可用的环境模块类列表
 
@@ -176,8 +175,8 @@ async def get_env_module_classes(
 
 @router.get("/all")
 async def get_all_modules(
-    include_custom: bool = Query(True, description="是否包含自定义模块")
-) -> Dict[str, Any]:
+    include_custom: bool = Query(True, description="是否包含自定义模块"),
+) -> dict[str, Any]:
     """
     获取所有可用的模块类
 

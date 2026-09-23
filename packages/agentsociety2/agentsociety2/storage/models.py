@@ -7,7 +7,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
@@ -20,7 +20,7 @@ class AgentProfile(SQLModel, table=True):
 
     id: int = Field(primary_key=True)
     name: str
-    profile: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    profile: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -32,8 +32,8 @@ class AgentStatus(SQLModel, table=True):
     id: int = Field(primary_key=True)
     step: int = Field(primary_key=True, index=True)
     t: datetime = Field(index=True)
-    action: Optional[str] = None
-    status: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    action: str | None = None
+    status: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -42,7 +42,7 @@ class AgentDialog(SQLModel, table=True):
 
     __tablename__ = "agent_dialog"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     agent_id: int = Field(index=True)
     step: int = Field(index=True)
     t: datetime

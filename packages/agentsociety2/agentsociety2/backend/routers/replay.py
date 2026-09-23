@@ -9,11 +9,11 @@ Replay data query API for simulation playback.
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
-import json
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -38,9 +38,14 @@ class ExperimentInfo(BaseModel):
     hypothesis_id: str
     experiment_id: str
     total_steps: int
-    start_time: Optional[datetime]
-    end_time: Optional[datetime]
+    start_time: datetime | None
+    end_time: datetime | None
     agent_count: int
+    run_status: str | None = None
+    pid_step_count: int | None = None
+    simulation_time: str | None = None
+    registered_datasets: int = 0
+    nonempty_snapshot_tables: int = 0
 
 
 class TimelinePoint(BaseModel):
@@ -51,21 +56,21 @@ class TimelinePoint(BaseModel):
 class AgentProfile(BaseModel):
     id: int
     name: str
-    profile: Dict[str, Any] = Field(default_factory=dict)
+    profile: dict[str, Any] = Field(default_factory=dict)
 
 
 class ReplayDatasetColumn(BaseModel):
     column_name: str
     sqlite_type: str
-    logical_type: Optional[str] = None
-    analysis_role: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    unit: Optional[str] = None
+    logical_type: str | None = None
+    analysis_role: str | None = None
+    title: str | None = None
+    description: str | None = None
+    unit: str | None = None
     nullable: bool
-    enum_values: Optional[Any] = None
-    example: Optional[Any] = None
-    tags: List[str] = Field(default_factory=list)
+    enum_values: Any | None = None
+    example: Any | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class ReplayDatasetInfo(BaseModel):
@@ -75,33 +80,33 @@ class ReplayDatasetInfo(BaseModel):
     kind: str
     title: str = ""
     description: str = ""
-    entity_key: Optional[str] = None
-    step_key: Optional[str] = None
-    time_key: Optional[str] = None
-    default_order: List[str] = Field(default_factory=list)
-    capabilities: List[str] = Field(default_factory=list)
+    entity_key: str | None = None
+    step_key: str | None = None
+    time_key: str | None = None
+    default_order: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
     version: int
     created_at: datetime
-    columns: List[ReplayDatasetColumn] = Field(default_factory=list)
+    columns: list[ReplayDatasetColumn] = Field(default_factory=list)
 
 
 class ReplayDatasetList(BaseModel):
-    datasets: List[ReplayDatasetInfo]
+    datasets: list[ReplayDatasetInfo]
 
 
 class ReplayDatasetRows(BaseModel):
     dataset_id: str
-    columns: List[str]
-    rows: List[Dict[str, Any]]
+    columns: list[str]
+    rows: list[dict[str, Any]]
     total: int
 
 
 class ReplayPanelSchema(BaseModel):
-    agent_profile_dataset: Optional[ReplayDatasetInfo] = None
-    agent_state_datasets: List[ReplayDatasetInfo] = Field(default_factory=list)
-    env_state_datasets: List[ReplayDatasetInfo] = Field(default_factory=list)
-    geo_dataset: Optional[ReplayDatasetInfo] = None
-    primary_agent_state_dataset_id: Optional[str] = None
+    agent_profile_dataset: ReplayDatasetInfo | None = None
+    agent_state_datasets: list[ReplayDatasetInfo] = Field(default_factory=list)
+    env_state_datasets: list[ReplayDatasetInfo] = Field(default_factory=list)
+    geo_dataset: ReplayDatasetInfo | None = None
+    primary_agent_state_dataset_id: str | None = None
     layout_hint: Literal["map", "random"] = "random"
     supports_map: bool = False
 
@@ -114,27 +119,27 @@ class ReplayDatasetPanelRef(BaseModel):
 
 class ReplayPosition(BaseModel):
     agent_id: int
-    lng: Optional[float] = None
-    lat: Optional[float] = None
+    lng: float | None = None
+    lat: float | None = None
 
 
 class ReplayAgentStateAtStep(BaseModel):
     dataset: ReplayDatasetPanelRef
-    rows_by_agent_id: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    rows_by_agent_id: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class ReplayEnvStateAtStep(BaseModel):
     dataset: ReplayDatasetPanelRef
-    row: Optional[Dict[str, Any]] = None
+    row: dict[str, Any] | None = None
 
 
 class ReplayStepBundle(BaseModel):
     step: int
-    t: Optional[datetime] = None
+    t: datetime | None = None
     layout_hint: Literal["map", "random"] = "random"
-    positions: List[ReplayPosition] = Field(default_factory=list)
-    agent_state_rows: Dict[str, ReplayAgentStateAtStep] = Field(default_factory=dict)
-    env_state_rows: Dict[str, ReplayEnvStateAtStep] = Field(default_factory=dict)
+    positions: list[ReplayPosition] = Field(default_factory=list)
+    agent_state_rows: dict[str, ReplayAgentStateAtStep] = Field(default_factory=dict)
+    env_state_rows: dict[str, ReplayEnvStateAtStep] = Field(default_factory=dict)
 
 
 def get_replay_dir(workspace_path: str, hypothesis_id: str, experiment_id: str) -> Path:
@@ -150,11 +155,11 @@ async def get_replay_reader(replay_dir: Path):
         await asyncio.to_thread(reader.close)
 
 
-def _dataset_to_response(dataset: Dict[str, Any]) -> ReplayDatasetInfo:
+def _dataset_to_response(dataset: dict[str, Any]) -> ReplayDatasetInfo:
     return ReplayDatasetInfo.model_validate(dataset)
 
 
-def _dataset_ref(dataset: Dict[str, Any]) -> ReplayDatasetPanelRef:
+def _dataset_ref(dataset: dict[str, Any]) -> ReplayDatasetPanelRef:
     return ReplayDatasetPanelRef(
         dataset_id=dataset["dataset_id"],
         module_name=dataset.get("module_name") or "",
@@ -162,7 +167,7 @@ def _dataset_ref(dataset: Dict[str, Any]) -> ReplayDatasetPanelRef:
     )
 
 
-def _coerce_datetime(value: Any) -> Optional[datetime]:
+def _coerce_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
@@ -173,19 +178,19 @@ def _coerce_datetime(value: Any) -> Optional[datetime]:
     return None
 
 
-def _dataset_has_columns(dataset: Dict[str, Any], *column_names: str) -> bool:
+def _dataset_has_columns(dataset: dict[str, Any], *column_names: str) -> bool:
     available = {column["column_name"] for column in dataset.get("columns", [])}
     return all(column_name in available for column_name in column_names)
 
 
-def _split_columns_param(raw_columns: Optional[str]) -> Optional[List[str]]:
+def _split_columns_param(raw_columns: str | None) -> list[str] | None:
     if raw_columns is None:
         return None
     columns = [column.strip() for column in raw_columns.split(",") if column.strip()]
     return columns or None
 
 
-def _list_agent_state_datasets(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _list_agent_state_datasets(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items = [
         dataset
         for dataset in datasets
@@ -198,7 +203,7 @@ def _list_agent_state_datasets(datasets: List[Dict[str, Any]]) -> List[Dict[str,
     return items
 
 
-def _list_env_state_datasets(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _list_env_state_datasets(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items = [
         dataset
         for dataset in datasets
@@ -210,7 +215,7 @@ def _list_env_state_datasets(datasets: List[Dict[str, Any]]) -> List[Dict[str, A
     return items
 
 
-def _select_geo_dataset(datasets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _select_geo_dataset(datasets: list[dict[str, Any]]) -> dict[str, Any] | None:
     candidates = [
         dataset
         for dataset in _list_agent_state_datasets(datasets)
@@ -222,8 +227,8 @@ def _select_geo_dataset(datasets: List[Dict[str, Any]]) -> Optional[Dict[str, An
 
 
 def _select_primary_agent_state_dataset(
-    datasets: List[Dict[str, Any]],
-) -> Optional[Dict[str, Any]]:
+    datasets: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     agent_state_datasets = _list_agent_state_datasets(datasets)
     if not agent_state_datasets:
         return None
@@ -239,8 +244,15 @@ def _select_primary_agent_state_dataset(
 
 
 def _select_timeline_dataset(
-    datasets: List[Dict[str, Any]],
-) -> Optional[Dict[str, Any]]:
+    datasets: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    from ...storage.replay_metadata import SIMULATION_TIMELINE_DATASET_ID
+
+    for dataset in datasets:
+        if dataset.get("dataset_id") == SIMULATION_TIMELINE_DATASET_ID:
+            if dataset.get("step_key") and dataset.get("time_key"):
+                return dataset
+
     primary_agent_state = _select_primary_agent_state_dataset(datasets)
     if (
         primary_agent_state is not None
@@ -273,9 +285,9 @@ def _select_timeline_dataset(
 
 
 def _find_time_value(
-    rows: List[Dict[str, Any]],
-    time_key: Optional[str],
-) -> Optional[datetime]:
+    rows: list[dict[str, Any]],
+    time_key: str | None,
+) -> datetime | None:
     if not time_key:
         return None
     for row in rows:
@@ -286,18 +298,18 @@ def _find_time_value(
 
 
 def _build_positions_from_step_rows(
-    geo_dataset: Optional[Dict[str, Any]],
-    agent_state_groups: Dict[str, ReplayAgentStateAtStep],
-) -> List[ReplayPosition]:
+    geo_dataset: dict[str, Any] | None,
+    agent_state_groups: dict[str, ReplayAgentStateAtStep],
+) -> list[ReplayPosition]:
     agent_ids: set[int] = set()
     for group in agent_state_groups.values():
-        for raw_agent_id in group.rows_by_agent_id.keys():
+        for raw_agent_id in group.rows_by_agent_id:
             try:
                 agent_ids.add(int(raw_agent_id))
             except (TypeError, ValueError):
                 continue
 
-    positions_by_agent_id: Dict[int, ReplayPosition] = {
+    positions_by_agent_id: dict[int, ReplayPosition] = {
         agent_id: ReplayPosition(agent_id=agent_id, lng=None, lat=None)
         for agent_id in sorted(agent_ids)
     }
@@ -323,8 +335,8 @@ def _build_positions_from_step_rows(
 
 async def _get_agent_profile_dataset(
     reader: ReplayReader,
-    datasets: Optional[List[Dict[str, Any]]] = None,
-) -> Optional[Dict[str, Any]]:
+    datasets: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     catalog = datasets or await load_dataset_catalog(reader)
     candidates = [
         dataset
@@ -336,7 +348,7 @@ async def _get_agent_profile_dataset(
     return candidates[0] if candidates else None
 
 
-def _parse_profile_payload(raw_profile: Any) -> Dict[str, Any]:
+def _parse_profile_payload(raw_profile: Any) -> dict[str, Any]:
     if isinstance(raw_profile, dict):
         return raw_profile
     if isinstance(raw_profile, str):
@@ -349,7 +361,7 @@ def _parse_profile_payload(raw_profile: Any) -> Dict[str, Any]:
 
 
 def _resolve_agent_name(
-    agent_id: int, row: Dict[str, Any], profile: Dict[str, Any]
+    agent_id: int, row: dict[str, Any], profile: dict[str, Any]
 ) -> str:
     name = row.get("name")
     if isinstance(name, str) and name.strip():
@@ -362,14 +374,14 @@ def _resolve_agent_name(
 
 async def _load_agent_profiles(
     reader: ReplayReader,
-    datasets: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[int, AgentProfile]:
+    datasets: list[dict[str, Any]] | None = None,
+) -> dict[int, AgentProfile]:
     catalog = datasets or await load_dataset_catalog(reader)
     profile_dataset = await _get_agent_profile_dataset(reader, catalog)
     if profile_dataset is not None:
         entity_key = profile_dataset["entity_key"]
         rows_result = await fetch_dataset_rows(reader, profile_dataset)
-        profiles: Dict[int, AgentProfile] = {}
+        profiles: dict[int, AgentProfile] = {}
         for row in rows_result["rows"]:
             raw_id = row.get(entity_key)
             if raw_id is None:
@@ -405,12 +417,12 @@ async def _load_agent_profiles(
 
 async def _get_experiment_summary(
     reader: ReplayReader,
-    datasets: List[Dict[str, Any]],
-) -> tuple[int, Optional[datetime], Optional[datetime], int]:
+    datasets: list[dict[str, Any]],
+) -> tuple[int, datetime | None, datetime | None, int]:
     timeline_dataset = _select_timeline_dataset(datasets)
     total_steps = 0
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
     if timeline_dataset is not None:
         step_key = timeline_dataset["step_key"]
@@ -434,12 +446,35 @@ async def get_experiment_info(
     workspace_path: str = Query(..., description="Workspace root path"),
 ) -> ExperimentInfo:
     replay_dir = get_replay_dir(workspace_path, hypothesis_id, experiment_id)
+    run_dir = replay_dir.parent
+    pid_path = run_dir / "pid.json"
+
+    run_status: str | None = None
+    pid_step_count: int | None = None
+    simulation_time: str | None = None
+    if pid_path.is_file():
+        try:
+            pid_data = json.loads(pid_path.read_text(encoding="utf-8"))
+            run_status = pid_data.get("status")
+            raw_step = pid_data.get("step_count")
+            pid_step_count = int(raw_step) if raw_step is not None else None
+            simulation_time = pid_data.get("simulation_time")
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            run_status = None
 
     async with get_replay_reader(replay_dir) as reader:
         datasets = await load_dataset_catalog(reader)
         total_steps, start_time, end_time, agent_count = await _get_experiment_summary(
             reader, datasets
         )
+        nonempty_snapshot_tables = 0
+        for dataset in datasets:
+            table = dataset.get("table_name")
+            if not table:
+                continue
+            shard_glob = list(replay_dir.glob(f"{table}.*.jsonl"))
+            if any(path.stat().st_size > 0 for path in shard_glob):
+                nonempty_snapshot_tables += 1
         return ExperimentInfo(
             hypothesis_id=hypothesis_id,
             experiment_id=experiment_id,
@@ -447,6 +482,11 @@ async def get_experiment_info(
             start_time=start_time,
             end_time=end_time,
             agent_count=agent_count,
+            run_status=run_status,
+            pid_step_count=pid_step_count,
+            simulation_time=simulation_time,
+            registered_datasets=len(datasets),
+            nonempty_snapshot_tables=nonempty_snapshot_tables,
         )
 
 
@@ -495,16 +535,14 @@ async def get_replay_dataset_rows(
     workspace_path: str = Query(..., description="Workspace root path"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
-    order_by: Optional[str] = Query(None),
+    order_by: str | None = Query(None),
     desc_order: bool = Query(False),
-    step: Optional[int] = Query(None, description="Exact step filter"),
-    entity_id: Optional[int] = Query(None, description="Exact entity filter"),
-    start_step: Optional[int] = Query(None, description="Start step (inclusive)"),
-    end_step: Optional[int] = Query(None, description="End step (inclusive)"),
-    max_step: Optional[int] = Query(None, description="Maximum step (inclusive)"),
-    columns: Optional[str] = Query(
-        None, description="Comma-separated column whitelist"
-    ),
+    step: int | None = Query(None, description="Exact step filter"),
+    entity_id: int | None = Query(None, description="Exact entity filter"),
+    start_step: int | None = Query(None, description="Start step (inclusive)"),
+    end_step: int | None = Query(None, description="End step (inclusive)"),
+    max_step: int | None = Query(None, description="Maximum step (inclusive)"),
+    columns: str | None = Query(None, description="Comma-separated column whitelist"),
     latest_per_entity: bool = Query(
         False,
         description="Return only the latest row per entity",
@@ -601,14 +639,14 @@ async def get_replay_step_bundle(
             "map" if geo_dataset is not None else "random"
         )
 
-        step_timestamp: Optional[datetime] = None
-        agent_state_rows: Dict[str, ReplayAgentStateAtStep] = {}
+        step_timestamp: datetime | None = None
+        agent_state_rows: dict[str, ReplayAgentStateAtStep] = {}
         for dataset in agent_state_datasets:
             rows_result = await fetch_dataset_rows(reader, dataset, step=step)
             entity_key = dataset.get("entity_key")
             if not entity_key:
                 continue
-            rows_by_agent_id: Dict[str, Dict[str, Any]] = {}
+            rows_by_agent_id: dict[str, dict[str, Any]] = {}
             for row in rows_result["rows"]:
                 raw_agent_id = row.get(entity_key)
                 if raw_agent_id is None:
@@ -623,7 +661,7 @@ async def get_replay_step_bundle(
                     rows_result["rows"], dataset.get("time_key")
                 )
 
-        env_state_rows: Dict[str, ReplayEnvStateAtStep] = {}
+        env_state_rows: dict[str, ReplayEnvStateAtStep] = {}
         for dataset in env_state_datasets:
             rows_result = await fetch_dataset_rows(reader, dataset, step=step, limit=1)
             row = rows_result["rows"][0] if rows_result["rows"] else None
@@ -648,13 +686,13 @@ async def get_replay_step_bundle(
 
 
 @router.get(
-    "/{hypothesis_id}/{experiment_id}/timeline", response_model=List[TimelinePoint]
+    "/{hypothesis_id}/{experiment_id}/timeline", response_model=list[TimelinePoint]
 )
 async def get_timeline(
     hypothesis_id: str,
     experiment_id: str,
     workspace_path: str = Query(..., description="Workspace root path"),
-) -> List[TimelinePoint]:
+) -> list[TimelinePoint]:
     replay_dir = get_replay_dir(workspace_path, hypothesis_id, experiment_id)
 
     async with get_replay_reader(replay_dir) as reader:
@@ -671,7 +709,7 @@ async def get_timeline(
             columns=[step_key, time_key],
             order_by=step_key,
         )
-        by_step: Dict[int, datetime] = {}
+        by_step: dict[int, datetime] = {}
         for row in rows_result["rows"]:
             raw_step = row.get(step_key)
             timestamp = _coerce_datetime(row.get(time_key))
@@ -681,7 +719,7 @@ async def get_timeline(
             current = by_step.get(step_value)
             if current is None or timestamp < current:
                 by_step[step_value] = timestamp
-        timeline: List[TimelinePoint] = []
+        timeline: list[TimelinePoint] = []
         for step_value, timestamp in sorted(by_step.items()):
             timeline.append(TimelinePoint(step=int(step_value), t=timestamp))
         return timeline
@@ -689,13 +727,13 @@ async def get_timeline(
 
 @router.get(
     "/{hypothesis_id}/{experiment_id}/agents/profiles",
-    response_model=List[AgentProfile],
+    response_model=list[AgentProfile],
 )
 async def get_agent_profiles(
     hypothesis_id: str,
     experiment_id: str,
     workspace_path: str = Query(..., description="Workspace root path"),
-) -> List[AgentProfile]:
+) -> list[AgentProfile]:
     replay_dir = get_replay_dir(workspace_path, hypothesis_id, experiment_id)
 
     async with get_replay_reader(replay_dir) as reader:

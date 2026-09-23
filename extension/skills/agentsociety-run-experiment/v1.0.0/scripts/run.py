@@ -134,10 +134,10 @@ def _get_default_paths(experiment_dir: Path) -> dict:
 
 
 def _load_workspace_env(workspace_path: Path) -> None:
-    """Load environment variables from the target workspace .env file."""
+    """从工作区 ``.env`` 加载环境变量（覆盖已有 shell 值）。"""
     env_file = workspace_path / ".env"
     if env_file.exists():
-        load_dotenv(env_file, override=False)
+        load_dotenv(env_file, override=True)
 
 
 async def main():

@@ -3,7 +3,10 @@ from pathlib import Path
 from agentsociety2.agent.base.skill_registry import SkillDescriptor
 from agentsociety2.agent.base.skill_runtime import AgentSkillRuntime
 from agentsociety2.agent.base.tool_schema import react_tool_schemas
-from agentsociety2.env.router_base import _empty_env_skill_catalog, _env_skill_catalog_row
+from agentsociety2.env.router_base import (
+    _empty_env_skill_catalog,
+    _env_skill_catalog_row,
+)
 
 
 class _Registry:
@@ -93,7 +96,10 @@ def test_resolve_skill_id_accepts_both_id_and_name():
     runtime = AgentSkillRuntime(agent_id=1, registry=_Registry())
     runtime.set_visible_skills(["env:MobilitySpace@mobility"])
 
-    assert runtime.resolve_skill_id("env:MobilitySpace@mobility") == "env:MobilitySpace@mobility"
+    assert (
+        runtime.resolve_skill_id("env:MobilitySpace@mobility")
+        == "env:MobilitySpace@mobility"
+    )
     assert runtime.resolve_skill_id("mobility") == "env:MobilitySpace@mobility"
     assert runtime.resolve_skill_id("does-not-exist") == ""
 
@@ -120,7 +126,7 @@ def test_activate_skill_accepts_both_id_and_name():
     runtime.set_visible_skills(["env:MobilitySpace@mobility"])
 
     activated_by_name, skill_id_name, doc_name = runtime.activate_skill("mobility")
-    activated_by_id, skill_id_id, doc_id = runtime.activate_skill(
+    activated_by_id, skill_id_id, _doc_id = runtime.activate_skill(
         "env:MobilitySpace@mobility"
     )
 

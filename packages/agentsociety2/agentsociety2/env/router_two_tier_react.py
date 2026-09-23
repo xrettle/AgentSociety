@@ -4,14 +4,14 @@ Two-Tier ReAct Router Implementation
 """
 
 import json
-from typing import Tuple, Dict, Any, List
+from typing import Any
 
 import json_repair
 from litellm import AllMessageValues
 
-from agentsociety2.logger import get_logger
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.router_base import RouterBase
+from agentsociety2.logger import get_logger
 
 __all__ = ["TwoTierReActRouter"]
 
@@ -39,11 +39,11 @@ class TwoTierReActRouter(RouterBase):
         )
 
         # 预收集模块信息和工具信息
-        self._module_info: Dict[str, Dict[str, Any]] = {}
-        self._module_tools: Dict[str, List[Dict[str, Any]]] = {}
-        self._module_readonly_tools: Dict[str, List[Dict[str, Any]]] = {}
-        self._tool_name_to_module: Dict[str, EnvBase] = {}
-        self._tool_name_to_tool_obj: Dict[str, Any] = {}
+        self._module_info: dict[str, dict[str, Any]] = {}
+        self._module_tools: dict[str, list[dict[str, Any]]] = {}
+        self._module_readonly_tools: dict[str, list[dict[str, Any]]] = {}
+        self._tool_name_to_module: dict[str, EnvBase] = {}
+        self._tool_name_to_tool_obj: dict[str, Any] = {}
 
         self._collect_module_info()
 
@@ -92,7 +92,7 @@ class TwoTierReActRouter(RouterBase):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """
         使用双层ReAct模式处理指令。
 
@@ -114,7 +114,10 @@ class TwoTierReActRouter(RouterBase):
 
             if not self.env_modules:
                 get_logger().warning("No environment modules available")
-                results = {"status": "fail", "reason": "No environment modules available"}
+                results = {
+                    "status": "fail",
+                    "reason": "No environment modules available",
+                }
                 return (
                     results,
                     "No environment modules available to handle the request.",
@@ -123,7 +126,7 @@ class TwoTierReActRouter(RouterBase):
             results = {}
             step_count = 0
             used_modules = set()
-            execution_log: List[Dict[str, Any]] = []  # 记录执行历史
+            execution_log: list[dict[str, Any]] = []  # 记录执行历史
             error = None
 
             while step_count < self.max_steps:
@@ -144,7 +147,9 @@ class TwoTierReActRouter(RouterBase):
                     break
 
                 used_modules.add(selected_module)
-                get_logger().info(f"TwoTierReActRouter: Selected module: {selected_module}")
+                get_logger().info(
+                    f"TwoTierReActRouter: Selected module: {selected_module}"
+                )
 
                 # 记录模块选择
                 execution_log.append(
@@ -205,7 +210,9 @@ class TwoTierReActRouter(RouterBase):
             # 达到最大步数或没有更多模块
             # 构建过程文本
             process_text = (
-                json.dumps(execution_log, indent=2, default=str) if execution_log else ""
+                json.dumps(execution_log, indent=2, default=str)
+                if execution_log
+                else ""
             )
             # 使用基类的generate_final_answer生成最终答案
             final_answer, determined_status = await self.generate_final_answer(
@@ -280,7 +287,7 @@ Return ONLY the module name (exactly as shown in the list above), nothing else.
 
 Selected module:"""
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         try:
             response = await self.acompletion_with_system_prompt(
@@ -298,7 +305,7 @@ Selected module:"""
                     f"TwoTierReActRouter: Invalid module selection: {selected}"
                 )
                 # 如果选择无效，返回第一个未使用的模块
-                for module_name in self._module_info.keys():
+                for module_name in self._module_info:
                     if module_name not in used_modules:
                         return module_name
                 return None
@@ -306,14 +313,14 @@ Selected module:"""
         except Exception as e:
             get_logger().error(f"TwoTierReActRouter: Failed to select module: {e!s}")
             # 返回第一个未使用的模块作为fallback
-            for module_name in self._module_info.keys():
+            for module_name in self._module_info:
                 if module_name not in used_modules:
                     return module_name
             return None
 
     async def _react_with_module(
         self, module_name: str, instruction: str, ctx: dict, readonly: bool
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """第二层：使用ReAct模式调用选中模块的工具"""
         # 获取该模块的工具
         available_tools = (
@@ -351,7 +358,7 @@ Selected module:"""
         tools_with_status = [*available_tools, set_status_tool]
 
         # 构建ReAct对话
-        dialog: List[AllMessageValues] = [
+        dialog: list[AllMessageValues] = [
             {
                 "role": "user",
                 "content": self._build_module_react_prompt(
@@ -562,14 +569,14 @@ Let's start!"""
 {json.dumps(results, indent=2, default=str)}
 
 ## Unused Modules
-{', '.join(unused_modules)}
+{", ".join(unused_modules)}
 
 ## Question
 Do you need to use more modules to complete the task? Answer with "yes" or "no" only.
 
 Answer:"""
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         try:
             response = await self.acompletion_with_system_prompt(

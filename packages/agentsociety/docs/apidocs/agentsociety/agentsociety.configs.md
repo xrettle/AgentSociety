@@ -14,9 +14,9 @@
 :maxdepth: 1
 
 agentsociety.configs.exp
-agentsociety.configs.utils
 agentsociety.configs.env
 agentsociety.configs.agent
+agentsociety.configs.utils
 ```
 
 ## Package Contents

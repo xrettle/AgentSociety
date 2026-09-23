@@ -8,9 +8,10 @@ extracting function signature, docstring, and implementation code separately.
 import ast
 import inspect
 import textwrap
-from typing import Any, Optional, List
-from pydantic import BaseModel, Field
+from typing import Any
+
 import black
+from pydantic import BaseModel, Field
 
 
 class FunctionParts(BaseModel):
@@ -19,14 +20,14 @@ class FunctionParts(BaseModel):
     signature: str = Field(
         description="Function signature string (e.g., 'def func(x: int) -> str:')"
     )
-    docstring: Optional[str] = Field(
+    docstring: str | None = Field(
         default=None, description="Function docstring, or None if not present"
     )
-    body_code: List[str] = Field(
+    body_code: list[str] = Field(
         default_factory=list,
         description="Function body code lines (excluding signature and docstring)",
     )
-    decorators: List[str] = Field(
+    decorators: list[str] = Field(
         default_factory=list,
         description="Function decorators (e.g., ['@tool(readonly=True)'])",
     )
@@ -48,9 +49,8 @@ class FunctionParser:
 
     def __init__(self):
         """Initialize the parser."""
-        pass
 
-    def parse_function(self, func: Any) -> Optional[FunctionParts]:
+    def parse_function(self, func: Any) -> FunctionParts | None:
         """
         Parse a function and extract its parts.
 
@@ -74,8 +74,8 @@ class FunctionParser:
         return self.parse_source(source_code, func.__name__)
 
     def parse_source(
-        self, source_code: str, function_name: Optional[str] = None
-    ) -> Optional[FunctionParts]:
+        self, source_code: str, function_name: str | None = None
+    ) -> FunctionParts | None:
         """
         Parse function source code string and extract parts.
 
@@ -121,7 +121,7 @@ class FunctionParser:
 
     def _extract_decorators(
         self, func_node: ast.FunctionDef | ast.AsyncFunctionDef, source_code: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Extract decorators from function node.
 
@@ -188,7 +188,7 @@ class FunctionParser:
 
     def _extract_docstring(
         self, func_node: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Extract docstring from function node.
 
@@ -216,7 +216,7 @@ class FunctionParser:
 
     def _extract_body_code(
         self, func_node: ast.FunctionDef | ast.AsyncFunctionDef, source_code: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Extract function body code (excluding signature and docstring).
 
@@ -284,7 +284,7 @@ class FunctionParser:
 
     def _extract_method_from_class_source(
         self, class_source: str, method_name: str
-    ) -> Optional[FunctionParts]:
+    ) -> FunctionParts | None:
         """
         Extract a method from class source code.
 

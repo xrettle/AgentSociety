@@ -6,7 +6,8 @@ from function signatures, including nested BaseModel fields.
 """
 
 import inspect
-from typing import Any, Dict, Set, Type, get_origin, get_args, Union
+from typing import Any, Union, get_args, get_origin
+
 from pydantic import BaseModel
 
 
@@ -24,8 +25,8 @@ class PydanticModelCollector:
 
     def __init__(self):
         """Initialize the collector."""
-        self.models_dict: Dict[Type[BaseModel], str] = {}
-        self.visited_models: Set[Type[BaseModel]] = set()
+        self.models_dict: dict[type[BaseModel], str] = {}
+        self.visited_models: set[type[BaseModel]] = set()
 
     def collect_from_annotation(self, annotation: Any) -> None:
         """
@@ -55,7 +56,7 @@ class PydanticModelCollector:
         if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
             self._add_model(annotation)
 
-    def _add_model(self, model_class: Type[BaseModel]) -> None:
+    def _add_model(self, model_class: type[BaseModel]) -> None:
         """
         Add a BaseModel class to the collection, including all its nested BaseModel fields.
 
@@ -103,7 +104,10 @@ class PydanticModelCollector:
         except (ValueError, TypeError):
             # If signature inspection fails, skip this function
             import logging
-            logging.getLogger(__name__).debug("Failed to inspect signature for type collection", exc_info=True)
+
+            logging.getLogger(__name__).debug(
+                "Failed to inspect signature for type collection", exc_info=True
+            )
 
     def collect_from_functions(self, functions: list[Any]) -> None:
         """
@@ -114,7 +118,7 @@ class PydanticModelCollector:
         for func in functions:
             self.collect_from_function(func)
 
-    def get_collected_models(self) -> Dict[Type[BaseModel], str]:
+    def get_collected_models(self) -> dict[type[BaseModel], str]:
         """
         Get all collected BaseModel classes with their source code.
 
@@ -126,4 +130,3 @@ class PydanticModelCollector:
         """Reset the collector state."""
         self.models_dict.clear()
         self.visited_models.clear()
-

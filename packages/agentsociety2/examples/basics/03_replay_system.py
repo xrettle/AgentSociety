@@ -1,27 +1,34 @@
 """Replay System Example.
 
-AgentSociety enables replay by default when ``run_dir`` is set. Environment
-datasets land under ``run_dir/replay/``.
+Shows that ``enable_replay=True`` writes ``run/replay/_schema.json`` at init
+(step-0 timeline). No agent LLM step is required for this smoke demo.
 """
 
 from __future__ import annotations
 
 import os
+import sys
+import time
+from pathlib import Path
 
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
 
-from agentsociety2.contrib.env import SimpleSocialSpace
-from agentsociety2.env import CodeGenRouter
+from agentsociety2.env import create_env_router_proxy
 from agentsociety2.society import AgentSociety
+
+_EXAMPLES_ROOT = Path(__file__).resolve().parents[1]
+if str(_EXAMPLES_ROOT) not in sys.path:
+    sys.path.insert(0, str(_EXAMPLES_ROOT))
+from _checks import fresh_run_dir
 
 
 async def main() -> None:
-    run_dir = Path("run_replay_example")
+    run_dir = fresh_run_dir(Path("run_replay_example"))
+
     agent_specs = [
         {
             "id": i,
@@ -32,12 +39,16 @@ async def main() -> None:
             },
             "config": {},
         }
-        for i in range(1, 4)
+        for i in range(1, 3)
     ]
     names = [(spec["id"], spec["profile"]["name"]) for spec in agent_specs]
 
-    social_env = SimpleSocialSpace(agent_id_name_pairs=names)
-    env_router = CodeGenRouter(env_modules=[social_env])
+    t0 = time.perf_counter()
+    env_router = await create_env_router_proxy(
+        ["SimpleSocialSpace"],
+        {"SimpleSocialSpace": {"agent_id_name_pairs": names}},
+        run_dir=run_dir,
+    )
     society = AgentSociety(
         agent_specs=agent_specs,
         agent_class_name="PersonAgent",
@@ -47,17 +58,19 @@ async def main() -> None:
         enable_replay=True,
     )
     await society.init()
-
-    print("=== Replay System Example ===\n")
-    print("Running agent interactions...\n")
-    for spec in agent_specs:
-        name = spec["profile"]["name"]
-        response = await society.ask(f"Hello {name}! Introduce yourself.")
-        print(f"{name}: {str(response)[:100]}...")
-
+    schema = run_dir / "replay" / "_schema.json"
+    print("=== Replay System Demo ===\n")
+    print(f"Replay schema: {schema}")
+    print(f"Exists: {schema.is_file()}")
+    stats = society.all_token_stats()
     await society.close()
-    print(f"\nReplay data written under: {run_dir / 'replay'}")
-    print("Inspect agent workspaces under:", run_dir / "agents")
+    wall = time.perf_counter() - t0
+    print(f"Token stats: {stats}")
+    print(f"WALL_SEC={wall:.2f}")
+    print(f"SUCCESS={schema.is_file()}")
+    if not schema.is_file():
+        print("ERROR: replay/_schema.json missing after init", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

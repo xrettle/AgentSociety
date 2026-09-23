@@ -32,7 +32,7 @@ The orchestrator will provide:
 
 ### 2. Tool Correctness
 
-- [ ] Observation tools use `@tool(readonly=True, kind="observe")`
+- [ ] Observation / statistics tools are optional; when present use `@tool(readonly=True, kind="observe"|"statistics")`
 - [ ] Read-write tools use `@tool(readonly=False)`
 - [ ] Statistics tools use `@tool(readonly=True, kind="statistics")` if applicable
 - [ ] Each tool's first parameter is `agent_id: str` (framework convention)

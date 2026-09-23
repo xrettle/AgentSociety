@@ -103,6 +103,7 @@ AgentSociety 2 使用 `ruff`_ 进行检查和格式化：
 * **Routers**:
   * ``/api/v1/prefill-params`` - 模块参数预填充信息
   * ``/api/v1/experiments`` - 实验管理
+  * ``GET /api/v1/experiments/{h}/{e}/log`` - 日志尾部读取（查询参数 ``tail``、``source``；``source`` 可为 ``auto``、``output.log`` 或 ``stderr.log``；默认约 2000 行）
   * ``/api/v1/modules`` - 模块管理
   * ``/api/v1/replay`` - 回放数据访问
   * ``/api/v1/custom`` - 自定义模块注册

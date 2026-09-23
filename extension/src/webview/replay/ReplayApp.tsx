@@ -36,6 +36,7 @@ const ReplayAppInner: React.FC<ReplayAppProps> = ({ vscode }) => {
     initData,
     currentStep,
     timeline,
+    experimentInfo,
   } = state;
 
   React.useEffect(() => {
@@ -107,6 +108,21 @@ const ReplayAppInner: React.FC<ReplayAppProps> = ({ vscode }) => {
     vscode.postMessage({ command: 'fetchStepBundle', step: stepNumber });
   }, [currentStep, initialized, timeline, vscode]);
 
+  // While a run is in progress and timeline is still empty, poll for markers.
+  React.useEffect(() => {
+    if (!initialized || timeline.length > 0) {
+      return;
+    }
+    if (experimentInfo?.run_status !== 'running') {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      vscode.postMessage({ command: 'fetchExperimentInfo' });
+      vscode.postMessage({ command: 'fetchTimeline' });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [initialized, timeline.length, experimentInfo?.run_status, vscode]);
+
   if (error) {
     return (
       <div className="loading-container">
@@ -132,13 +148,39 @@ const ReplayAppInner: React.FC<ReplayAppProps> = ({ vscode }) => {
   }
 
   if (timeline.length === 0) {
+    const info = experimentInfo;
+    const status = info?.run_status ?? null;
+    const completed = info?.pid_step_count ?? 0;
+    let hint = t('replay.noDataHint');
+    if (status === 'running') {
+      hint = t('replay.noDataRunning', { completed });
+    } else if (status === 'completed' || status === 'finished' || status === 'done') {
+      hint = t('replay.noDataCompleted');
+    } else if ((info?.registered_datasets ?? 0) > 0) {
+      hint = t('replay.noDataRegistered', {
+        datasets: info?.registered_datasets ?? 0,
+        nonempty: info?.nonempty_snapshot_tables ?? 0,
+      });
+    }
     return (
       <div className="loading-container">
         <div style={{ fontSize: '48px' }}>📭</div>
         <div>{t('replay.noData')}</div>
-        <div style={{ fontSize: '12px', opacity: 0.7, maxWidth: '400px', textAlign: 'center' }}>
-          {t('replay.noDataHint')}
+        <div style={{ fontSize: '12px', opacity: 0.7, maxWidth: '420px', textAlign: 'center' }}>
+          {hint}
         </div>
+        <button
+          style={{ marginTop: 12 }}
+          onClick={() => {
+            actions.setError(null);
+            actions.setLoading(true);
+            vscode.postMessage({ command: 'fetchExperimentInfo' });
+            vscode.postMessage({ command: 'fetchTimeline' });
+            vscode.postMessage({ command: 'fetchPanelSchema' });
+          }}
+        >
+          {t('replay.refreshTimeline')}
+        </button>
       </div>
     );
   }

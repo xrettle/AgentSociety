@@ -1,7 +1,8 @@
 """模块初始化与后端请求的数据模型（Pydantic）。"""
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -21,7 +22,7 @@ class EnvModuleInitConfig(BaseModel):
         description="The type of environment module (e.g., 'global_information', 'economy_space', 'social_space', 'mobility_space')",
     )
 
-    args: Dict[str, Any] = Field(
+    args: dict[str, Any] = Field(
         default_factory=dict,
         description="Module initialization arguments (excluding llm). These arguments are passed directly to the module constructor. See init_description() for the module's expected parameters and JSON schemas.",
     )
@@ -36,7 +37,7 @@ class AgentInitConfig(BaseModel):
 
     agent_id: int = Field(..., description="Unique ID for the agent")
 
-    args: Dict[str, Any] = Field(
+    args: dict[str, Any] = Field(
         default_factory=dict,
         description="Agent initialization arguments (excluding llm and env which are set via init() method). All other parameters including 'id', 'profile', 'memory_config', etc. should be included here. See init_description() for the agent's expected parameters.",
     )
@@ -49,11 +50,11 @@ class CreateInstanceRequest(BaseModel):
         ..., description="Unique identifier for this society instance"
     )
 
-    env_modules: List[EnvModuleInitConfig] = Field(
+    env_modules: list[EnvModuleInitConfig] = Field(
         ..., min_length=1, description="List of environment modules to initialize"
     )
 
-    agents: List[AgentInitConfig] = Field(
+    agents: list[AgentInitConfig] = Field(
         ..., min_length=1, description="List of agents to initialize"
     )
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import Any, Dict, Iterable, Literal, Mapping, Optional, Tuple
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 OperationScope = Literal["hypothesis", "workspace"]
 OperationPlane = Literal["evidence", "presentation", "governance"]
@@ -45,14 +45,14 @@ class AnalysisInputSpec(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
-    flags: Tuple[str, ...]
+    flags: tuple[str, ...]
     kind: InputKind = "string"
     required: bool = False
     cli_required: bool = False
-    action: Optional[Literal["store_true"]] = None
+    action: Literal["store_true"] | None = None
     default: Any = None
-    default_source: Optional[Literal["workspace"]] = None
-    choices: Tuple[str, ...] = Field(default_factory=tuple)
+    default_source: Literal["workspace"] | None = None
+    choices: tuple[str, ...] = Field(default_factory=tuple)
     help: str = ""
 
 
@@ -62,7 +62,7 @@ class AnalysisInputGroup(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str
-    members: Tuple[str, ...]
+    members: tuple[str, ...]
     mode: InputGroupMode
     required: bool = True
 
@@ -75,27 +75,27 @@ class AnalysisOperationSpec(BaseModel):
     id: str
     contract_version: int = 1
     summary: str
-    phases: Tuple[str, ...] = Field(default_factory=tuple)
+    phases: tuple[str, ...] = Field(default_factory=tuple)
     scope: OperationScope = "hypothesis"
     plane: OperationPlane = "evidence"
-    depends_on_gates: Tuple[str, ...] = Field(default_factory=tuple)
-    required_inputs: Tuple[str, ...] = Field(default_factory=tuple)
-    optional_inputs: Tuple[str, ...] = Field(default_factory=tuple)
-    inputs: Tuple[AnalysisInputSpec, ...] = Field(default_factory=tuple)
-    input_groups: Tuple[AnalysisInputGroup, ...] = Field(default_factory=tuple)
-    produced_artifacts: Tuple[str, ...] = Field(default_factory=tuple)
+    depends_on_gates: tuple[str, ...] = Field(default_factory=tuple)
+    required_inputs: tuple[str, ...] = Field(default_factory=tuple)
+    optional_inputs: tuple[str, ...] = Field(default_factory=tuple)
+    inputs: tuple[AnalysisInputSpec, ...] = Field(default_factory=tuple)
+    input_groups: tuple[AnalysisInputGroup, ...] = Field(default_factory=tuple)
+    produced_artifacts: tuple[str, ...] = Field(default_factory=tuple)
     mutates_workspace: bool = False
     repeatable: bool = True
     risk: OperationRisk = "low"
-    validator: Optional[str] = None
+    validator: str | None = None
     handler: str
-    capability_requirements: Tuple[str, ...] = Field(default_factory=tuple)
+    capability_requirements: tuple[str, ...] = Field(default_factory=tuple)
     phase_policy: OperationPhasePolicy = "advisory"
-    workflow_order: Optional[int] = None
+    workflow_order: int | None = None
     requires_current_gate: bool = False
 
 
-_INPUT_CATALOG: Mapping[str, Dict[str, Any]] = MappingProxyType(
+_INPUT_CATALOG: Mapping[str, dict[str, Any]] = MappingProxyType(
     {
         "workspace": {
             "kind": "path",
@@ -183,8 +183,8 @@ def _input_spec(name: str, *, required: bool) -> AnalysisInputSpec:
 
 
 def _operation_inputs(
-    required_inputs: Tuple[str, ...], optional_inputs: Tuple[str, ...]
-) -> tuple[Tuple[AnalysisInputSpec, ...], Tuple[AnalysisInputGroup, ...]]:
+    required_inputs: tuple[str, ...], optional_inputs: tuple[str, ...]
+) -> tuple[tuple[AnalysisInputSpec, ...], tuple[AnalysisInputGroup, ...]]:
     inputs: list[AnalysisInputSpec] = []
     groups: list[AnalysisInputGroup] = []
     for raw_name in required_inputs:
@@ -219,11 +219,11 @@ def _op(
     mutates_workspace: bool = False,
     repeatable: bool = True,
     risk: OperationRisk = "low",
-    validator: Optional[str] = None,
-    handler: Optional[str] = None,
+    validator: str | None = None,
+    handler: str | None = None,
     capability_requirements: Iterable[str] = (),
-    phase_policy: Optional[OperationPhasePolicy] = None,
-    workflow_order: Optional[int] = None,
+    phase_policy: OperationPhasePolicy | None = None,
+    workflow_order: int | None = None,
     requires_current_gate: bool = False,
 ) -> AnalysisOperationSpec:
     required = tuple(required_inputs)
@@ -728,7 +728,7 @@ def operation_specs_for_phase(
     *,
     passed_gates: Iterable[str] = (),
     current_gate_pass: bool = False,
-) -> Tuple[AnalysisOperationSpec, ...]:
+) -> tuple[AnalysisOperationSpec, ...]:
     passed = set(passed_gates)
     selected = [
         spec
@@ -749,7 +749,7 @@ def operation_specs_for_phase(
     )
 
 
-def workflow_operations_by_phase() -> Dict[str, list[str]]:
+def workflow_operations_by_phase() -> dict[str, list[str]]:
     return {
         phase: [
             spec.id

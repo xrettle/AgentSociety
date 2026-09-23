@@ -12,13 +12,13 @@ Recommendation Algorithms
 - LightGCNRecommender: LightGCN (轻量级图卷积网络) 算法实现
 """
 
-from .core import RecommenderAlgorithm, RatingMatrix
-from .mf import MFRecommender, MFConfig
-from .sasrec import SASRecRecommender, SASRecConfig
-from .ncf import NCFRecommender, NCFConfig
-from .deepfm import DeepFMRecommender, DeepFMConfig
-from .din import DINRecommender, DINConfig
-from .lightgcn import LightGCNRecommender, LightGCNConfig
+from .core import RatingMatrix, RecommenderAlgorithm
+from .deepfm import DeepFMConfig, DeepFMRecommender
+from .din import DINConfig, DINRecommender
+from .lightgcn import LightGCNConfig, LightGCNRecommender
+from .mf import MFConfig, MFRecommender
+from .ncf import NCFConfig, NCFRecommender
+from .sasrec import SASRecConfig, SASRecRecommender
 
 __all__ = [
     "DINConfig",
