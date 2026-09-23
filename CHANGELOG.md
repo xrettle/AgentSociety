@@ -14,6 +14,17 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ## [Unreleased]
 
+## [2.9.2] - 2026-09-23
+
+- **agentsociety2** `2.9.2` · **extension** `1.7.2` · 标签 `agentsociety2-v2.9.2`
+
+### Fixed
+
+- **CI**：VSIX 发版校验适配 js-yaml 5 的 `dist/` 布局（CJS 入口从根 `index.js` 变为
+  `dist/js-yaml.cjs.js`）。2.9.1 的 GitHub Actions `Build VSCode extension` 因此误判失败、
+  `Create GitHub Release` 被跳过——VSIX 实际内容一直是完好的，PyPI 2.9.1 亦已正常发布。
+  本版无任何功能变更，重新发版以落成 VSIX 工件与 GitHub Release。
+
 ## [2.9.1] - 2026-09-23
 
 - **agentsociety2** `2.9.1` · **extension** `1.7.1` · 标签 `agentsociety2-v2.9.1`
