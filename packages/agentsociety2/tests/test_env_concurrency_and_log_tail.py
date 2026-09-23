@@ -50,8 +50,9 @@ async def test_template_lookup_runs_embeddings_outside_cache_lock(
     embedding 在锁外并发、锁内只剩纯 CPU 检索。断言不依赖时间阈值：锁外
     化的直接可观测特征是 N 个 embedding 调用全部重叠。
     """
-    import numpy as np
     from types import SimpleNamespace
+
+    import numpy as np
 
     from agentsociety2.env.router_codegen import CacheCodeProvider
 
@@ -95,6 +96,46 @@ async def test_template_lookup_runs_embeddings_outside_cache_lock(
     assert max_inflight == n
     # 时间维度兜底：串行（锁内）需要 ≥ n*delay，并发只需 ~1*delay。
     assert elapsed < delay * n * 0.8
+
+
+@pytest.mark.asyncio
+async def test_exec_print_capture_isolated_between_concurrent_asks() -> None:
+    """并发 ask 的 exec print 输出不得串台（回归：sys.stdout 全局替换）。
+
+    旧实现在 exec 前全局替换 sys.stdout；async 生成代码在 await 环境工具期间
+    让出事件循环，另一个 ask 会换走全局 stdout，本执行恢复后的 print 写进
+    别人的 buffer。现改为向 exec globals 注入每执行独立的 print。
+    """
+    from types import SimpleNamespace
+
+    from agentsociety2.env.router_codegen import CodeGenRouter, CodeStage
+
+    class _Snoozer:
+        async def snooze(self):
+            await asyncio.sleep(0.02)
+
+    router = SimpleNamespace(
+        ALLOWED_MODULES=CodeGenRouter.ALLOWED_MODULES,
+        ALLOWED_BUILTINS=CodeGenRouter.ALLOWED_BUILTINS,
+        _modules={"env": _Snoozer()},
+    )
+
+    async def run(tag: str) -> dict:
+        code = (
+            f"print('{tag}-start')\n"
+            "r = await modules['env'].snooze()\n"
+            f"print('{tag}-end')\n"
+            "results['status'] = 'success'\n"
+        )
+        return await CodeStage._execute_code(router, code, {}, readonly=True)
+
+    res_a, res_b = await asyncio.gather(run("A"), run("B"))
+    assert res_a["success"] is True and res_b["success"] is True
+    # 各自的输出完整、且不含对方的任何内容（串台判据）。
+    assert "A-start" in res_a["output"] and "A-end" in res_a["output"]
+    assert "B-start" in res_b["output"] and "B-end" in res_b["output"]
+    assert "B-" not in res_a["output"]
+    assert "A-" not in res_b["output"]
 
 
 @pytest.mark.asyncio

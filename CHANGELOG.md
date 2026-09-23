@@ -43,6 +43,11 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
   全部模块、汇总失败点后统一抛错）。静默降级（失败模块以初始状态继续跑）会让模块状态与
   `SOCIETY_STEP.json` 记录的步数脱钩，损坏只会在下游指标暴露。设置
   `AGENTSOCIETY_ENV_RESTORE_ALLOW_FRESH=1` 可恢复旧的降级行为（fresh 启动 + ERROR 汇总）。
+- **agentsociety2**：`CodeGenRouter` 代码执行不再全局替换 `sys.stdout`——async 生成代码在
+  `await` 环境工具期间让出事件循环，并发 ask 会互相换走进程级 stdout，恢复后 print 串进
+  别人的 buffer（64 并发下实测串台）。改为向 exec globals 注入每次执行独立的 `print`
+  （生成代码无法 import sys——sys 在 `DANGEROUS_MODULES`；exec globals 先于 builtins 解析，
+  输出全部走注入路径，各自写入本次执行的 StringIO）。
 - **agentsociety2**：`CodeGenRouter` FAISS 指令模板缓存仅在 `template_mode=True` 时生效；无
   observe/statistics 工具时 init 不再为了空集合跑 LLM 代码生成。
 - **agentsociety2**：`society.step` 在任一 agent `ok=False` 时抛错；博弈/contrib agent 的 LLM
@@ -65,17 +70,17 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 examples basics/advanced/games 全量 LLM 回归均为 SUCCESS。本次新增回归：并发默认值断言
 （`test_env_actor_max_concurrency_default_is_64`）、embedding 锁外并发
 （`test_template_lookup_runs_embeddings_outside_cache_lock`）、严格 resume 与降级开关
-（`test_partial_restore_aborts_by_default` / `test_partial_restore_degrades_only_with_allow_fresh`）；
-全量 `pytest -m "not network"` 552 passed。
+（`test_partial_restore_aborts_by_default` / `test_partial_restore_degrades_only_with_allow_fresh`）、
+exec print 并发隔离（`test_exec_print_capture_isolated_between_concurrent_asks`）；
+全量 `pytest -m "not network"` 553 passed。
 
 正确性抽检（2026-09-22 实跑）：`SpecialistAgent` onboarding SUCCESS（~30s）；
 囚徒困境 2 轮 SUCCESS（~68s）；`PersonAgent` `step`+`ask` SUCCESS（~377s，`AGENT.json` 写出）。
 
 ### Known issues
 
-- **agentsociety2**：`CodeGenRouter` 代码执行仍全局替换 `sys.stdout`（进程级），高并发 env ask
-  下的 print 输出可能串台；且 `exec` 同步阻塞，asyncio 单线程下无法真并行。改动执行路径风险高，
-  本版未动，待后续以 contextvars / 每执行环境独立 print 注入改造。
+- **agentsociety2**：`exec` 仍同步阻塞事件循环（asyncio 单线程下生成代码无法真并行）；受 env
+  模块线程安全约束，本版未改为线程池执行。
 
 ## [2.9.0] - 2026-09-17
 

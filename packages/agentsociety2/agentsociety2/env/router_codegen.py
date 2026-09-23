@@ -1131,12 +1131,28 @@ class CodeStage:
             k: v for k, v in __builtins__.items() if k in router.ALLOWED_BUILTINS
         }
         restricted_builtins["__import__"] = safe_import
+        # 每次执行注入独立的 print，不再全局替换 sys.stdout：async 生成代码在
+        # await 环境工具期间让出事件循环，并发 ask 会互相换走进程级 stdout，
+        # 恢复后 print 串进别人的 buffer（64 并发下实测串台）。生成代码无法
+        # import sys（sys 在 DANGEROUS_MODULES），exec globals 又先于 builtins
+        # 解析，print 一律走此注入路径，各自写入本次执行的 StringIO。
+        captured_output = StringIO()
+
+        def _sandbox_print(*args, sep=" ", end="\n", file=None, flush=False):
+            print(
+                *args,
+                sep=sep,
+                end=end,
+                file=file if file is not None else captured_output,
+                flush=flush,
+            )
+
         exec_globals = {
             "__builtins__": restricted_builtins,
             "ctx": ctx,
             "modules": types.MappingProxyType(router._modules),
             "results": results,
-            "print": print,
+            "print": _sandbox_print,
             **allowed_modules,
             "Exception": Exception,
             "RuntimeError": RuntimeError,
@@ -1149,8 +1165,6 @@ class CodeStage:
             "KeyError": KeyError,
         }
         exec_locals = {}
-        old_stdout = sys.stdout
-        sys.stdout = captured_output = StringIO()
         try:
             is_async = "async" in code or "await" in code
 
@@ -1214,8 +1228,6 @@ class CodeStage:
                 "error": str(e),
                 "success": False,
             }
-        finally:
-            sys.stdout = old_stdout
 
     async def process(self, context: AskContext, router: "CodeGenRouter") -> AskContext:
         if context.early_return:
