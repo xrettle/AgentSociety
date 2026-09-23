@@ -133,6 +133,37 @@ class TestConfigClass:
         assert url.endswith("/mcp/")
 
 
+class TestEnvBoolHelper:
+    """Tests for the _env_bool env-var helper."""
+
+    def test_unset_returns_default(self, monkeypatch):
+        from agentsociety2.config.config import _env_bool
+
+        monkeypatch.delenv("AGENTSOCIETY_TEST_BOOL_FLAG", raising=False)
+        assert _env_bool("AGENTSOCIETY_TEST_BOOL_FLAG", False) is False
+        assert _env_bool("AGENTSOCIETY_TEST_BOOL_FLAG", True) is True
+
+    def test_truthy_values(self, monkeypatch):
+        from agentsociety2.config.config import _env_bool
+
+        for raw in ("1", "true", "True", "YES", "on"):
+            monkeypatch.setenv("AGENTSOCIETY_TEST_BOOL_FLAG", raw)
+            assert _env_bool("AGENTSOCIETY_TEST_BOOL_FLAG", False) is True
+
+    def test_other_values_are_false(self, monkeypatch):
+        from agentsociety2.config.config import _env_bool
+
+        for raw in ("0", "false", "no", "off", "maybe"):
+            monkeypatch.setenv("AGENTSOCIETY_TEST_BOOL_FLAG", raw)
+            assert _env_bool("AGENTSOCIETY_TEST_BOOL_FLAG", True) is False
+
+    def test_blank_returns_default(self, monkeypatch):
+        from agentsociety2.config.config import _env_bool
+
+        monkeypatch.setenv("AGENTSOCIETY_TEST_BOOL_FLAG", "   ")
+        assert _env_bool("AGENTSOCIETY_TEST_BOOL_FLAG", False) is False
+
+
 class TestConfigGetters:
     """Tests for Config getter methods."""
 

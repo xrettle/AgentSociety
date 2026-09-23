@@ -55,6 +55,15 @@ def _env_str(name: str) -> str | None:
     return raw.strip() if raw and raw.strip() else None
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a bool env var (``1``/``true``/``yes`` → True), falling back to
+    ``default`` when unset/empty/unrecognized."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 def _env_json_obj(name: str) -> dict[str, Any] | None:
     """Parse an env var holding a JSON object; warn and ignore if malformed.
 
@@ -360,8 +369,24 @@ class Config:
     # (>1) when every mounted env module declares is_concurrency_safe();
     # otherwise the actor stays serial (concurrency=1). API rate-limit control
     # is handled by the inner LLMClient AIMD, not here.
+    #
+    # Default 64: with 300 agents the measured p50 of in-flight env asks is
+    # ~59, so the old default of 8 starved the actor (env ask mean 38.2s at
+    # concurrency 8 vs 2.5s at 64 in the same run shape). Concurrency-safe
+    # modules still serialize on their own module locks; unsafe stacks keep
+    # max_concurrency=1 regardless of this value.
     ENV_ACTOR_MAX_CONCURRENCY: int = _env_int(
-        "AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY", 8
+        "AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY", 64
+    )
+
+    # Strict env resume: when a module's restore() raises, abort the run
+    # instead of silently starting that module fresh. Fresh-start fallback
+    # corrupts the continued simulation (module state resets to initial
+    # values while SOCIETY_STEP.json keeps the old step count) and only
+    # surfaces much later through downstream metrics. Set to 1/true to
+    # restore the old degrade-with-ERROR-logs behavior.
+    ENV_RESTORE_ALLOW_FRESH: bool = _env_bool(
+        "AGENTSOCIETY_ENV_RESTORE_ALLOW_FRESH", False
     )
 
     # Adaptive concurrency control for LLM requests (per-worker AIMD).

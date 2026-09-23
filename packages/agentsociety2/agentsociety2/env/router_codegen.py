@@ -603,10 +603,14 @@ class CacheAddObserver:
     ) -> None:
         if not router._template_cache_enabled:
             return
+        # Embedding（可能是一次 embedding HTTP 调用）必须在 _template_cache_lock
+        # 之外计算：该锁同时守护 _lookup（每次 ask），锁内 await 会把并行 ask 串行
+        # 化到 embedding 端点的延迟上。_compute_embedding 自带缓存与独立锁，
+        # 并发调用安全；锁内剩余工作（DB 查询/faiss 更新）是纯 CPU，仍串行。
+        embedding = await CacheCodeProvider._compute_embedding(router, instruction)
         async with router._template_cache_lock:
             variable_keys = tuple(sorted(variables.keys()))
             variable_types = {k: type(v).__name__ for k, v in variables.items()}
-            embedding = await CacheCodeProvider._compute_embedding(router, instruction)
             existing = router._cache_db.find_by_instruction(
                 router._env_class_type_key, instruction
             )
@@ -725,10 +729,12 @@ class CacheCodeProvider:
     ) -> tuple[CacheEntry | None, str | None]:
         if not router._template_cache_enabled:
             return None, "template_cache_disabled"
+        # 与 _add_to_cache 同理：embedding（含 HTTP）在锁外计算，_compute_embedding
+        # 自带缓存与独立锁、并发安全；锁内只剩纯 CPU 的 faiss 检索，保持串行。
+        emb = await CacheCodeProvider._compute_embedding(router, instruction)
+        if emb is None:
+            return None, "embedding_unavailable"
         async with router._template_cache_lock:
-            emb = await CacheCodeProvider._compute_embedding(router, instruction)
-            if emb is None:
-                return None, "embedding_unavailable"
             current_keys = set(variables.keys())
             best_match, best_sim = None, 0.0
             saw_compatible_candidate = False
@@ -1125,12 +1131,28 @@ class CodeStage:
             k: v for k, v in __builtins__.items() if k in router.ALLOWED_BUILTINS
         }
         restricted_builtins["__import__"] = safe_import
+        # 每次执行注入独立的 print，不再全局替换 sys.stdout：async 生成代码在
+        # await 环境工具期间让出事件循环，并发 ask 会互相换走进程级 stdout，
+        # 恢复后 print 串进别人的 buffer（64 并发下实测串台）。生成代码无法
+        # import sys（sys 在 DANGEROUS_MODULES），exec globals 又先于 builtins
+        # 解析，print 一律走此注入路径，各自写入本次执行的 StringIO。
+        captured_output = StringIO()
+
+        def _sandbox_print(*args, sep=" ", end="\n", file=None, flush=False):
+            print(
+                *args,
+                sep=sep,
+                end=end,
+                file=file if file is not None else captured_output,
+                flush=flush,
+            )
+
         exec_globals = {
             "__builtins__": restricted_builtins,
             "ctx": ctx,
             "modules": types.MappingProxyType(router._modules),
             "results": results,
-            "print": print,
+            "print": _sandbox_print,
             **allowed_modules,
             "Exception": Exception,
             "RuntimeError": RuntimeError,
@@ -1143,8 +1165,6 @@ class CodeStage:
             "KeyError": KeyError,
         }
         exec_locals = {}
-        old_stdout = sys.stdout
-        sys.stdout = captured_output = StringIO()
         try:
             is_async = "async" in code or "await" in code
 
@@ -1208,8 +1228,6 @@ class CodeStage:
                 "error": str(e),
                 "success": False,
             }
-        finally:
-            sys.stdout = old_stdout
 
     async def process(self, context: AskContext, router: "CodeGenRouter") -> AskContext:
         if context.early_return:

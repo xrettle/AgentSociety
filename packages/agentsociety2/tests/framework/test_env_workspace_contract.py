@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from agentsociety2.config import Config
 from agentsociety2.contrib.env.economy_space import EconomyPerson, EconomySpace
 from agentsociety2.contrib.env.prisoners_dilemma import PrisonersDilemmaEnv
 from agentsociety2.contrib.env.simple_social_space import (
@@ -73,9 +74,7 @@ async def test_simple_social_space_roundtrip(tmp_path: Path) -> None:
 async def test_economy_space_roundtrip(tmp_path: Path) -> None:
     ws = tmp_path / "env" / "economy_space"
     persons = [
-        EconomyPerson(
-            id=1, currency=100.0, skill="eng", consumption=5.0, income=10.0
-        )
+        EconomyPerson(id=1, currency=100.0, skill="eng", consumption=5.0, income=10.0)
     ]
 
     m1 = EconomySpace(persons=persons)
@@ -233,8 +232,13 @@ class _FailingDumpEnv(PrisonersDilemmaEnv):
 
 
 @pytest.mark.asyncio
-async def test_partial_restore_does_not_abort_others(tmp_path: Path) -> None:
-    """一个模块 restore 失败不应让其它模块也丢失恢复（且汇总 ERROR 告警）。"""
+async def test_partial_restore_aborts_by_default(tmp_path: Path) -> None:
+    """严格模式（默认）：任一模块 restore 失败 → 中止整个 resume 并抛错。
+
+    静默降级（失败模块 fresh 启动）曾让坏 key 覆盖整个模块状态，而
+    SOCIETY_STEP.json 仍记录原步数——损坏直到下游指标才暴露。抛错前仍会
+    尝试恢复所有模块，便于一次汇总全部失败点。
+    """
     root = tmp_path / "env"
     good = PrisonersDilemmaEnv()
     bad = _FailingRestoreEnv()
@@ -248,7 +252,32 @@ async def test_partial_restore_does_not_abort_others(tmp_path: Path) -> None:
     router = _stub_router([_FailingRestoreEnv(), PrisonersDilemmaEnv()])
     router.run_dir = tmp_path
     router.bind_env_workspaces(root, ["bad", "good"])
-    # 即使 bad 抛错，good 仍恢复；整体返回 True（发生过恢复）。
+    with pytest.raises(RuntimeError, match="AGENTSOCIETY_ENV_RESTORE_ALLOW_FRESH"):
+        await router.from_workspaces()
+    # 收集全部失败点后统一抛错：good 在抛错前仍完成了恢复。
+    assert router.env_modules[1]._pending_actions == {"A": "Yes"}
+
+
+@pytest.mark.asyncio
+async def test_partial_restore_degrades_only_with_allow_fresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """显式 opt-in（ENV_RESTORE_ALLOW_FRESH=1）才降级：bad fresh、good 照常恢复。"""
+    monkeypatch.setattr(Config, "ENV_RESTORE_ALLOW_FRESH", True)
+    root = tmp_path / "env"
+    good = PrisonersDilemmaEnv()
+    bad = _FailingRestoreEnv()
+    # 先各自写一份 checkpoint。
+    good._bind_workspace(root / "good")
+    await good.submit_action("A", "Yes")
+    await good.to_workspace()
+    bad._bind_workspace(root / "bad")
+    await bad.to_workspace()
+
+    router = _stub_router([_FailingRestoreEnv(), PrisonersDilemmaEnv()])
+    router.run_dir = tmp_path
+    router.bind_env_workspaces(root, ["bad", "good"])
+    # 降级模式下即使 bad 抛错，good 仍恢复；整体返回 True（发生过恢复）。
     restored = await router.from_workspaces()
     assert restored is True
     assert router.env_modules[1]._pending_actions == {"A": "Yes"}
@@ -276,43 +305,84 @@ async def test_to_workspaces_one_module_failure_does_not_abort_others(
 # ── 游戏型模块（round_number / round_history / _pending_* / _step_counter）──
 
 GAME_MODULES = [
-    ("public_goods", "PublicGoodsEnv", {"num_agents": 2},
-     lambda m: (m._pending_contributions.update({"a": 5, "b": 3}),
-                m._agents_submitted_in_current_round.update({"a", "b"}),
-                m.__setattr__("round_number", 2), m.__setattr__("_step_counter", 4)),
-     lambda b: b._pending_contributions == {"a": 5, "b": 3}
-               and b._agents_submitted_in_current_round == {"a", "b"}
-               and b.round_number == 2 and b._step_counter == 4),
-    ("trust_game", "TrustGameEnv", {},
-     lambda m: (m.__setattr__("round_number", 3),
-                m.__setattr__("partner_mapping", {"Alice": "Bob"}),
-                m._pending_investments.update({"Alice": 10}),
-                m._pending_returns.update({"Bob": 5}),
-                m.__setattr__("_step_counter", 5)),
-     lambda b: b.round_number == 3 and b.partner_mapping == {"Alice": "Bob"}
-               and b._pending_investments == {"Alice": 10}
-               and b._pending_returns == {"Bob": 5} and b._step_counter == 5),
-    ("volunteer_dilemma", "VolunteerDilemmaEnv", {},
-     lambda m: (m._pending_choices.update({"a": "yes", "b": "no"}),
-                m.__setattr__("round_number", 1), m.__setattr__("_step_counter", 2)),
-     lambda b: b._pending_choices == {"a": "yes", "b": "no"}
-               and b.round_number == 1 and b._step_counter == 2),
-    ("commons_tragedy", "CommonsTragedyEnv", {},
-     lambda m: (m._pending_extractions.update({"X": 5}),
-                m._agents_submitted_in_current_round.add("X"),
-                m.__setattr__("current_pool_resources", 80),
-                m.__setattr__("_last_round_executed", 3),
-                m.__setattr__("_step_counter", 7)),
-     lambda b: b._pending_extractions == {"X": 5}
-               and b._agents_submitted_in_current_round == {"X"}
-               and b.current_pool_resources == 80 and b._last_round_executed == 3
-               and b._step_counter == 7),
+    (
+        "public_goods",
+        "PublicGoodsEnv",
+        {"num_agents": 2},
+        lambda m: (
+            m._pending_contributions.update({"a": 5, "b": 3}),
+            m._agents_submitted_in_current_round.update({"a", "b"}),
+            m.__setattr__("round_number", 2),
+            m.__setattr__("_step_counter", 4),
+        ),
+        lambda b: (
+            b._pending_contributions == {"a": 5, "b": 3}
+            and b._agents_submitted_in_current_round == {"a", "b"}
+            and b.round_number == 2
+            and b._step_counter == 4
+        ),
+    ),
+    (
+        "trust_game",
+        "TrustGameEnv",
+        {},
+        lambda m: (
+            m.__setattr__("round_number", 3),
+            m.__setattr__("partner_mapping", {"Alice": "Bob"}),
+            m._pending_investments.update({"Alice": 10}),
+            m._pending_returns.update({"Bob": 5}),
+            m.__setattr__("_step_counter", 5),
+        ),
+        lambda b: (
+            b.round_number == 3
+            and b.partner_mapping == {"Alice": "Bob"}
+            and b._pending_investments == {"Alice": 10}
+            and b._pending_returns == {"Bob": 5}
+            and b._step_counter == 5
+        ),
+    ),
+    (
+        "volunteer_dilemma",
+        "VolunteerDilemmaEnv",
+        {},
+        lambda m: (
+            m._pending_choices.update({"a": "yes", "b": "no"}),
+            m.__setattr__("round_number", 1),
+            m.__setattr__("_step_counter", 2),
+        ),
+        lambda b: (
+            b._pending_choices == {"a": "yes", "b": "no"}
+            and b.round_number == 1
+            and b._step_counter == 2
+        ),
+    ),
+    (
+        "commons_tragedy",
+        "CommonsTragedyEnv",
+        {},
+        lambda m: (
+            m._pending_extractions.update({"X": 5}),
+            m._agents_submitted_in_current_round.add("X"),
+            m.__setattr__("current_pool_resources", 80),
+            m.__setattr__("_last_round_executed", 3),
+            m.__setattr__("_step_counter", 7),
+        ),
+        lambda b: (
+            b._pending_extractions == {"X": 5}
+            and b._agents_submitted_in_current_round == {"X"}
+            and b.current_pool_resources == 80
+            and b._last_round_executed == 3
+            and b._step_counter == 7
+        ),
+    ),
 ]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("module_key,class_name,kwargs,mutate,check", GAME_MODULES)
-async def test_game_modules_roundtrip(tmp_path, module_key, class_name, kwargs, mutate, check):
+async def test_game_modules_roundtrip(
+    tmp_path, module_key, class_name, kwargs, mutate, check
+):
     """游戏型模块 round-trip：公共 goods / 信任博弈 / volunteer / 公地悲剧。"""
     import importlib
 
@@ -330,31 +400,65 @@ async def test_game_modules_roundtrip(tmp_path, module_key, class_name, kwargs, 
 # ── 心理/全局模块（int 键 dict / str）──
 
 PSYCH_MODULES = [
-    ("endowment_effect", "EndowmentEffectEnv", {"agent_ids": [1, 2]},
-     lambda m: (m._evaluations[1].update({"item1": {"wta": 10, "wtp": 5}}),
-                m.__setattr__("_step_counter", 3)),
-     lambda b: (b._evaluations.get(1, {}).get("item1") == {"wta": 10, "wtp": 5}
-                and b._step_counter == 3)),
-    ("self_enhancement", "SelfEnhancementEnv", {"agent_ids": [1, 2]},
-     lambda m: (m._rankings[1].update({"intelligence": 95}),
-                m.__setattr__("_step_counter", 6)),
-     lambda b: (b._rankings.get(1, {}).get("intelligence") == 95 and b._step_counter == 6)),
-    ("self_reference_effect", "SelfReferenceEffectEnv", {"agent_ids": [1]},
-     lambda m: (m._encoding_ratings[1].append({"trait": "kind", "identity": "self", "rating": 5}),
-                m._recognition_judgments[1].append({"trait": "kind", "judge_type": "old", "is_correct": True}),
-                m.__setattr__("_step_counter", 3)),
-     lambda b: (len(b._encoding_ratings.get(1, [])) == 1
-                and len(b._recognition_judgments.get(1, [])) == 1
-                and b._step_counter == 3)),
-    ("global_information", "GlobalInformationEnv", {},
-     lambda m: m.__setattr__("_global_information", "storm warning"),
-     lambda b: b._global_information == "storm warning"),
+    (
+        "endowment_effect",
+        "EndowmentEffectEnv",
+        {"agent_ids": [1, 2]},
+        lambda m: (
+            m._evaluations[1].update({"item1": {"wta": 10, "wtp": 5}}),
+            m.__setattr__("_step_counter", 3),
+        ),
+        lambda b: (
+            b._evaluations.get(1, {}).get("item1") == {"wta": 10, "wtp": 5}
+            and b._step_counter == 3
+        ),
+    ),
+    (
+        "self_enhancement",
+        "SelfEnhancementEnv",
+        {"agent_ids": [1, 2]},
+        lambda m: (
+            m._rankings[1].update({"intelligence": 95}),
+            m.__setattr__("_step_counter", 6),
+        ),
+        lambda b: (
+            b._rankings.get(1, {}).get("intelligence") == 95 and b._step_counter == 6
+        ),
+    ),
+    (
+        "self_reference_effect",
+        "SelfReferenceEffectEnv",
+        {"agent_ids": [1]},
+        lambda m: (
+            m._encoding_ratings[1].append(
+                {"trait": "kind", "identity": "self", "rating": 5}
+            ),
+            m._recognition_judgments[1].append(
+                {"trait": "kind", "judge_type": "old", "is_correct": True}
+            ),
+            m.__setattr__("_step_counter", 3),
+        ),
+        lambda b: (
+            len(b._encoding_ratings.get(1, [])) == 1
+            and len(b._recognition_judgments.get(1, [])) == 1
+            and b._step_counter == 3
+        ),
+    ),
+    (
+        "global_information",
+        "GlobalInformationEnv",
+        {},
+        lambda m: m.__setattr__("_global_information", "storm warning"),
+        lambda b: b._global_information == "storm warning",
+    ),
 ]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("module_key,class_name,kwargs,mutate,check", PSYCH_MODULES)
-async def test_psych_global_modules_roundtrip(tmp_path, module_key, class_name, kwargs, mutate, check):
+async def test_psych_global_modules_roundtrip(
+    tmp_path, module_key, class_name, kwargs, mutate, check
+):
     """心理实验/全局信息模块 round-trip。"""
     import importlib
 
@@ -370,6 +474,7 @@ async def test_psych_global_modules_roundtrip(tmp_path, module_key, class_name, 
 
 
 # ── EventSpace: pydantic CurrentEvent（含 datetime）──
+
 
 @pytest.mark.asyncio
 async def test_event_space_roundtrip(tmp_path):
@@ -402,6 +507,7 @@ async def test_event_space_roundtrip(tmp_path):
 
 
 # ── ReputationGame: enum Reputation + pydantic ActionLogEntry ──
+
 
 @pytest.mark.asyncio
 async def test_reputation_game_roundtrip(tmp_path):
@@ -443,6 +549,7 @@ async def test_reputation_game_roundtrip(tmp_path):
 
 # ── ImplicitAssociationTest: int-keyed dict ──
 
+
 @pytest.mark.asyncio
 async def test_implicit_association_test_roundtrip(tmp_path):
     from agentsociety2.contrib.env.implicit_association_test import (
@@ -465,6 +572,7 @@ async def test_implicit_association_test_roundtrip(tmp_path):
 
 # ── SocialMediaSpace: 社交图 + deque/defaultdict + 推荐器重建 ──
 
+
 @pytest.mark.asyncio
 async def test_social_media_roundtrip(tmp_path):
     from datetime import timezone
@@ -483,9 +591,7 @@ async def test_social_media_roundtrip(tmp_path):
     m1._bind_workspace(ws)
     now = datetime.now(timezone.utc)
     m1._persons[1] = SocialMediaPerson(id=1, username="A", created_at=now)
-    m1._posts[1] = Post(
-        post_id=1, author_id=1, content="hello", created_at=now
-    )
+    m1._posts[1] = Post(post_id=1, author_id=1, content="hello", created_at=now)
     m1._comments = {1: []}  # restore 会还原为 defaultdict(list)
     m1._next_post_id = 5
     m1._next_comment_id = 3
@@ -509,4 +615,3 @@ async def test_social_media_roundtrip(tmp_path):
     assert isinstance(m2._comments, defaultdict)
     # 推荐器在无 model_path 时也正常构造（轻量 fallback）
     assert m2._rec_engine is not None
-

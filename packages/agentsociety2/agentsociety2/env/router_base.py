@@ -56,7 +56,12 @@ from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 from litellm.types.utils import ModelResponse
 from pydantic import BaseModel, ValidationError
 
-from agentsociety2.config import LLMDispatchError, extract_json, get_model_name
+from agentsociety2.config import (
+    Config,
+    LLMDispatchError,
+    extract_json,
+    get_model_name,
+)
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.function_parser import FunctionParser, FunctionParts
 from agentsociety2.env.pydantic_collector import PydanticModelCollector
@@ -405,13 +410,17 @@ class RouterBase(ABC):
     async def from_workspaces(self) -> bool:
         """恢复各已绑定模块的状态（存在快照时）。
 
-        任一模块恢复失败不会中断其它模块，但会以 ERROR 级汇总告警——否则会出现
-        「部分模块 fresh、部分模块 checkpoint」的静默不一致状态。
+        默认严格模式：任一模块 ``restore()`` 抛错则中止整个 resume（所有模块先
+        尝试恢复、汇总失败后统一抛错，便于一次看清全部损坏点）。静默降级——失败
+        模块以初始状态继续跑——会让模块状态与 ``SOCIETY_STEP.json`` 记录的步数
+        脱钩，损坏只会在下游指标才暴露。设置 ``AGENTSOCIETY_ENV_RESTORE_ALLOW_FRESH=1``
+        可恢复旧的降级行为：失败模块 fresh 启动并 ERROR 汇总告警，其余模块照常恢复。
 
         :returns: 是否有任一模块加载了快照（即 resume）。
+        :raises RuntimeError: 严格模式下存在恢复失败的模块。
         """
         any_restored = False
-        failed: list[str] = []
+        failed: dict[str, Exception] = {}
         for module in self.env_modules:
             if module._workspace_root is None:
                 continue
@@ -419,20 +428,29 @@ class RouterBase(ABC):
                 restored = await module.restore(module._workspace_root)
             except Exception as exc:
                 get_logger().error(
-                    "Env module %s restore failed (will start fresh): %s",
+                    "Env module %s restore failed: %s",
                     module.name,
                     exc,
                 )
-                failed.append(module.name)
+                failed[module.name] = exc
                 restored = False
             any_restored = any_restored or restored
         if failed:
+            if not Config.ENV_RESTORE_ALLOW_FRESH:
+                details = "; ".join(f"{n}: {e}" for n, e in failed.items())
+                raise RuntimeError(
+                    f"Env resume aborted: {len(failed)} module(s) failed to "
+                    f"restore ({sorted(failed)}), refusing to silently start "
+                    "fresh and desync from the recorded step count (set "
+                    "AGENTSOCIETY_ENV_RESTORE_ALLOW_FRESH=1 to allow the "
+                    f"fresh-start fallback). Failures: {details}"
+                )
             get_logger().error(
-                "Partial env resume: %d module(s) failed to restore and start "
-                "fresh while others resumed from checkpoint — env state may be "
-                "inconsistent: %s",
+                "Partial env resume (ENV_RESTORE_ALLOW_FRESH=1): %d module(s) "
+                "failed to restore and start fresh while others resumed from "
+                "checkpoint — env state may be inconsistent: %s",
                 len(failed),
-                failed,
+                sorted(failed),
             )
         return any_restored
 
