@@ -49,8 +49,8 @@ Run commands from the workspace root through `.agentsociety/bin/ags.py`.
 | Download open PDF       | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text download --entry 1`                                                        |
 | Register local PDF      | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text register --entry 1 --file /path/to/paper.pdf`                              |
 | Mark no PDF found       | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text mark --entry 1 --status no_candidate --reason "No open PDF URL available"` |
-| List enrichable entries | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text enrich --dry-run`                                                          |
-| Mark entry as enriched  | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text enrich --entry 1`                                                          |
+| List entries needing notes | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text enrich --dry-run`                                                       |
+| Mark note supplemented  | `$PYTHON_PATH .agentsociety/bin/ags.py literature-full-text enrich --entry 1`                                                          |
 
 ## Configuration (required)
 
@@ -81,7 +81,7 @@ Full-text helper parameters:
 | `literature-full-text download`   | `--entry N`, `--url URL` optional                             | Try open PDF URLs and update `extra_fields.full_text`                         |
 | `literature-full-text register`   | `--entry N`, `--file PATH`                                    | Copy/register a local PDF and update the index                                |
 | `literature-full-text mark`       | `--entry N`, `--status no_candidate\|failed`, `--reason TEXT` | Record why a PDF is unavailable                                               |
-| `literature-full-text enrich`     | `--entry N` or `--dry-run`                                    | List or mark entries whose Markdown notes have been enriched via web research |
+| `literature-full-text enrich`     | `--entry N` or `--dry-run`                                    | List or mark entries whose Markdown notes were manually supplemented          |
 
 ## Recommended Workflow
 
@@ -140,11 +140,7 @@ Keep `file_path` pointed at the Markdown note. PDF paths belong in `extra_fields
 
 ## Optional Full-Text Retrieval
 
-The search command automatically tries open-access PDF downloads. Publisher paywalls are not bypassed. See `references/full-text-retrieval.md` for manual follow-up.
-
-### Enriching Notes When PDF Is Unavailable
-
-When a PDF cannot be downloaded, enrich the Markdown note via web search. See `references/full-text-retrieval.md` (section **Enriching Notes via Web Research**).
+The search command automatically tries open-access PDF downloads. Publisher paywalls are not bypassed. See `references/full-text-retrieval.md` for manual follow-up. When a PDF is unavailable, mark the reason, optionally supplement the Markdown note from the abstract/user-provided material, then `literature-full-text enrich --entry N`.
 
 ## Common Mistakes
 

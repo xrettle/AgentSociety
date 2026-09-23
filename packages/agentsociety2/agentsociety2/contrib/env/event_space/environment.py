@@ -13,14 +13,15 @@ Supports 7 specific event types:
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Literal, Optional
+from typing import Any, ClassVar, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentsociety2.env import EnvBase, tool
 from agentsociety2.env.base import dump_int_map, load_int_map
 from agentsociety2.logger import get_logger
 from agentsociety2.storage import ColumnDef
 from agentsociety2.storage.workspace_state import atomic_write_text
-from pydantic import BaseModel, ConfigDict, Field
 
 _STATE_REL = "state/ENV_STATE.json"
 
@@ -97,7 +98,7 @@ class CurrentEvent(BaseModel):
         default="in_progress", description="Current status of the event"
     )
     start_time: datetime = Field(..., description="Event start time")
-    expected_end_time: Optional[datetime] = Field(
+    expected_end_time: datetime | None = Field(
         default=None, description="Expected end time provided by person"
     )
 
@@ -117,14 +118,14 @@ class CurrentEvent(BaseModel):
         """Get elapsed time in seconds"""
         return (current_time - self.start_time).total_seconds()
 
-    def get_remaining_seconds(self, current_time: datetime) -> Optional[float]:
+    def get_remaining_seconds(self, current_time: datetime) -> float | None:
         """Get remaining time in seconds until expected end time (if set)"""
         if self.expected_end_time is None or self.status != "in_progress":
             return None
         remaining = self.expected_end_time - current_time
         return max(0, remaining.total_seconds())
 
-    def get_progress_percentage(self, current_time: datetime) -> Optional[float]:
+    def get_progress_percentage(self, current_time: datetime) -> float | None:
         """Get progress percentage (0-100) based on expected end time"""
         if self.expected_end_time is None:
             return None
@@ -165,12 +166,12 @@ class GetEventResponse(BaseModel):
     event_name: str = Field(..., description="Event name/description")
     status: str = Field(..., description="Event status")
     start_time: datetime = Field(..., description="Start time")
-    expected_end_time: Optional[datetime] = Field(None, description="Expected end time")
+    expected_end_time: datetime | None = Field(None, description="Expected end time")
     elapsed_seconds: float = Field(..., description="Elapsed time in seconds")
-    remaining_seconds: Optional[float] = Field(
+    remaining_seconds: float | None = Field(
         None, description="Remaining time in seconds (if expected_end_time set)"
     )
-    progress_percentage: Optional[float] = Field(
+    progress_percentage: float | None = Field(
         None, description="Progress percentage (0-100, if expected_end_time set)"
     )
 
@@ -214,16 +215,16 @@ class EventSpace(EnvBase):
 
     def __init__(
         self,
-        allowed_event_types: List[str] = DEFAULT_ALLOWED_EVENT_TYPES,
+        allowed_event_types: list[str] = DEFAULT_ALLOWED_EVENT_TYPES,
         event_types_description: str = DEFAULT_EVENT_TYPES_CONFIG,
     ):
         """Initialize the EventSpace"""
         super().__init__()
         self._allowed_event_types = allowed_event_types
         self._event_types_description = event_types_description
-        self._agent_events: Dict[int, CurrentEvent] = {}
+        self._agent_events: dict[int, CurrentEvent] = {}
         """Storage for current event of each person: person_id -> CurrentEvent"""
-        self._recent_stopped_events: Dict[int, CurrentEvent] = {}
+        self._recent_stopped_events: dict[int, CurrentEvent] = {}
         """Last event stopped at the current env clock, used to absorb same-tick restarts."""
         self._step_counter: int = 0
 
@@ -281,7 +282,10 @@ class EventSpace(EnvBase):
     @classmethod
     def description(cls) -> str:
         """Return a short module description."""
-        return "Event tracking environment for recording and querying person activities."
+        return (
+            "Event tracking environment for recording and querying person activities."
+        )
+
     async def init(self, start_datetime: datetime) -> Any:
         """
         Initialize the EventSpace.
@@ -294,9 +298,11 @@ class EventSpace(EnvBase):
         self._step_counter = 0
         get_logger().info("EventSpace initialized")
 
-    def _serialize_active_events(self, current_time: datetime) -> Dict[str, Dict[str, Any]]:
+    def _serialize_active_events(
+        self, current_time: datetime
+    ) -> dict[str, dict[str, Any]]:
         """Serialize active events to JSON-safe dictionaries for replay output."""
-        result: Dict[str, Dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {}
         for person_id, event in self._agent_events.items():
             result[str(person_id)] = {
                 **event.model_dump(mode="json"),
@@ -388,10 +394,7 @@ class EventSpace(EnvBase):
                 expected_end_time=recent.expected_end_time or expected_end,
                 status="in_progress",
             )
-        if (
-            recent is not None
-            and recent.event_type == event_type
-        ):
+        if recent is not None and recent.event_type == event_type:
             recent.status = "in_progress"
             if recent.expected_end_time is None:
                 recent.expected_end_time = expected_end
@@ -518,7 +521,7 @@ class EventSpace(EnvBase):
         return any(term in value for term in passive_terms)
 
     @tool(readonly=True, kind="observe")
-    async def get_current_event(self, person_id: int) -> Optional[GetEventResponse]:
+    async def get_current_event(self, person_id: int) -> GetEventResponse | None:
         """
         Query current event information for a person.
 

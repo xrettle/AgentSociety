@@ -9,7 +9,7 @@ import shutil
 from dataclasses import dataclass
 from hashlib import sha1
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 try:
     import pandas as pd
@@ -49,11 +49,11 @@ class ReportPaths:
 
     markdown: Path
     html: Path
-    markdown_zh: Optional[Path] = None
-    html_zh: Optional[Path] = None
-    markdown_en: Optional[Path] = None
-    html_en: Optional[Path] = None
-    assets_dir: Optional[Path] = None
+    markdown_zh: Path | None = None
+    html_zh: Path | None = None
+    markdown_en: Path | None = None
+    html_en: Path | None = None
+    assets_dir: Path | None = None
 
 
 class AssetManager:
@@ -67,7 +67,7 @@ class AssetManager:
         self,
         experiment_id: str,
         hypothesis_id: str,
-    ) -> List[ReportAsset]:
+    ) -> list[ReportAsset]:
         """Discover image assets under `run/artifacts`."""
 
         hid = _sanitize_id(hypothesis_id)
@@ -80,7 +80,7 @@ class AssetManager:
             / DIR_ARTIFACTS
         )
 
-        assets: List[ReportAsset] = []
+        assets: list[ReportAsset] = []
         if not asset_path.exists():
             return assets
 
@@ -103,17 +103,17 @@ class AssetManager:
 
     def process_assets(
         self,
-        assets: List[ReportAsset],
+        assets: list[ReportAsset],
         output_dir: Path,
         *,
         include_embedded_data: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Copy assets into `assets/`; optionally generate base64 payloads."""
 
         assets_dir = output_dir / DIR_REPORT_ASSETS
         assets_dir.mkdir(exist_ok=True)
         ensure_brand_icon(assets_dir)
-        processed: Dict[str, Any] = {}
+        processed: dict[str, Any] = {}
         used_names: set[str] = set()
 
         for asset in assets:
@@ -193,15 +193,15 @@ class EDAGenerator:
     def resolve_table_selection(
         self,
         reader,
-        tables: Optional[List[str]],
-    ) -> Tuple[List[str], List[str], List[str]]:
+        tables: list[str] | None,
+    ) -> tuple[list[str], list[str], list[str]]:
         """Return requested, selected, and invalid table names."""
 
         available_tables = reader.read_schema().tables
         if tables is None:
             return available_tables, available_tables, []
 
-        requested_tables: List[str] = []
+        requested_tables: list[str] = []
         seen = set()
         for table in tables:
             name = (table or "").strip()
@@ -219,7 +219,7 @@ class EDAGenerator:
         ]
         return requested_tables, selected_tables, invalid_tables
 
-    def _resolve_tables(self, reader, tables: Optional[List[str]]) -> List[str]:
+    def _resolve_tables(self, reader, tables: list[str] | None) -> list[str]:
         _, selected_tables, _ = self.resolve_table_selection(reader, tables)
         return selected_tables
 
@@ -227,12 +227,12 @@ class EDAGenerator:
         self,
         db_path: Path,
         max_rows: int = 5000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[str]:
+        tables: list[str] | None = None,
+    ) -> str | None:
         if not db_path.exists():
             return None
 
-        from .data import DataReader, DatabaseSchema
+        from .data import DatabaseSchema, DataReader
 
         reader = DataReader(db_path)
         schema = reader.read_schema()
@@ -254,8 +254,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 50000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         """Generate a missing-value report with missingno."""
 
         if not db_path.exists():
@@ -393,8 +393,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 50000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         """Generate a correlation report."""
 
         if not db_path.exists():
@@ -501,8 +501,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 10000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         """Generate a ydata-profiling report."""
 
         if not db_path.exists():
@@ -593,7 +593,7 @@ class EDAGenerator:
 
     def _build_eda_index_html(
         self,
-        table_files: List[Tuple[str, str, int]],
+        table_files: list[tuple[str, str, int]],
         tool_name: str,
     ) -> str:
         rows = "\n".join(
@@ -635,8 +635,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 10000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         """Generate a Sweetviz report."""
 
         if not db_path.exists():
@@ -731,8 +731,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int,
-        tables: Optional[List[str]],
-    ) -> Dict[str, "pd.DataFrame"]:
+        tables: list[str] | None,
+    ) -> dict[str, pd.DataFrame]:
         if pd is None or not db_path.exists():
             return {}
 
@@ -741,7 +741,7 @@ class EDAGenerator:
         reader = DataReader(db_path)
         selected_tables = self._resolve_tables(reader, tables)
         sample = reader.read_sample_data(tables=selected_tables, limit=max_rows)
-        frames: Dict[str, pd.DataFrame] = {}
+        frames: dict[str, pd.DataFrame] = {}
         for table_name, data in (sample or {}).items():
             if not data:
                 continue
@@ -755,8 +755,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 10000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         frames = self._read_non_empty_tables(db_path, output_dir, max_rows, tables)
         if not frames:
             return None
@@ -768,7 +768,7 @@ class EDAGenerator:
             self.logger.warning("pygwalker 未安装，跳过拖拽探索报告")
             return None
 
-        generated: List[Tuple[str, str, int]] = []
+        generated: list[tuple[str, str, int]] = []
         for table_name, df in frames.items():
             safe_name = "".join(
                 c if c.isalnum() or c in "_-" else "_" for c in table_name
@@ -798,14 +798,14 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 5000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         frames = self._read_non_empty_tables(db_path, output_dir, max_rows, tables)
         if not frames:
             return None
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        generated: List[Tuple[str, str, int]] = []
+        generated: list[tuple[str, str, int]] = []
         for table_name, df in frames.items():
             safe_name = "".join(
                 c if c.isalnum() or c in "_-" else "_" for c in table_name
@@ -831,9 +831,7 @@ class EDAGenerator:
             )
         return index_file
 
-    def _build_sortable_datatable_html(
-        self, table_name: str, df: "pd.DataFrame"
-    ) -> str:
+    def _build_sortable_datatable_html(self, table_name: str, df: pd.DataFrame) -> str:
         preview = df.head(500)
         esc = html_module.escape
         headers = "".join(f"<th>{esc(str(col))}</th>" for col in preview.columns)
@@ -909,8 +907,8 @@ class EDAGenerator:
         db_path: Path,
         output_dir: Path,
         max_rows: int = 8000,
-        tables: Optional[List[str]] = None,
-    ) -> Optional[Path]:
+        tables: list[str] | None = None,
+    ) -> Path | None:
         frames = self._read_non_empty_tables(db_path, output_dir, max_rows, tables)
         if not frames:
             return None
@@ -922,7 +920,7 @@ class EDAGenerator:
             self.logger.warning("plotly 未安装，跳过 Plotly 概览")
             return None
 
-        generated: List[Tuple[str, str, int]] = []
+        generated: list[tuple[str, str, int]] = []
         for table_name, df in frames.items():
             numeric = df.select_dtypes(include=["number"])
             if numeric.shape[1] < 1:
@@ -981,7 +979,7 @@ class EDAGenerator:
 
     def _build_eda_hub_html(
         self,
-        entries: List[Dict[str, str]],
+        entries: list[dict[str, str]],
         *,
         title: str,
         lang: str = "zh",
@@ -997,8 +995,8 @@ class EDAGenerator:
         if not entries:
             body = '<p class="hub-empty">暂无 EDA 产物。请先运行 <code>run-eda --type bundle</code>。</p>'
         else:
-            tab_buttons: List[str] = []
-            tab_panels: List[str] = []
+            tab_buttons: list[str] = []
+            tab_panels: list[str] = []
             for idx, spec in enumerate(entries):
                 active = " active" if idx == 0 else ""
                 tab_id = spec["key"]
@@ -1017,7 +1015,7 @@ class EDAGenerator:
                         f'<p class="panel-intro"><strong>{label}</strong> — {desc}</p>'
                         f'<p class="iframe-hint">'
                         f'<a href="{md_path}" target="_blank" rel="noopener">'
-                        f'{"打开 Markdown" if zh else "Open Markdown"}</a></p>'
+                        f"{'打开 Markdown' if zh else 'Open Markdown'}</a></p>"
                     )
                 else:
                     open_lbl = "新标签页打开" if zh else "Open in new tab"
@@ -1032,7 +1030,7 @@ class EDAGenerator:
                 )
             tabs_html = (
                 f'<div class="tab-root"><div class="tab-bar" role="tablist">{"".join(tab_buttons)}</div>'
-                f'{"".join(tab_panels)}</div>'
+                f"{''.join(tab_panels)}</div>"
             )
             body = tabs_html
 
@@ -1058,10 +1056,10 @@ class EDAGenerator:
         self,
         db_path: Path,
         output_dir: Path,
-        profiles: Optional[List[str]] = None,
-        tables: Optional[List[str]] = None,
+        profiles: list[str] | None = None,
+        tables: list[str] | None = None,
         max_rows: int = 10000,
-    ) -> Tuple[List[str], Optional[Path]]:
+    ) -> tuple[list[str], Path | None]:
         default_profiles = [
             "quick-stats",
             "ydata",
@@ -1072,7 +1070,7 @@ class EDAGenerator:
         active = profiles or default_profiles
         output_dir.mkdir(parents=True, exist_ok=True)
         ensure_brand_icon(output_dir.parent / "assets")
-        files: List[str] = []
+        files: list[str] = []
 
         runners = {
             "quick-stats": lambda: self._bundle_quick_stats(
@@ -1123,8 +1121,8 @@ class EDAGenerator:
         self,
         db_path: Path,
         output_dir: Path,
-        tables: Optional[List[str]],
-    ) -> Optional[str]:
+        tables: list[str] | None,
+    ) -> str | None:
         content = self.generate_quick_stats(db_path, tables=tables)
         if content is None:
             return None

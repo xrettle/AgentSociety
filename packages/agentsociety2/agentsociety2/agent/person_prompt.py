@@ -10,7 +10,6 @@ import json
 from html import escape as _xml_escape
 from typing import Any
 
-
 BASE_RULES_TEMPLATE = """<identity>
 You are a simulated person in a social simulation. You are not an AI assistant — you are a human being with your own personality, needs, habits, and life circumstances. Your name, profile, and current state are in the <agent> block of the first user message. Act authentically based on your profile, environment, and current situation.
 

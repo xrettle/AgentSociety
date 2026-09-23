@@ -12,9 +12,9 @@
 from __future__ import annotations
 
 import json
-from typing import Dict, Any, Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi import Path as PathParam
 
 from agentsociety2.backend.path_security import (
@@ -28,7 +28,7 @@ logger = get_logger()
 router = APIRouter(prefix="/api/v1/prefill-params", tags=["prefill-params"])
 
 
-def _load_prefill_params_file(workspace_path: str) -> Dict[str, Any]:
+def _load_prefill_params_file(workspace_path: str) -> dict[str, Any]:
     """加载全局预填充参数文件"""
     workspace = resolve_workspace_root(workspace_path)
     prefill_file = resolve_under_root(workspace, ".agentsociety", "prefill_params.json")
@@ -49,7 +49,7 @@ def _load_prefill_params_file(workspace_path: str) -> Dict[str, Any]:
 @router.get("")
 async def get_prefill_params(
     workspace_path: str = Query(..., description="工作区路径"),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     获取全局预填充参数
 
@@ -84,7 +84,7 @@ async def get_class_prefill_params(
         ..., description="类名，如 mobility_space, basic_agent"
     ),
     workspace_path: str = Query(..., description="工作区路径"),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     获取特定类的预填充参数
 

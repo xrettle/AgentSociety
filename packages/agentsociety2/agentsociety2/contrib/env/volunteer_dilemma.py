@@ -2,10 +2,11 @@
 Volunteer's Dilemma Game Environment
 Environment for Volunteer's Dilemma game based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,11 @@ class SubmitChoiceResponse(BaseModel):
 
 class VolunteerDilemmaEnv(EnvBase):
     """Environment for Volunteer's Dilemma game based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _env_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("round_number", "INTEGER", nullable=False),
@@ -56,10 +62,10 @@ class VolunteerDilemmaEnv(EnvBase):
         self.cost_c = cost_c
 
         self.round_number = 0
-        self.round_history: List[dict] = []
+        self.round_history: list[dict] = []
 
         # Pending choices for current round (agent_name -> choice)
-        self._pending_choices: Dict[str, str] = {}
+        self._pending_choices: dict[str, str] = {}
 
         self._lock = asyncio.Lock()
         self._step_counter: int = 0
@@ -125,10 +131,9 @@ class VolunteerDilemmaEnv(EnvBase):
     def description(cls) -> str:
         """Return a short module description."""
         return "Volunteer's Dilemma game environment for group volunteer decisions."
+
     @tool(readonly=False)
-    async def submit_choice(
-        self, agent_name: str, choice: str
-    ) -> SubmitChoiceResponse:
+    async def submit_choice(self, agent_name: str, choice: str) -> SubmitChoiceResponse:
         """
         Submit choice decision for an agent.
 
@@ -148,7 +153,11 @@ class VolunteerDilemmaEnv(EnvBase):
 
             # 记录提交日志用于调试
             import sys
-            print(f"[ENV DEBUG] {agent_name} submitted: {validated_choice} (pending: {len(self._pending_choices)}/{self.num_agents})", file=sys.stderr)
+
+            print(
+                f"[ENV DEBUG] {agent_name} submitted: {validated_choice} (pending: {len(self._pending_choices)}/{self.num_agents})",
+                file=sys.stderr,
+            )
 
             return SubmitChoiceResponse(
                 agent_name=agent_name,
@@ -157,7 +166,7 @@ class VolunteerDilemmaEnv(EnvBase):
             )
 
     @tool(readonly=True)
-    async def get_round_history(self, round_num: Optional[int] = None) -> List[dict]:
+    async def get_round_history(self, round_num: int | None = None) -> list[dict]:
         """
         Get round history.
 
@@ -167,9 +176,7 @@ class VolunteerDilemmaEnv(EnvBase):
         """
         async with self._lock:
             if round_num is not None:
-                return [
-                    r for r in self.round_history if r.get("round") == round_num
-                ]
+                return [r for r in self.round_history if r.get("round") == round_num]
             return self.round_history.copy()
 
     async def init(self, start_datetime: datetime):
@@ -200,7 +207,8 @@ class VolunteerDilemmaEnv(EnvBase):
 
                 # Calculate number of volunteers
                 num_volunteers = sum(
-                    1 for choice in self._pending_choices.values()
+                    1
+                    for choice in self._pending_choices.values()
                     if choice == "Volunteer"
                 )
                 is_someone_volunteering = num_volunteers > 0
@@ -249,5 +257,6 @@ class VolunteerDilemmaEnv(EnvBase):
             cost_c=self.cost_c,
         )
         self._step_counter += 1
+
 
 __all__ = ["VolunteerDilemmaEnv"]

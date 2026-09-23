@@ -17,23 +17,24 @@ FastAPI backend service for AI Social Scientist VSCode extension
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
-from pathlib import Path
 
 from agentsociety2 import __version__
 from agentsociety2.backend.routers import (
-    prefill_params,
-    experiments,
-    replay,
-    custom,
-    modules,
     agent_skills,
+    custom,
+    experiments,
+    modules,
+    prefill_params,
+    replay,
 )
 
 # 加载环境变量
@@ -149,7 +150,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     :param exc: 未捕获异常。
     :returns: 标准化的 500 JSON 响应。
     """
-    logger.error(f"未处理的异常: {exc}", exc_info=True)
+    logger.error(f"未处理的异常: {exc}")
     return JSONResponse(
         status_code=500,
         content={
@@ -160,8 +161,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
-    import uvicorn
     import argparse
+
+    import uvicorn
 
     # 解析命令行参数
     parser = argparse.ArgumentParser(

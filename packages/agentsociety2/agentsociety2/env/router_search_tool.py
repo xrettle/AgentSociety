@@ -4,15 +4,15 @@ Search Tool as Tool Router Implementation
 """
 
 import json
-from typing import Tuple, Dict, Any, List
+from typing import Any
 
 import json_repair
 from litellm import AllMessageValues
 from openai.types.chat import ChatCompletionToolParam
 
-from agentsociety2.logger import get_logger
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.router_base import RouterBase
+from agentsociety2.logger import get_logger
 
 __all__ = ["SearchToolRouter"]
 
@@ -41,11 +41,11 @@ class SearchToolRouter(RouterBase):
         )
 
         # 预收集所有工具信息
-        self._all_tools: List[ChatCompletionToolParam] = []
-        self._all_readonly_tools: List[ChatCompletionToolParam] = []
-        self._tool_name_to_module: Dict[str, EnvBase] = {}
-        self._tool_name_to_tool_obj: Dict[str, Any] = {}
-        self._tool_descriptions: Dict[str, str] = {}
+        self._all_tools: list[ChatCompletionToolParam] = []
+        self._all_readonly_tools: list[ChatCompletionToolParam] = []
+        self._tool_name_to_module: dict[str, EnvBase] = {}
+        self._tool_name_to_tool_obj: dict[str, Any] = {}
+        self._tool_descriptions: dict[str, str] = {}
 
         self._collect_all_tools()
 
@@ -84,7 +84,7 @@ class SearchToolRouter(RouterBase):
                     if readonly_tools.get(tool_name, False):
                         self._all_readonly_tools.append(tool_schema)
 
-    def _create_search_tool_schema(self) -> Dict[str, Any]:
+    def _create_search_tool_schema(self) -> dict[str, Any]:
         """创建search tool的schema"""
         return {
             "type": "function",
@@ -109,7 +109,7 @@ class SearchToolRouter(RouterBase):
             },
         }
 
-    def _create_set_status_tool_schema(self) -> Dict[str, Any]:
+    def _create_set_status_tool_schema(self) -> dict[str, Any]:
         """创建set_status工具的schema"""
         return {
             "type": "function",
@@ -142,7 +142,7 @@ class SearchToolRouter(RouterBase):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """
         使用Search Tool模式处理指令。
 
@@ -164,7 +164,10 @@ class SearchToolRouter(RouterBase):
 
             if not self.env_modules:
                 get_logger().warning("No environment modules available")
-                results = {"status": "fail", "reason": "No environment modules available"}
+                results = {
+                    "status": "fail",
+                    "reason": "No environment modules available",
+                }
                 return (
                     results,
                     "No environment modules available to handle the request.",
@@ -182,24 +185,28 @@ class SearchToolRouter(RouterBase):
 
             # 构建初始对话，包含ctx和instruction
             initial_prompt = self._build_initial_prompt(instruction, ctx, readonly)
-            dialog: List[AllMessageValues] = [{"role": "user", "content": initial_prompt}]
+            dialog: list[AllMessageValues] = [
+                {"role": "user", "content": initial_prompt}
+            ]
 
             results = {}
             step_count = 0
             discovered_tools: set = set()  # 已发现的工具集合
-            execution_log: List[Dict[str, Any]] = []  # 记录执行历史
+            execution_log: list[dict[str, Any]] = []  # 记录执行历史
             # status 表示用户的指令在环境模块中是否被有效地完成了，还是需要等待一段时间后由用户主动检测指令的完成性
             status = "success"
             error = None
 
             while step_count < self.max_steps:
                 step_count += 1
-                get_logger().debug(f"SearchToolRouter: Step {step_count}/{self.max_steps}")
+                get_logger().debug(
+                    f"SearchToolRouter: Step {step_count}/{self.max_steps}"
+                )
 
                 # 确定当前可用的工具列表
                 # 如果还没有发现工具，只提供search_tool + set_status
                 # 如果已经发现工具，提供search_tool + set_status + 已发现的工具
-                current_tools: List[ChatCompletionToolParam | Dict[str, Any]] = [
+                current_tools: list[ChatCompletionToolParam | dict[str, Any]] = [
                     self._search_tool_schema,
                     self._set_status_tool_schema,
                 ]
@@ -364,7 +371,10 @@ class SearchToolRouter(RouterBase):
                                 "tool_call_id": tool_call.id,
                                 "name": func_name,
                                 "content": json.dumps(
-                                    {"status": status, "message": "Status set successfully"}
+                                    {
+                                        "status": status,
+                                        "message": "Status set successfully",
+                                    }
                                 ),
                             }
                         )
@@ -440,10 +450,14 @@ class SearchToolRouter(RouterBase):
                 dialog.extend(tool_results)
 
             # 达到最大步数
-            get_logger().warning(f"SearchToolRouter: Reached max steps ({self.max_steps})")
+            get_logger().warning(
+                f"SearchToolRouter: Reached max steps ({self.max_steps})"
+            )
             # 构建过程文本
             process_text = (
-                json.dumps(execution_log, indent=2, default=str) if execution_log else ""
+                json.dumps(execution_log, indent=2, default=str)
+                if execution_log
+                else ""
             )
             # 使用基类的generate_final_answer生成最终答案
             final_answer, determined_status = await self.generate_final_answer(
@@ -458,7 +472,7 @@ class SearchToolRouter(RouterBase):
 
     async def _search_tools(
         self, query: str, max_results: int, readonly: bool
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """执行工具搜索"""
         # 使用简单的关键词匹配进行搜索
         query_lower = query.lower()
@@ -491,7 +505,7 @@ class SearchToolRouter(RouterBase):
             if isinstance(params, dict):
                 properties = params.get("properties", {})
                 if isinstance(properties, dict):
-                    for param_name in properties.keys():
+                    for param_name in properties:
                         if query_lower in param_name.lower():
                             score += 1
 

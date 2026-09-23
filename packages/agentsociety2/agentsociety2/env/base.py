@@ -35,17 +35,15 @@ import functools
 import inspect
 import json
 import re
+from collections.abc import Callable
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
-    Dict,
     Literal,
-    Optional,
     TypeVar,
     overload,
 )
@@ -86,7 +84,6 @@ def tool(
     kind: Literal["observe", "statistics"] = ...,
 ) -> Callable[[F], F]:
     """Overload for observe/statistics tools that must be readonly."""
-    ...
 
 
 @overload
@@ -97,7 +94,6 @@ def tool(
     kind: None = None,
 ) -> Callable[[F], F]:
     """Overload for regular tools."""
-    ...
 
 
 def tool(
@@ -232,7 +228,7 @@ def tool(
                 "return_value": return_value_repr,
                 "exception_occurred": exception_occurred,
                 "exception_info": exception_info,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             # Attach OTel trace context if available
             if trace_ctx:
@@ -342,9 +338,9 @@ class EnvMeta(type):
     def __new__(cls, name, bases, namespace, **kwargs):
         new_class = super().__new__(cls, name, bases, namespace, **kwargs)
 
-        registered_tools: Dict[str, Any] = {}
-        readonly_tools: Dict[str, bool] = {}
-        tool_kinds: Dict[str, str | None] = {}
+        registered_tools: dict[str, Any] = {}
+        readonly_tools: dict[str, bool] = {}
+        tool_kinds: dict[str, str | None] = {}
         for attr_name, attr_value in namespace.items():
             if callable(attr_value) and hasattr(attr_value, "_tool_info"):
                 tool_info = attr_value._tool_info  # type: ignore
@@ -418,11 +414,11 @@ class EnvBase(metaclass=EnvMeta):
         self._current_trace_context: dict[str, str | None] = {}
 
         # Replay writer for storing simulation state
-        self._replay_writer: Optional["ReplayWriter"] = None
+        self._replay_writer: ReplayWriter | None = None
         self._state_tables_registered: bool = False
 
         # workspace 持久化槽位（无状态 resume）。
-        self._workspace_root: Optional[Path] = None
+        self._workspace_root: Path | None = None
 
         tools = list(getattr(self.__class__, "_registered_tools", {}).values())
         self._tool_manager = ToolManager(tools=tools)
@@ -570,7 +566,6 @@ class EnvBase(metaclass=EnvMeta):
 
     async def close(self):
         """关闭环境模块并释放资源（可选重写）。"""
-        pass
 
     # ==================== workspace 持久化（无状态 resume） ====================
     #
@@ -648,7 +643,10 @@ class EnvBase(metaclass=EnvMeta):
             except RuntimeError:
                 # No running event loop; register lazily on first write
                 import logging
-                logging.getLogger(__name__).debug("No running event loop for state table registration; deferring")
+
+                logging.getLogger(__name__).debug(
+                    "No running event loop for state table registration; deferring"
+                )
 
     @staticmethod
     def _on_register_state_tables_done(task: "asyncio.Task[None]") -> None:

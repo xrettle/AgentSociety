@@ -35,12 +35,14 @@ def test_validate_public_url_blocks_hostname_resolving_to_private() -> None:
     fake = [
         (0, 0, 0, "", ("10.1.2.3", 0)),
     ]
-    with patch(
-        "agentsociety2.skills.literature.full_text.socket.getaddrinfo",
-        return_value=fake,
+    with (
+        patch(
+            "agentsociety2.skills.literature.full_text.socket.getaddrinfo",
+            return_value=fake,
+        ),
+        pytest.raises(FullTextDownloadError, match="restricted address"),
     ):
-        with pytest.raises(FullTextDownloadError, match="restricted address"):
-            _validate_public_url("https://evil.example/paper.pdf")
+        _validate_public_url("https://evil.example/paper.pdf")
 
 
 def test_validate_public_url_allows_hostname_resolving_to_public() -> None:

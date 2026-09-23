@@ -4,15 +4,15 @@ Plan-and-Execute Router Implementation
 """
 
 import json
-from typing import Tuple, Dict, Any, List
+from typing import Any
 
 import json_repair
 from litellm import AllMessageValues
 from openai.types.chat import ChatCompletionToolParam
 
-from agentsociety2.logger import get_logger
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.router_base import RouterBase
+from agentsociety2.logger import get_logger
 
 __all__ = ["PlanExecuteRouter"]
 
@@ -41,10 +41,10 @@ class PlanExecuteRouter(RouterBase):
         )
 
         # 预收集所有工具
-        self._all_tools: List[ChatCompletionToolParam] = []
-        self._all_readonly_tools: List[ChatCompletionToolParam] = []
-        self._tool_name_to_module: Dict[str, EnvBase] = {}
-        self._tool_name_to_tool_obj: Dict[str, Any] = {}
+        self._all_tools: list[ChatCompletionToolParam] = []
+        self._all_readonly_tools: list[ChatCompletionToolParam] = []
+        self._tool_name_to_module: dict[str, EnvBase] = {}
+        self._tool_name_to_tool_obj: dict[str, Any] = {}
 
         self._collect_all_tools()
 
@@ -79,7 +79,7 @@ class PlanExecuteRouter(RouterBase):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """
         使用Plan-and-Execute模式处理指令。
 
@@ -101,7 +101,10 @@ class PlanExecuteRouter(RouterBase):
 
             if not self.env_modules:
                 get_logger().warning("No environment modules available")
-                results = {"status": "fail", "reason": "No environment modules available"}
+                results = {
+                    "status": "fail",
+                    "reason": "No environment modules available",
+                }
                 return (
                     results,
                     "No environment modules available to handle the request.",
@@ -120,7 +123,10 @@ class PlanExecuteRouter(RouterBase):
             # 第一阶段：制定计划
             plan = await self._create_plan(instruction, ctx, readonly, available_tools)
             if not plan:
-                results = {"status": "fail", "reason": "Failed to create execution plan"}
+                results = {
+                    "status": "fail",
+                    "reason": "Failed to create execution plan",
+                }
                 return results, "Failed to create execution plan."
 
             get_logger().info(f"PlanExecuteRouter: Created plan with {len(plan)} steps")
@@ -171,7 +177,9 @@ class PlanExecuteRouter(RouterBase):
                     if isinstance(step_result, dict):
                         if step_result.get("_replan_requested"):
                             should_replan = True
-                            replan_reason = step_result.get("reason", "Replan requested")
+                            replan_reason = step_result.get(
+                                "reason", "Replan requested"
+                            )
                             step_result.pop("_replan_requested", None)
                         elif step_result.get("_error_suggests_replan"):
                             should_replan = True
@@ -241,7 +249,9 @@ class PlanExecuteRouter(RouterBase):
 
             # 构建过程文本
             process_text = (
-                json.dumps(execution_log, indent=2, default=str) if execution_log else ""
+                json.dumps(execution_log, indent=2, default=str)
+                if execution_log
+                else ""
             )
             # 使用基类的generate_final_answer生成最终答案
             final_answer, determined_status = await self.generate_final_answer(
@@ -260,8 +270,8 @@ class PlanExecuteRouter(RouterBase):
         instruction: str,
         ctx: dict,
         readonly: bool,
-        available_tools: List[ChatCompletionToolParam],
-    ) -> List[Dict[str, Any]]:
+        available_tools: list[ChatCompletionToolParam],
+    ) -> list[dict[str, Any]]:
         """创建执行计划"""
         # 构建工具列表描述
         tools_description = self._format_tools_description(available_tools)
@@ -318,7 +328,7 @@ Note: If during execution you encounter issues like missing parameters or invali
 
 Your plan:"""
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         try:
             response = await self.acompletion_with_system_prompt(
@@ -346,10 +356,10 @@ Your plan:"""
         instruction: str,
         ctx: dict,
         readonly: bool,
-        available_tools: List[ChatCompletionToolParam],
+        available_tools: list[ChatCompletionToolParam],
         current_results: dict,
         execution_log: list,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """创建重新计划，基于当前执行结果和错误信息"""
         # 构建工具列表描述
         tools_description = self._format_tools_description(available_tools)
@@ -425,7 +435,7 @@ Return a JSON array of steps, where each step is:
 
 Your new plan:"""
 
-        dialog: List[AllMessageValues] = [{"role": "user", "content": prompt}]
+        dialog: list[AllMessageValues] = [{"role": "user", "content": prompt}]
 
         try:
             response = await self.acompletion_with_system_prompt(
@@ -516,7 +526,9 @@ Your new plan:"""
             try:
                 return json_repair.loads(json_match.group())
             except Exception:
-                get_logger().debug("Failed to parse JSON array from text", exc_info=True)
+                get_logger().debug(
+                    "Failed to parse JSON array from text", exc_info=True
+                )
 
         # 尝试直接解析整个文本
         try:
@@ -527,7 +539,7 @@ Your new plan:"""
         # 如果都失败，返回空列表
         return []
 
-    def _format_tools_description(self, tools: List[ChatCompletionToolParam]) -> str:
+    def _format_tools_description(self, tools: list[ChatCompletionToolParam]) -> str:
         """格式化工具描述"""
         descriptions = []
         for tool in tools:
@@ -540,7 +552,7 @@ Your new plan:"""
 
     async def _execute_step(
         self,
-        step: Dict[str, Any],
+        step: dict[str, Any],
         ctx: dict,
         readonly: bool,
         results: dict,
@@ -607,7 +619,7 @@ Your new plan:"""
                 "cannot",
                 "not available",
             ]
-            result: Dict[str, Any] = {"error": error_msg}
+            result: dict[str, Any] = {"error": error_msg}
             if any(keyword in error_str for keyword in replan_keywords):
                 result["_recoverable_error"] = "true"
                 result["_error_suggests_replan"] = "true"

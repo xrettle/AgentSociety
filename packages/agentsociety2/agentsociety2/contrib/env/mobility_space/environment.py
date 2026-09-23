@@ -6,10 +6,14 @@ import os
 from datetime import datetime
 from pathlib import Path
 from subprocess import Popen
-from typing import Any, ClassVar, List, Literal, Optional, Tuple, Union
+from typing import Any, ClassVar, Literal
 
 import aiohttp
 import shapely
+from pycityproto.city.trip.v2.trip_pb2 import TripMode
+from pydantic import BaseModel, ConfigDict, Field
+from shapely.geometry import LineString
+
 from agentsociety2.contrib.env.mobility_space.download_sim import download_binary
 from agentsociety2.contrib.env.mobility_space.map import Map
 from agentsociety2.contrib.env.mobility_space.utils import (
@@ -24,11 +28,6 @@ from agentsociety2.env.base import dump_int_map, load_int_map
 from agentsociety2.logger import get_logger
 from agentsociety2.storage import ColumnDef
 from agentsociety2.storage.workspace_state import atomic_write_text
-from pycityproto.city.geo.v2 import geo_pb2 as geo_pb2
-from pycityproto.city.map.v2 import map_pb2 as map_pb2
-from pycityproto.city.trip.v2.trip_pb2 import TripMode
-from pydantic import BaseModel, ConfigDict, Field
-from shapely.geometry import LineString
 
 __all__ = [
     "MobilityPerson",
@@ -51,7 +50,7 @@ class PositionInit(BaseModel):
     aoi_id: int = Field(
         ..., description="AOI ID, which is a continuous integer starting from 500000000"
     )
-    poi_id: Optional[int] = Field(
+    poi_id: int | None = Field(
         None,
         description="POI ID, which is a continuous integer starting from 700000000 (optional when initializing a person)",
     )
@@ -61,20 +60,20 @@ class Position(BaseModel):
     kind: Literal["aoi", "lane"] = Field(
         ..., description="Position kind: 'aoi' or 'lane'"
     )
-    aoi_id: Optional[int] = Field(
+    aoi_id: int | None = Field(
         None,
         description="AOI ID, which is a continuous integer starting from 500000000",
     )
-    poi_id: Optional[int] = Field(
+    poi_id: int | None = Field(
         None,
         description="POI ID, which is a continuous integer starting from 700000000 (optional when initializing a person)",
     )
-    poi_category: Optional[str] = Field(
+    poi_category: str | None = Field(
         None,
         description="Second-level POI category when standing at a POI",
     )
-    xy: Tuple[float, float] = Field(..., description="XY coordinates of the position")
-    lnglat: Tuple[float, float] = Field(
+    xy: tuple[float, float] = Field(..., description="XY coordinates of the position")
+    lnglat: tuple[float, float] = Field(
         ..., description="Lnglat coordinates of the position"
     )
 
@@ -84,12 +83,8 @@ class MobilityPersonInit(BaseModel):
 
     id: int = Field(..., description="Person ID")
     position: PositionInit = Field(..., description="The position of the person.")
-    work_aoi: Optional[int] = Field(
-        None, description="Work AOI ID for scheduled commute."
-    )
-    home_aoi: Optional[int] = Field(
-        None, description="Home AOI ID for scheduled return."
-    )
+    work_aoi: int | None = Field(None, description="Work AOI ID for scheduled commute.")
+    home_aoi: int | None = Field(None, description="Home AOI ID for scheduled return.")
 
 
 class Target(BaseModel):
@@ -113,9 +108,9 @@ class MobilityPerson(BaseModel):
         description='Person status. Default: "idle". If person is moving, it should be "moving".',
     )
     position: Position = Field(..., description="The position of the person.")
-    target: Optional[Target] = Field(None, description="The target of the person.")
-    work_aoi: Optional[int] = Field(None, description="Work AOI ID.")
-    home_aoi: Optional[int] = Field(None, description="Home AOI ID.")
+    target: Target | None = Field(None, description="The target of the person.")
+    work_aoi: int | None = Field(None, description="Work AOI ID.")
+    home_aoi: int | None = Field(None, description="Home AOI ID.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -145,14 +140,12 @@ class GetPersonResponse(BaseModel):
     id: int = Field(..., description="Person ID")
     status: Literal["idle", "moving"] = Field(..., description="Person status")
     position: Position = Field(..., description="The position of the person")
-    target: Optional[TargetResponse] = Field(
-        None, description="The target of the person"
-    )
-    nearby_pois: Optional[List[NearbyPoiSummary]] = Field(
+    target: TargetResponse | None = Field(None, description="The target of the person")
+    nearby_pois: list[NearbyPoiSummary] | None = Field(
         None, description="Summary of nearby POIs by category (only when idle)"
     )
-    work_aoi: Optional[int] = Field(None, description="Work AOI ID")
-    home_aoi: Optional[int] = Field(None, description="Home AOI ID")
+    work_aoi: int | None = Field(None, description="Work AOI ID")
+    home_aoi: int | None = Field(None, description="Home AOI ID")
 
 
 class Poi(BaseModel):
@@ -162,8 +155,8 @@ class Poi(BaseModel):
     name: str = Field(..., description="POI name")
     category: str = Field(..., description="POI category")
     position: dict = Field(..., description="POI position (x, y coordinates)")
-    aoi_id: Optional[int] = Field(None, description="AOI containing this POI")
-    distance: Optional[float] = Field(
+    aoi_id: int | None = Field(None, description="AOI containing this POI")
+    distance: float | None = Field(
         None, description="Distance from search center (only for find_nearby_pois)"
     )
 
@@ -171,7 +164,7 @@ class Poi(BaseModel):
 class FindNearbyPoisResponse(BaseModel):
     """Response model for find_nearby_pois() function"""
 
-    pois: List[Poi] = Field(..., description="List of POIs found")
+    pois: list[Poi] = Field(..., description="List of POIs found")
 
 
 class MobilitySpace(EnvBase):
@@ -216,7 +209,7 @@ class MobilitySpace(EnvBase):
         self,
         file_path: str,
         home_dir: str,
-        persons: List[MobilityPersonInit] | List[dict],
+        persons: list[MobilityPersonInit] | list[dict],
         poi_search_limit: int = 10,
     ):
         """
@@ -239,7 +232,7 @@ class MobilitySpace(EnvBase):
         self._home_dir = home_dir
         self._map = Map(file_path)
         # type annotation
-        self._routing_proc: Optional[Popen] = None
+        self._routing_proc: Popen | None = None
 
         self.poi_id_2_aoi_id: dict[int, int] = {
             poi["id"]: poi["aoi_id"] for poi in self._map._poi_list
@@ -251,7 +244,7 @@ class MobilitySpace(EnvBase):
         """lock for routing process"""
 
         # 位置跟踪存储（用于benchmark数据收集）
-        self._person_trajectories: dict[int, list[Tuple[float, float]]] = {
+        self._person_trajectories: dict[int, list[tuple[float, float]]] = {
             p["id"] if isinstance(p, dict) else p.id: [] for p in persons
         }
         """Store trajectory points for each person"""
@@ -361,7 +354,7 @@ class MobilitySpace(EnvBase):
         if person.position.aoi_id is not None:
             self._person_visited_aois[person_id].add(person.position.aoi_id)
 
-    def get_person_trajectory(self, person_id: int) -> list[Tuple[float, float]]:
+    def get_person_trajectory(self, person_id: int) -> list[tuple[float, float]]:
         """
         Get the recorded trajectory of a person.
 
@@ -381,7 +374,7 @@ class MobilitySpace(EnvBase):
         """
         return self._person_visited_aois.get(person_id, set())
 
-    def get_all_persons_trajectories(self) -> dict[int, list[Tuple[float, float]]]:
+    def get_all_persons_trajectories(self) -> dict[int, list[tuple[float, float]]]:
         """
         Get trajectories for all persons.
 
@@ -410,7 +403,7 @@ class MobilitySpace(EnvBase):
 
         description = f"""{cls.__name__}: Mobility management module for urban navigation and location tracking.
 
-**Description:** {cls.__doc__ or 'No description available'}
+**Description:** {cls.__doc__ or "No description available"}
 
 **Initialization Parameters (excluding llm):**
 - file_path (str): The path to the map file.
@@ -499,8 +492,8 @@ class MobilitySpace(EnvBase):
     def _get_around_pois(
         self,
         center: tuple[float, float],
-        radius: Optional[float] = None,
-        poi_type: Optional[Union[str, list[str]]] = None,
+        radius: float | None = None,
+        poi_type: str | list[str] | None = None,
         limit: int = 10,
     ) -> list[dict]:
         """
@@ -927,7 +920,7 @@ class MobilitySpace(EnvBase):
 
     @tool(readonly=True)
     async def find_nearby_pois(
-        self, x: float, y: float, category: Optional[str], radius: float
+        self, x: float, y: float, category: str | None, radius: float
     ) -> FindNearbyPoisResponse:
         """
         Discover Points of Interest (POIs) near a location, filtered by category and distance.
@@ -1026,13 +1019,17 @@ class MobilitySpace(EnvBase):
         for item in raw_pois:
             poi = item["poi"]
             dist = item["distance"]
-            candidates.append({
-                "poi_id": poi["id"],
-                "name": poi["name"],
-                "category": poi["category"][-1] if isinstance(poi["category"], list) and poi["category"] else str(poi.get("category", "")),
-                "distance": dist,
-                "aoi_id": poi.get("aoi_id") or self.poi_id_2_aoi_id.get(poi["id"]),
-            })
+            candidates.append(
+                {
+                    "poi_id": poi["id"],
+                    "name": poi["name"],
+                    "category": poi["category"][-1]
+                    if isinstance(poi["category"], list) and poi["category"]
+                    else str(poi.get("category", "")),
+                    "distance": dist,
+                    "aoi_id": poi.get("aoi_id") or self.poi_id_2_aoi_id.get(poi["id"]),
+                }
+            )
 
         if not candidates:
             return {"status": "no_candidates", "reason": "No POIs found in search area"}
@@ -1045,11 +1042,17 @@ class MobilitySpace(EnvBase):
             )
 
         if not candidates:
-            return {"status": "no_candidates", "reason": "All POIs filtered by home/work exclusion"}
+            return {
+                "status": "no_candidates",
+                "reason": "All POIs filtered by home/work exclusion",
+            }
 
         selected = gravity_model(candidates)
         if selected is None:
-            return {"status": "no_candidates", "reason": "Gravity model returned no result"}
+            return {
+                "status": "no_candidates",
+                "reason": "Gravity model returned no result",
+            }
 
         distance = float(selected.get("distance", 0))
         mode = poi_travel_mode(distance)

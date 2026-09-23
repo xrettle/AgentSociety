@@ -1,24 +1,23 @@
 #!/usr/bin/env python
-# ruff: noqa: F841
-# -*- coding: utf-8 -*-
 """
 Trust Game - V2 Framework Implementation
 Main entry point for running Trust Game using V2 framework
 """
-import os
-import json
+
 import asyncio
-from datetime import datetime
+import json
 import logging
+import os
+from datetime import datetime
 
 # Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 # V2 framework imports
+from agentsociety2.contrib.env.trust_game import TrustGameEnv
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
-from agentsociety2.contrib.env.trust_game import TrustGameEnv
 
 # Ensure results directory exists
 os.makedirs("result_trust_game", exist_ok=True)
@@ -176,12 +175,8 @@ async def main():
     # ------- Statistical variables -------
     all_game_investments = []  # List of dicts per game: [{"Trustor_1": X, ...}, ...]
     all_game_returns = []  # List of dicts per game: [{"Trustee_1": Y, ...}, ...]
-    all_game_return_rates = (
-        []
-    )  # List of dicts per game: [{"Trustee_1": rate, ...}, ...]
-    per_game_payoffs = (
-        []
-    )  # List of dicts, e.g., [{"Trustor_1": X, "Trustee_1": Y, ...}, ...]
+    all_game_return_rates = []  # List of dicts per game: [{"Trustee_1": rate, ...}, ...]
+    per_game_payoffs = []  # List of dicts, e.g., [{"Trustor_1": X, "Trustee_1": Y, ...}, ...]
 
     # ------- Game loop -------
     for game_num in range(1, NUM_GAMES + 1):
@@ -253,7 +248,7 @@ async def main():
                 agent_specs=agent_specs,
                 agent_class_name="TrustGameAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -393,7 +388,7 @@ async def main():
                             f"Game {game_num} Round {round_num}: Could not parse round result from history"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logging.error(
                         f"Game {game_num} Round {round_num} execution timeout"
                     )
@@ -405,7 +400,7 @@ async def main():
                     logging.error(
                         f"Game {game_num} Round {round_num} execution error: {e}"
                     )
-                    print(f"[Error] Round {round_num} execution error: {str(e)}")
+                    print(f"[Error] Round {round_num} execution error: {e!s}")
                     import traceback
 
                     traceback.print_exc()

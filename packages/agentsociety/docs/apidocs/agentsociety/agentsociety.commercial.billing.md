@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 1
 
-agentsociety.commercial.billing.calculator
 agentsociety.commercial.billing.models
+agentsociety.commercial.billing.calculator
 agentsociety.commercial.billing.api
 agentsociety.commercial.billing.system
 ```

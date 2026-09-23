@@ -39,9 +39,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from agentsociety2.agent.service_proxy import ServiceProxy
@@ -56,24 +57,37 @@ def _ray_remote(fn: _F) -> _F:
         return fn
     return ray.remote(fn)  # type: ignore[return-value]
 
+
 __all__ = [
-    "step_agent_batch",
     "create_agents_batch",
-    "questionnaire_agent_batch",
     "query_agent_task",
+    "questionnaire_agent_batch",
+    "step_agent_batch",
 ]
 
 
-def _resolve_agent_class(agent_class_name: str) -> Any:
+def _resolve_agent_class(
+    agent_class_name: str, workspace_root: str | None = None
+) -> Any:
     """Resolve an agent class by name via the module registry.
 
     Done inside each task (not in the driver) so the class object never
     crosses the Ray boundary.
 
     :param agent_class_name: Registered agent class name (e.g. ``"PersonAgent"``).
+    :param workspace_root: Agent workspace root (``run_dir/agents``). When the
+        parent ``run_dir`` contains ``custom/``, that workspace is scanned so
+        custom agent classes are visible on this worker.
     :returns: The agent class.
     :raises ValueError: If the class is not registered.
     """
+    if workspace_root:
+        run_dir = Path(workspace_root).resolve().parent
+        if (run_dir / "custom").is_dir():
+            from agentsociety2.registry import get_registry
+
+            get_registry().set_workspace(run_dir)
+
     from agentsociety2.registry import get_agent_module_class
 
     cls = get_agent_module_class(agent_class_name)
@@ -112,9 +126,9 @@ async def _step_agent_batch_async(
     agent_class_name: str,
     tick: int,
     t: datetime,
-    service_proxy: "ServiceProxy",
+    service_proxy: ServiceProxy,
 ) -> list[dict]:
-    cls = _resolve_agent_class(agent_class_name)
+    cls = _resolve_agent_class(agent_class_name, workspace_root)
 
     async def _step_one(aid: int) -> dict:
         ws = _workspace_for(workspace_root, aid)
@@ -125,9 +139,11 @@ async def _step_agent_batch_async(
             try:
                 await agent.close()
             except Exception:
-                logging.getLogger(__name__).debug("Error closing agent %s", aid, exc_info=True)
+                logging.getLogger(__name__).debug(
+                    "Error closing agent %s", aid, exc_info=True
+                )
             return {"id": aid, "ok": True, "summary": summary}
-        except Exception as e:  # noqa: BLE001 — report per-agent failure, don't abort batch
+        except Exception as e:
             return {"id": aid, "ok": False, "error": repr(e)}
 
     # Run all agents in the batch CONCURRENTLY. Each agent is LLM-bound — its
@@ -145,7 +161,7 @@ async def _create_agents_batch_async(
     workspace_root: str,
     agent_class_name: str,
 ) -> int:
-    cls = _resolve_agent_class(agent_class_name)
+    cls = _resolve_agent_class(agent_class_name, workspace_root)
     for it in items:
         ws = _workspace_for(workspace_root, int(it["id"]))
         cls.create(ws, it["profile"], it["config"])
@@ -159,7 +175,7 @@ async def _questionnaire_agent_batch_async(
     questionnaire: Any,
     t: datetime,
     step_count: int,
-    service_proxy: "ServiceProxy",
+    service_proxy: ServiceProxy,
 ) -> list[dict]:
     """Run a full questionnaire for every agent in the batch (concurrent).
 
@@ -177,7 +193,7 @@ async def _questionnaire_agent_batch_async(
     """
     from agentsociety2.society.questionnaire import QuestionnaireRunner
 
-    cls = _resolve_agent_class(agent_class_name)
+    cls = _resolve_agent_class(agent_class_name, workspace_root)
     runner = QuestionnaireRunner()
 
     async def _run_one(aid: int) -> dict:
@@ -198,18 +214,22 @@ async def _questionnaire_agent_batch_async(
                 try:
                     await agent.to_workspace(ws)
                 except Exception:
-                    logging.getLogger(__name__).debug("Error persisting agent %s to workspace", aid, exc_info=True)
+                    logging.getLogger(__name__).debug(
+                        "Error persisting agent %s to workspace", aid, exc_info=True
+                    )
             try:
                 await agent.close()
             except Exception:
-                logging.getLogger(__name__).debug("Error closing agent %s after query", aid, exc_info=True)
+                logging.getLogger(__name__).debug(
+                    "Error closing agent %s after query", aid, exc_info=True
+                )
             per_agent = resp.responses[0] if resp.responses else None
             return {
                 "id": aid,
                 "ok": True,
                 "result": per_agent.model_dump(mode="json") if per_agent else None,
             }
-        except Exception as e:  # noqa: BLE001 — report per-agent failure, don't abort batch
+        except Exception as e:
             return {"id": aid, "ok": False, "error": repr(e)}
 
     return await asyncio.gather(*[_run_one(aid) for aid in agent_ids])
@@ -221,11 +241,11 @@ async def _query_agent_task_async(
     agent_class_name: str,
     op: str,
     payload: dict,
-    service_proxy: "ServiceProxy",
+    service_proxy: ServiceProxy,
 ) -> dict:
     import json
 
-    cls = _resolve_agent_class(agent_class_name)
+    cls = _resolve_agent_class(agent_class_name, workspace_root)
     ws = _workspace_for(workspace_root, agent_id)
 
     if op == "dump":
@@ -258,7 +278,9 @@ async def _query_agent_task_async(
         try:
             await agent.close()
         except Exception:
-            logging.getLogger(__name__).debug("Error closing agent after query", exc_info=True)
+            logging.getLogger(__name__).debug(
+                "Error closing agent after query", exc_info=True
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +293,7 @@ def step_agent_batch(
     agent_class_name: str,
     tick: int,
     t: datetime,
-    service_proxy: "ServiceProxy",
+    service_proxy: ServiceProxy,
 ) -> list[dict]:
     """Run one ``step`` for every agent id in the batch.
 
@@ -343,7 +365,7 @@ def query_agent_task(
     agent_class_name: str,
     op: str,
     payload: dict,
-    service_proxy: "ServiceProxy",
+    service_proxy: ServiceProxy,
 ) -> dict:
     """Generic single-agent query/mutation task (low-volume external ops).
 
@@ -385,7 +407,7 @@ def questionnaire_agent_batch(
     questionnaire: Any,
     t: datetime,
     step_count: int,
-    service_proxy: "ServiceProxy",
+    service_proxy: ServiceProxy,
 ) -> dict:
     """Run a full questionnaire for every agent in the batch.
 

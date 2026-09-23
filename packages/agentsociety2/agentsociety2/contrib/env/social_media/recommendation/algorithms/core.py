@@ -6,8 +6,8 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Set, Dict
 from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -26,14 +26,14 @@ class RatingMatrix:
     - SciPy sparse matrix: 协同过滤等算法需要
     """
 
-    user_ids: np.ndarray      # [N] 用户ID数组
-    item_ids: np.ndarray      # [N] 物品ID数组
-    ratings: np.ndarray       # [N] 评分值数组
-    user_map: Dict[int, int]  # 原始用户ID → 内部索引
-    item_map: Dict[int, int]  # 原始物品ID → 内部索引
+    user_ids: np.ndarray  # [N] 用户ID数组
+    item_ids: np.ndarray  # [N] 物品ID数组
+    ratings: np.ndarray  # [N] 评分值数组
+    user_map: dict[int, int]  # 原始用户ID → 内部索引
+    item_map: dict[int, int]  # 原始物品ID → 内部索引
 
     @classmethod
-    def from_ratings(cls, ratings: List[Rating]) -> 'RatingMatrix':
+    def from_ratings(cls, ratings: list[Rating]) -> "RatingMatrix":
         """
         从 Rating 列表构建 RatingMatrix
 
@@ -61,7 +61,7 @@ class RatingMatrix:
             item_ids=item_ids,
             ratings=rating_values,
             user_map=user_map,
-            item_map=item_map
+            item_map=item_map,
         )
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -72,17 +72,12 @@ class RatingMatrix:
 
         :returns: DataFrame with users as rows, items as columns
         """
-        df = pd.DataFrame({
-            'userId': self.user_ids,
-            'itemId': self.item_ids,
-            'rating': self.ratings
-        })
+        df = pd.DataFrame(
+            {"userId": self.user_ids, "itemId": self.item_ids, "rating": self.ratings}
+        )
 
         return df.pivot_table(
-            values='rating',
-            index='userId',
-            columns='itemId',
-            fill_value=np.nan
+            values="rating", index="userId", columns="itemId", fill_value=np.nan
         )
 
     def to_sparse(self) -> sparse.csr_matrix:
@@ -101,8 +96,7 @@ class RatingMatrix:
         col_indices = np.array([self.item_map[iid] for iid in self.item_ids])
 
         return sparse.csr_matrix(
-            (self.ratings, (row_indices, col_indices)),
-            shape=(n_users, n_items)
+            (self.ratings, (row_indices, col_indices)), shape=(n_users, n_items)
         )
 
     def get_user_count(self) -> int:
@@ -141,7 +135,6 @@ class RecommenderAlgorithm(ABC):
 
         :param data: 评分矩阵
         """
-        pass
 
     @abstractmethod
     def predict(self, user_id: int, item_id: int) -> float:
@@ -153,15 +146,11 @@ class RecommenderAlgorithm(ABC):
 
         :returns: 预测评分 (1.0-5.0)
         """
-        pass
 
     @abstractmethod
     def recommend(
-        self,
-        user_id: int,
-        n: int,
-        exclude_ids: Set[int]
-    ) -> List[Tuple[int, float]]:
+        self, user_id: int, n: int, exclude_ids: set[int]
+    ) -> list[tuple[int, float]]:
         """
         为用户生成推荐列表
 
@@ -171,7 +160,6 @@ class RecommenderAlgorithm(ABC):
 
         :returns: [(item_id, score), ...] 按 score 降序排列
         """
-        pass
 
     def save(self, path: str) -> None:
         """
@@ -201,16 +189,16 @@ class RecommenderAlgorithm(ABC):
         """
         return self.__class__.__name__
 
-    def get_algorithm_info(self) -> Dict[str, any]:
+    def get_algorithm_info(self) -> dict[str, any]:
         """
         获取算法信息
 
         :returns: 算法信息字典
         """
         return {
-            'name': self.get_algorithm_name(),
-            'supports_save': self._supports_save(),
-            'supports_load': self._supports_load(),
+            "name": self.get_algorithm_name(),
+            "supports_save": self._supports_save(),
+            "supports_load": self._supports_load(),
         }
 
     def _supports_save(self) -> bool:
@@ -218,8 +206,9 @@ class RecommenderAlgorithm(ABC):
         try:
             # 尝试调用 save 方法签名
             import inspect
+
             source = inspect.getsource(self.save)
-            return 'NotImplementedError' not in source
+            return "NotImplementedError" not in source
         except Exception:
             return False
 
@@ -227,7 +216,8 @@ class RecommenderAlgorithm(ABC):
         """检查是否支持加载"""
         try:
             import inspect
+
             source = inspect.getsource(self.load)
-            return 'NotImplementedError' not in source
+            return "NotImplementedError" not in source
         except Exception:
             return False

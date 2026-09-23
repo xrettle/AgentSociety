@@ -10,7 +10,7 @@ Orchestrates the AgentSociety research workflow. Determines which skill to invok
 
 ## Overview
 
-The research pipeline is a revision-capable workflow: **literature search → hypothesis → experiment config → run → analysis → paper**, with explicit reroutes back to the smallest sufficient earlier stage. After a draft exists, `paper-review` can perform an optional robust author-side mock review using three parallel independent reviewers and a separate evidence-verifying MetaReview agent, then advise which earlier stage to revisit. The review remains read-only; the user or controlling coding agent closes the feedback loop by explicitly applying an accepted route through `research-pipeline reroute`. Supporting skills (scan-modules, create-agent, create-env-module, web-research, datasets) branch off the main trunk at specific points.
+The research pipeline is a revision-capable workflow: **literature search → hypothesis → experiment config → run → analysis → paper**, with explicit reroutes back to the smallest sufficient earlier stage. After a draft exists, `paper-review` can perform an optional robust author-side mock review using three parallel independent reviewers and a separate evidence-verifying MetaReview agent, then advise which earlier stage to revisit. The review remains read-only; the user or controlling coding agent closes the feedback loop by explicitly applying an accepted route through `research-pipeline reroute`. Supporting skills (scan-modules, create-agent, create-env-module, datasets) branch off the main trunk at specific points.
 
 ## Scale Planning Gate
 
@@ -143,7 +143,6 @@ digraph research_pipeline {
     env [label="create-env-module"];
     create_ds [label="create-dataset"];
     use_ds [label="use-dataset"];
-    web [label="web-research"];
 
     decide -> lit;
     decide -> hypo;
@@ -153,7 +152,6 @@ digraph research_pipeline {
     decide -> paper;
 
     lit -> hypo;
-    lit -> web [style=dashed, label="supplementary context"];
     hypo -> scan [style=dashed, label="names uncertain"];
     scan -> hypo;
     hypo -> exp;
@@ -201,7 +199,6 @@ digraph research_pipeline {
 | **scan-modules** | hypothesis, experiment-config | When module names are unknown or need validation |
 | **create-agent** | experiment-config | When needed agent class doesn't exist |
 | **create-env-module** | experiment-config | When needed env module doesn't exist |
-| **web-research** | literature-search, hypothesis, analysis | When supplementary non-academic context needed |
 | **create-dataset** | experiment-config | When packaging data for upload or publishing |
 | **use-dataset** | literature-search, hypothesis, experiment-config, analysis | When searching, downloading, or inspecting datasets |
 
@@ -219,7 +216,6 @@ digraph research_pipeline {
 | scan-modules | "available modules", "list agents", "find environment" |
 | create-agent | "create agent", "custom agent", "new agent type" |
 | create-env-module | "create environment", "custom module", "env module" |
-| web-research | "web search", "current events", "recent developments" |
 | create-dataset | "create dataset", "upload dataset", "publish data" |
 | use-dataset | "download dataset", "find data", "browse datasets", "search datasets", "dataset search" |
 

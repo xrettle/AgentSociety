@@ -43,7 +43,11 @@ async def main():
     agent_specs = [
         {
             "id": 1,
-            "profile": {"name": "Alice", "age": 28, "personality": "friendly and curious"},
+            "profile": {
+                "name": "Alice",
+                "age": 28,
+                "personality": "friendly and curious",
+            },
             "config": {},
         }
     ]
@@ -71,11 +75,23 @@ asyncio.run(main())
 
 - **PersonAgent / AgentBase**：默认人物智能体。基于 `AgentBase`（直接拥有 workspace / 技能运行时 / ReAct 循环 / TODO / trace），作为 workspace 绑定的**无状态 record**，由 Ray Task 流式驱动。
 - **Agent Skills**：metadata-first 的 skill 选择模型；当前唯一内置技能是 `daily-guidance`，自定义技能放在 `custom/skills/`。脚本默认经进程内 `entrypoint(argv, ctx)` 执行。
-- **Environment Modules**：继承 `EnvBase`，通过 `@tool` 暴露可观察、统计和读写工具；生产环境路由跑在专用 Ray actor 里。
+- **Environment Modules**：继承 `EnvBase`，通过 `@tool` 暴露可观察、统计和读写工具；可声明
+  `is_concurrency_safe()`，全部安全时 env Ray actor 并行 fan-out（`AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY`）。
 - **ServiceProxy**：把 env / LLM clients / trace / replay 句柄收口为单一容器注入 agent。
-- **CodeGenRouter**：推荐的环境路由器（另有 ReAct / Plan-Execute / Two-Tier / Search 路由器可选）。
+- **CodeGenRouter**：推荐的环境路由器（另有 ReAct / Plan-Execute / Two-Tier / Search 路由器可选）；
+  FAISS 指令模板缓存仅在 `template_mode=True` 时启用。
 - **ReplayWriter / ReplayReader / Trace**：`run/replay/` 下的 sharded JSONL replay dataset、`_schema.json` catalog 与 DuckDB 读侧 + 分布式 trace span。新实验不再写旧的 `sqlite.db`、`agent_profile` / `agent_status` / `agent_dialog` 表。
-- **Agent Workspace**：每个 `PersonAgent` 在 `run/agents/agent_xxxx/` 下维护 `config.json` / `AGENT.json` / `state/*` / `.runtime/logs/*`。
+- **Agent Workspace**：每个 `PersonAgent` 在 `run/agents/agent_xxxx/` 下维护 `config.json` / `AGENT.json`（含 `world_description`） / `state/*` / `.runtime/logs/*`。
+
+## 示例
+
+包内 `examples/`：
+
+- `basics/`：入门（含 contrib `WeatherEnvironment`）
+- `games/`：囚徒困境 / 公共物品 / 声誉博弈
+- `advanced/`：多路由器比较与 contrib `SpecialistAgent`
+
+更长的批量实验脚本见 `experiments/env_main_*_v2.py`。
 
 ## 配置
 

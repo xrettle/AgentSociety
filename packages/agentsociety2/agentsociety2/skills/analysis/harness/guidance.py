@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import Any
 
 from agentsociety2.skills.analysis.harness.attestation import PHASE_RUBRIC_KEYS
 from agentsociety2.skills.analysis.harness.operations import (
     operation_registry,
     workflow_operations_by_phase,
 )
-
 
 GUIDANCE_TOPICS = (
     "workflow",
@@ -130,7 +129,7 @@ if __name__ == "__main__":
 '''
 
 
-PAYLOAD_TEMPLATES: Dict[str, Dict[str, Any]] = {
+PAYLOAD_TEMPLATES: dict[str, dict[str, Any]] = {
     "analysis_plan": {
         "research_question": "Does treatment X increase metric Y by step 10?",
         "primary_metrics": ["Y", "treatment_flag"],
@@ -280,7 +279,9 @@ PAYLOAD_TEMPLATES: Dict[str, Dict[str, Any]] = {
                     "Write figure contracts",
                     "Validate charts before report assembly",
                 ],
-                "pitfalls": ["Do not promote exploratory EDA to a claim without review"],
+                "pitfalls": [
+                    "Do not promote exploratory EDA to a claim without review"
+                ],
                 "confidence": "high",
             }
         ],
@@ -299,18 +300,18 @@ PAYLOAD_TEMPLATES: Dict[str, Dict[str, Any]] = {
 }
 
 
-def list_payload_templates() -> List[str]:
+def list_payload_templates() -> list[str]:
     return sorted(PAYLOAD_TEMPLATES)
 
 
-def get_payload_template(name: str) -> Dict[str, Any]:
+def get_payload_template(name: str) -> dict[str, Any]:
     key = name.strip().replace("-", "_")
     if key not in PAYLOAD_TEMPLATES:
         raise KeyError(key)
     return deepcopy(PAYLOAD_TEMPLATES[key])
 
 
-def get_harness_guidance(topic: str = "workflow") -> Dict[str, Any]:
+def get_harness_guidance(topic: str = "workflow") -> dict[str, Any]:
     topic = (topic or "workflow").strip().lower()
     if topic not in GUIDANCE_TOPICS:
         raise KeyError(topic)

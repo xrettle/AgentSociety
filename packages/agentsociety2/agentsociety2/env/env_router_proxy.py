@@ -6,11 +6,16 @@ in-process ``CodeGenRouter`` (same method names: ``ask``, ``init``, ``step``,
 ``set_replay_writer``). The proxy forwards each call to a Ray actor that owns
 the real router in a separate process, so env codegen execution (and its
 former ``_execute_lock`` serialization) no longer blocks the agent event loop.
+
+In-process ``CodeGenRouter`` instances are **not** Ray-serializable. Examples
+and scripts must use :func:`create_env_router_proxy` (or the CLI actor path)
+so ``ServiceProxy`` can cross Ray Task boundaries.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -96,6 +101,92 @@ class EnvRouterProxy:
     async def close(self) -> None:
         return await self._actor.close.remote()
 
+    def get_token_usages(self) -> dict[str, Any]:
+        """Return a snapshot of env-router (coder/summary) token usage."""
+        return ray_get_token_usages(self._actor)
+
+
+def ray_get_token_usages(actor_handle: Any) -> dict[str, Any]:
+    """Blocking fetch of token usage from the env actor (driver-side only)."""
+    import ray
+
+    return ray.get(actor_handle.get_token_usages.remote())
+
+
+async def create_env_router_proxy(
+    env_module_types: list[str],
+    env_kwargs: dict[str, dict[str, Any]] | None = None,
+    *,
+    run_dir: str | Path | None = None,
+    max_concurrency: int | None = None,
+    final_summary_enabled: bool = False,
+) -> EnvRouterProxy:
+    """Create a Ray ``EnvRouterProxy`` for examples / scripts (CLI-compatible).
+
+    Initializes Ray + LLM dispatchers if needed, builds the env actor with the
+    same injection pattern as ``society.cli``, and returns a serializable proxy.
+
+    :param env_module_types: Registry keys (usually the env class name).
+    :param env_kwargs: Per-type constructor kwargs; defaults to ``{}`` per type.
+    :param run_dir: Experiment run directory (env workspaces under ``run_dir/env``).
+    :param max_concurrency: Ray actor concurrency. ``None`` chooses
+        ``Config.ENV_ACTOR_MAX_CONCURRENCY`` when every module declares
+        ``is_concurrency_safe()``, otherwise ``1``.
+    :param final_summary_enabled: Forwarded to ``CodeGenRouter``.
+    :returns: Serializable :class:`EnvRouterProxy` suitable for ``AgentSociety``.
+    """
+    from agentsociety2.config import Config
+    from agentsociety2.config.llm_dispatcher import (
+        build_client_for_role,
+        init_dispatchers,
+    )
+    from agentsociety2.env.env_router_actor import get_env_router_actor_class
+    from agentsociety2.registry import get_registered_env_modules
+
+    await init_dispatchers()
+
+    types = list(env_module_types)
+    kwargs = dict(env_kwargs or {})
+    for t in types:
+        kwargs.setdefault(t, {})
+
+    run_dir_path = Path(run_dir).resolve() if run_dir is not None else None
+    if run_dir_path is not None and (run_dir_path / "custom").is_dir():
+        from agentsociety2.registry import get_registry
+
+        get_registry().set_workspace(run_dir_path)
+
+    type_map = dict(get_registered_env_modules())
+    missing = [t for t in types if t not in type_map]
+    if missing:
+        raise ValueError(
+            f"Unknown env module type(s): {missing}. "
+            "Register custom classes before calling create_env_router_proxy."
+        )
+
+    if max_concurrency is None:
+        all_safe = all(type_map[t].is_concurrency_safe() for t in types)
+        max_concurrency = Config.ENV_ACTOR_MAX_CONCURRENCY if all_safe else 1
+    llm_clients_spec = {
+        "coder": build_client_for_role("coder"),
+        "default": build_client_for_role("default"),
+    }
+    actor_cls = get_env_router_actor_class(max_concurrency=max_concurrency)
+    actor = actor_cls.remote(
+        types,
+        kwargs,
+        str(run_dir_path) if run_dir_path is not None else None,
+        {"final_summary_enabled": final_summary_enabled},
+        llm_clients_spec,
+        None,
+        None,
+    )
+    return EnvRouterProxy(
+        actor,
+        run_dir=run_dir_path,
+        env_module_types=types,
+    )
+
 
 def _resolve_env_skill_dirs(
     env_module_types: list[str],
@@ -107,11 +198,8 @@ def _resolve_env_skill_dirs(
     skipped — discovery must never crash agent construction over a missing
     skill source. Duplicate ``(name, dir)`` pairs are removed.
 
-    Args:
-        env_module_types: Registry env-module type keys.
-
-    Returns:
-        Ordered, de-duplicated ``(module_class_name, skill_dir_str)`` pairs.
+    :param env_module_types: Registry env-module type keys.
+    :returns: Ordered, de-duplicated ``(module_class_name, skill_dir_str)`` pairs.
     """
     if not env_module_types:
         return []

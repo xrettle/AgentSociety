@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from agentsociety2.skills.analysis.harness.json_io import load_model_from_file
 from agentsociety2.skills.analysis.harness.models import ClaimMode, ValidationResult
@@ -21,14 +20,14 @@ MIN_SECTION_HEADERS = 3
 MIN_KEY_FINDING_CHARS = 12
 
 FLUFF_PATTERNS = (
-    re.compile(r"有趣的模式|interesting patterns?", re.I),
-    re.compile(r"结果(表明|显示).{0,12}(显著|明显)(?!.*\d)", re.I),
-    re.compile(r"further research is needed", re.I),
-    re.compile(r"呈现出(一定|较为)?(的)?(多样|复杂|丰富)", re.I),
+    re.compile(r"有趣的模式|interesting patterns?", re.IGNORECASE),
+    re.compile(r"结果(表明|显示).{0,12}(显著|明显)(?!.*\d)", re.IGNORECASE),
+    re.compile(r"further research is needed", re.IGNORECASE),
+    re.compile(r"呈现出(一定|较为)?(的)?(多样|复杂|丰富)", re.IGNORECASE),
 )
 
 FIGURE_LINE_RE = re.compile(r"!\[[^\]]*\]\(assets/([^)]+)\)")
-SECTION_RE = re.compile(r"^##\s+.+", re.M)
+SECTION_RE = re.compile(r"^##\s+.+", re.MULTILINE)
 MARKDOWN_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 MARKDOWN_TABLE_SEPARATOR_RE = re.compile(
     r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$",
@@ -53,7 +52,7 @@ class _ReportHTMLAuditParser(HTMLParser):
     def handle_starttag(
         self,
         tag: str,
-        attrs: List[Tuple[str, Optional[str]]],
+        attrs: list[tuple[str, str | None]],
     ) -> None:
         attributes = {name.lower(): value for name, value in attrs}
         element_id = attributes.get("id")
@@ -100,13 +99,13 @@ def _word_count(text: str) -> int:
     return len(tokens)
 
 
-def _figure_refs(text: str) -> List[str]:
+def _figure_refs(text: str) -> list[str]:
     return FIGURE_LINE_RE.findall(text)
 
 
-def _caption_lines_after_figures(text: str) -> List[bool]:
+def _caption_lines_after_figures(text: str) -> list[bool]:
     lines = text.splitlines()
-    ok: List[bool] = []
+    ok: list[bool] = []
     for i, line in enumerate(lines):
         if FIGURE_LINE_RE.search(line):
             next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
@@ -114,7 +113,7 @@ def _caption_lines_after_figures(text: str) -> List[bool]:
     return ok
 
 
-def _duplicate_html_ids(text: str) -> List[str]:
+def _duplicate_html_ids(text: str) -> list[str]:
     audit = _audit_html(text)
     return sorted(
         element_id for element_id, count in audit.id_counts.items() if count > 1
@@ -132,7 +131,7 @@ def _markdown_data_section(text: str) -> str:
     return ""
 
 
-def _data_parity_issues(markdown: str, report_html: str) -> Tuple[str, ...]:
+def _data_parity_issues(markdown: str, report_html: str) -> tuple[str, ...]:
     markdown_data = _markdown_data_section(markdown)
     if len(re.sub(r"\W+", "", markdown_data)) < 40:
         return ()
@@ -162,10 +161,10 @@ def _data_parity_issues(markdown: str, report_html: str) -> Tuple[str, ...]:
 def validate_report_quality(
     presentation_dir: Path,
     *,
-    workspace: Optional[Path] = None,
-    hypothesis_id: Optional[str] = None,
+    workspace: Path | None = None,
+    hypothesis_id: str | None = None,
 ) -> ValidationResult:
-    issues: List = []
+    issues: list = []
     report_zh = presentation_dir / "report_zh.md"
     report_en = presentation_dir / "report_en.md"
     html_zh = presentation_dir / "report_zh.html"

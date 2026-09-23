@@ -55,17 +55,17 @@ with open("instruction_test.yaml", "r") as f:
 for test_case in test_data["instructions"]:
     expected_calls = test_case["expected_calls"]
     context = {"id": 123}
-    
+
     # 执行路由器的 ask 方法
     result, answer = await router.ask(context, test_case["instruction"])
-    
+
     # 提取实际调用
     tool_call_history = router.get_tool_call_history()
     actual_calls = extract_call_signatures(tool_call_history, exclude_exceptions=True)
-    
+
     # 计算指标
     metrics = compute_metrics(expected_calls, actual_calls, tool_call_history, context)
-    
+
     print(f"工具选择准确度: {metrics['tool_selection_iou']:.2f}")
     print(f"序列准确度: {metrics['sequence_lcs_score']:.2f}")
     print(f"参数准确度: {metrics['param_accuracy']:.2f}")
@@ -79,12 +79,15 @@ import logging
 import os
 import pickle
 import time
-import yaml
 from datetime import datetime
-from typing import List, Dict, Any, Tuple, Set
+from typing import Any
 
+import yaml
 from dotenv import load_dotenv
+
 load_dotenv(".env")
+
+from tqdm import tqdm
 
 from agentsociety2.contrib.env.event_space import EventSpace
 from agentsociety2.contrib.env.mobility_space import MobilitySpace
@@ -92,7 +95,6 @@ from agentsociety2.env import (
     CodeGenRouter,
 )
 from agentsociety2.logger import get_logger, setup_logging
-from tqdm import tqdm
 
 
 class RawCodeGenRouter(CodeGenRouter):
@@ -138,7 +140,9 @@ Reply with ONLY one word: simple or complex"""
         max_body = kwargs.pop("max_body_code_lines", 15)
         # Initialize with pyi format (used for "simple" instructions)
         kwargs.setdefault("code_format", "pyi")
-        super().__init__(env_modules=env_modules, max_body_code_lines=max_body, **kwargs)
+        super().__init__(
+            env_modules=env_modules, max_body_code_lines=max_body, **kwargs
+        )
 
         # Pre-compute raw-code versions (used for "complex" instructions)
         all_info = self._collect_tools_info()
@@ -147,8 +151,10 @@ Reply with ONLY one word: simple or complex"""
         ro_obs = self._filter_tools_info(all_info, readonly=True, kind="observe")
         ro_stat = self._filter_tools_info(all_info, readonly=True, kind="statistics")
 
-        self._tools_pyi_backup: Dict[Tuple[bool, str | None], str] = dict(self._tools_pyi_dict)
-        self._tools_raw_dict: Dict[Tuple[bool, str | None], str] = {}
+        self._tools_pyi_backup: dict[tuple[bool, str | None], str] = dict(
+            self._tools_pyi_dict
+        )
+        self._tools_raw_dict: dict[tuple[bool, str | None], str] = {}
         for key, info in [
             ((False, None), all_info_filtered),
             ((True, None), ro_info),
@@ -181,7 +187,9 @@ Reply with ONLY one word: simple or complex"""
         """Override ask: classify first, then swap tools dict for the pipeline."""
         complexity = await self._classify_complexity(instruction)
         logger = get_logger()
-        logger.info(f"DynamicCodeGenRouter: classified as '{complexity}' for: {instruction[:60]}")
+        logger.info(
+            f"DynamicCodeGenRouter: classified as '{complexity}' for: {instruction[:60]}"
+        )
 
         if complexity == "complex":
             self._tools_pyi_dict = dict(self._tools_raw_dict)
@@ -192,26 +200,25 @@ Reply with ONLY one word: simple or complex"""
         return result
 
 
-
-def compute_iou(set1: Set, set2: Set) -> float:
+def compute_iou(set1: set, set2: set) -> float:
     """
     计算两个集合的交并比（Intersection over Union, IOU）。
-    
+
     该指标用于评估工具选择的准确性，通过比较期望调用的函数集合和实际调用的函数集合的重叠程度。
-    
+
     计算公式：IOU = |set1 ∩ set2| / |set1 ∪ set2|
-    
+
     参数:
         set1: 第一个集合（通常是期望的函数名集合）
         set2: 第二个集合（通常是实际的函数名集合）
-    
+
     返回:
         float: IOU 值，范围 [0, 1]
         - 1.0 表示两个集合完全相同
         - 0.0 表示两个集合没有交集
         - 当两个集合都为空时，返回 1.0（表示都正确，因为没有需要调用的函数）
         - 当只有一个集合为空时，返回 0.0（表示完全不匹配）
-    
+
     示例:
         >>> compute_iou({1, 2, 3}, {2, 3, 4})
         0.5  # 交集 {2, 3} 大小为 2，并集 {1, 2, 3, 4} 大小为 4，IOU = 2/4 = 0.5
@@ -221,26 +228,26 @@ def compute_iou(set1: Set, set2: Set) -> float:
     return intersection / union if union > 0 else 1.0  # 两个集合都为空时返回 1.0
 
 
-def compute_lcs_score(seq1: List, seq2: List) -> float:
+def compute_lcs_score(seq1: list, seq2: list) -> float:
     """
     计算归一化的最长公共子序列（Longest Common Subsequence, LCS）分数。
-    
+
     该指标用于评估调用序列的准确性，通过比较实际调用序列和期望调用序列的最长公共子序列长度。
     分数 = LCS长度 / 期望序列长度
-    
+
     注意：这里使用归一化分数，即 LCS 长度除以期望序列长度，而不是实际序列长度。
     这样可以衡量实际序列在多大程度上"覆盖"了期望序列。
-    
+
     参数:
         seq1: 实际序列（actual sequence）
         seq2: 期望序列（expected sequence）
-    
+
     返回:
         float: 归一化的 LCS 分数，范围 [0, 1]
         - 1.0 表示期望序列是实际序列的子序列（完全匹配或超出期望）
         - 0.0 表示两个序列没有公共子序列
         - 当期望序列为空时，如果实际序列也为空返回 1.0，否则返回 0.0
-    
+
     示例:
         >>> compute_lcs_score(['A', 'B', 'C', 'D'], ['A', 'C', 'D'])
         1.0  # LCS 是 ['A', 'C', 'D']，长度为 3，期望序列长度为 3，分数 = 3/3 = 1.0
@@ -274,15 +281,15 @@ def compute_lcs_score(seq1: List, seq2: List) -> float:
 
 
 def match_args(
-    expected_kwargs: dict, actual_kwargs: dict, context: Dict[str, Any] | None = None
-) -> Tuple[bool, float]:
+    expected_kwargs: dict, actual_kwargs: dict, context: dict[str, Any] | None = None
+) -> tuple[bool, float]:
     """
     匹配期望的参数和实际参数，计算参数匹配的准确度。
-    
+
     该函数用于评估函数调用时参数传递的准确性。支持两种特殊标记：
     - '*'：通配符，表示该参数的值不重要，不参与匹配
     - '@'：上下文标记，表示该参数应该匹配 context 中的 'id' 字段
-    
+
     参数:
         expected_kwargs: 期望的参数字典，可能包含：
             - '*' 作为通配符（跳过该参数的匹配）
@@ -290,13 +297,13 @@ def match_args(
         actual_kwargs: 实际的参数字典
         context: 上下文字典，包含 'id' 字段（用于 '@' 标记）
                 如果为 None 或 '@' 标记没有对应的 context，则 '@' 会被视为通配符（跳过）
-    
+
     返回:
         Tuple[bool, float]: (是否完全匹配, 匹配准确度)
         - all_match: True 表示所有需要匹配的参数都完全匹配，False 表示至少有一个不匹配
         - accuracy: 匹配准确度，范围 [0, 1]，计算公式 = 匹配的参数数量 / 需要匹配的参数总数
           （排除通配符和无效的 '@' 标记）
-    
+
     示例:
         >>> match_args({"a": 1, "b": "*", "c": 2}, {"a": 1, "b": 999, "c": 2})
         (True, 1.0)  # 'b' 是通配符，不参与匹配；'a' 和 'c' 都匹配
@@ -312,23 +319,23 @@ def match_args(
         return (True, 1.0) if not actual_kwargs else (False, 0.0)
 
     matched = 0  # 匹配的参数数量
-    total = 0    # 需要匹配的参数总数（排除通配符）
-    
+    total = 0  # 需要匹配的参数总数（排除通配符）
+
     for param_name, exp_value in expected_kwargs.items():
         # 跳过通配符：'*' 表示该参数的值不重要，不参与匹配
         if exp_value == "*":
             continue
-        
+
         # 处理 '@' 标记：替换为 context 中的 'id' 值
         if exp_value == "@":
             if context is None or "id" not in context:
                 # 如果 context 缺失或没有 'id' 字段，将 '@' 视为通配符（跳过）
                 continue
             exp_value = context["id"]  # 替换为实际的 id 值
-            
+
         # 该参数需要参与匹配
         total += 1
-        
+
         # 检查实际参数中是否存在该参数名
         if param_name in actual_kwargs:
             act_value = actual_kwargs[param_name]
@@ -345,18 +352,18 @@ def match_args(
 
 
 def extract_call_signatures(
-    tool_call_history: List[Dict[str, Any]],
+    tool_call_history: list[dict[str, Any]],
     exclude_exceptions: bool = True,
-) -> List[Tuple[str, str, dict]]:
+) -> list[tuple[str, str, dict]]:
     """
     从工具调用历史中提取调用签名。
-    
+
     该函数将工具调用历史记录转换为标准化的调用签名列表，每个签名包含：
     (模块名, 函数名, 参数字典)
-    
+
     注意：异常调用可以根据参数选择是否排除。在指标计算中，通常需要排除异常调用，
     因为异常调用表示执行失败，不应该参与准确性评估。
-    
+
     参数:
         tool_call_history: 工具调用历史记录列表，每个记录是一个字典，包含：
             - module_name: 模块名称
@@ -364,13 +371,13 @@ def extract_call_signatures(
             - kwargs: 参数字典
             - exception_occurred: 是否发生异常（可选）
         exclude_exceptions: 如果为 True，排除所有 exception_occurred=True 的调用
-    
+
     返回:
         List[Tuple[str, str, dict]]: 调用签名列表，每个元素是 (模块名, 函数名, 参数字典) 的元组
-    
+
     示例:
         >>> history = [
-        ...     {"module_name": "MobilitySpace", "function_name": "get_person", 
+        ...     {"module_name": "MobilitySpace", "function_name": "get_person",
         ...      "kwargs": {"person_id": 123}, "exception_occurred": False},
         ...     {"module_name": "EventSpace", "function_name": "start_event",
         ...      "kwargs": {"person_id": 123}, "exception_occurred": True}
@@ -380,32 +387,36 @@ def extract_call_signatures(
         # 第二个调用因为异常被排除
     """
     return [
-        (call.get("module_name", ""), call.get("function_name", ""), call.get("kwargs", {}))
+        (
+            call.get("module_name", ""),
+            call.get("function_name", ""),
+            call.get("kwargs", {}),
+        )
         for call in tool_call_history
         if not (exclude_exceptions and call.get("exception_occurred", False))
     ]
 
 
 def compute_metrics(
-    expected_calls: List[List],
-    actual_calls: List[Tuple[str, str, dict]],
-    tool_call_history: List[Dict[str, Any]] | None = None,
-    context: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    expected_calls: list[list],
+    actual_calls: list[tuple[str, str, dict]],
+    tool_call_history: list[dict[str, Any]] | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     计算单个测试用例的所有评估指标。
-    
+
     该函数是评测系统的核心，计算以下四个主要指标：
     1. 工具选择准确度（IOU）：评估是否选择了正确的工具函数
     2. 调用序列准确度（LCS）：评估调用顺序是否正确
     3. 参数准确度：评估参数传递是否正确
     4. 成功调用：综合评估是否完全成功（无异常 + 完美序列 + 完美参数）
-    
+
     重要说明：
     - 异常调用会被排除在 IOU、LCS 和参数匹配的计算之外
     - 但 token 使用统计仍然包括所有调用（包括异常调用）
     - 所有指标都基于非异常调用进行计算
-    
+
     参数:
         expected_calls: 期望的调用列表，格式为 [[模块名, 函数名, {参数字典}], ...]
             例如：[["MobilitySpace", "get_person", {"person_id": "@"}]]
@@ -415,7 +426,7 @@ def compute_metrics(
             用于检测是否有异常发生
         context: 上下文字典，包含 'id' 字段（用于 '@' 标记的参数匹配）
             例如：{"id": 123}
-    
+
     返回:
         Dict[str, Any]: 包含以下指标的字典：
             - tool_selection_iou (float): 工具选择准确度，范围 [0, 1]
@@ -430,7 +441,8 @@ def compute_metrics(
     # 步骤1：规范化期望调用格式
     # 将期望调用转换为统一的元组格式：(模块名, 函数名, 参数字典)
     expected_signatures = [
-        (call[0], call[1], call[2] if isinstance(call[2], dict) else {}) for call in expected_calls
+        (call[0], call[1], call[2] if isinstance(call[2], dict) else {})
+        for call in expected_calls
     ]
     # 实际调用应该已经排除了异常，直接使用
     actual_signatures = actual_calls
@@ -443,15 +455,23 @@ def compute_metrics(
     # ========== 指标1：工具选择准确度（IOU） ==========
     # 该指标评估是否选择了正确的工具函数，不考虑调用顺序
     # 只比较函数名集合，不比较模块名和参数
-    expected_function_names = {sig[1] for sig in expected_signatures}  # 提取期望的函数名集合
-    actual_function_names = {sig[1] for sig in actual_signatures}  # 提取实际的函数名集合（已排除异常）
+    expected_function_names = {
+        sig[1] for sig in expected_signatures
+    }  # 提取期望的函数名集合
+    actual_function_names = {
+        sig[1] for sig in actual_signatures
+    }  # 提取实际的函数名集合（已排除异常）
     tool_selection_iou = compute_iou(expected_function_names, actual_function_names)
 
     # ========== 指标2：调用序列准确度（LCS） ==========
     # 该指标评估调用顺序是否正确
     # 只比较函数名序列，不比较模块名和参数
-    expected_function_seq = [sig[1] for sig in expected_signatures]  # 提取期望的函数名序列
-    actual_function_seq = [sig[1] for sig in actual_signatures]  # 提取实际的函数名序列（已排除异常）
+    expected_function_seq = [
+        sig[1] for sig in expected_signatures
+    ]  # 提取期望的函数名序列
+    actual_function_seq = [
+        sig[1] for sig in actual_signatures
+    ]  # 提取实际的函数名序列（已排除异常）
     # 注意：LCS 分数 = LCS长度 / 期望序列长度
     # 这意味着如果实际序列包含了期望序列的所有元素（即使顺序不完全相同），分数也可能很高
     sequence_lcs_score = compute_lcs_score(actual_function_seq, expected_function_seq)
@@ -505,21 +525,21 @@ def compute_metrics(
 
 
 async def initialize_environment(
-    profiles_to_use: List[Dict],
+    profiles_to_use: list[dict],
     router_class,
     logger,
-) -> Tuple[Any, List[int]]:
+) -> tuple[Any, list[int]]:
     """
     初始化环境模块和路由器。
-    
+
     该函数创建测试所需的环境模块（MobilitySpace 和 EventSpace）和路由器实例，
     用于后续的指令测试。
-    
+
     参数:
         profiles_to_use: 要使用的 agent profile 列表
         router_class: 路由器类（如 CodeGenRouter、ReActRouter 等）
         logger: 日志记录器
-    
+
     返回:
         Tuple[Any, List[int]]: (环境路由器实例, Agent ID 列表)
     """
@@ -540,8 +560,12 @@ async def initialize_environment(
         )
 
     # 创建 MobilitySpace 环境
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    map_path = os.path.join(project_root, "agentsociety_data", "agentsociety_beijing.pb")
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    map_path = os.path.join(
+        project_root, "agentsociety_data", "agentsociety_beijing.pb"
+    )
     home_dir = os.path.join(project_root, "agentsociety_data")
     os.makedirs(home_dir, exist_ok=True)
 
@@ -563,6 +587,7 @@ async def initialize_environment(
     # 手动初始化：跳过 MobilitySpace 的 routing server 启动（benchmark 只测试工具调用，不需要路径规划）
     env_router.t = START_TIME
     from agentsociety2.env.base import EnvBase
+
     await EnvBase.init(mobility_env, START_TIME)
     await event_space.init(START_TIME)
 
@@ -579,14 +604,14 @@ async def main(
 ):
     """
     运行指令测试基准评测，评估路由器的性能。
-    
+
     该函数是评测系统的主入口，执行以下步骤：
     1. 加载 agent profiles
     2. 加载测试数据（YAML 格式）
     3. 初始化环境
     4. 运行所有测试用例并计算指标
     5. 统计结果并保存
-    
+
     参数:
         logger: 日志记录器
         router_class: 路由器类（如 CodeGenRouter、ReActRouter 等）
@@ -641,18 +666,18 @@ async def main(
 
     # ==================== Run Tests ====================
     logger.info("\n【步骤4/4】运行测试...")
-    
+
     # 定义用于循环的 agent ID 列表（1-5）
     context_agent_ids = [1, 2, 3, 4, 5]
-    
-    async def run_single_test(idx: int, test_case: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def run_single_test(idx: int, test_case: dict[str, Any]) -> dict[str, Any]:
         """
         执行单个测试用例的辅助函数。
-        
+
         参数:
             idx: 测试用例索引
             test_case: 测试用例字典
-        
+
         返回:
             测试结果字典
         """
@@ -676,7 +701,9 @@ async def main(
             # 获取工具调用历史
             tool_call_history = env_router.get_tool_call_history()
             # 提取调用签名（排除异常调用）
-            actual_calls = extract_call_signatures(tool_call_history, exclude_exceptions=True)
+            actual_calls = extract_call_signatures(
+                tool_call_history, exclude_exceptions=True
+            )
 
             # 获取 token 使用统计（仅 coder 模型）
             token_usages = env_router.get_token_usages()
@@ -686,7 +713,9 @@ async def main(
             total_output_tokens = coder_stats.output_tokens if coder_stats else 0
 
             # 计算指标
-            metrics = compute_metrics(expected_calls, actual_calls, tool_call_history, context)
+            metrics = compute_metrics(
+                expected_calls, actual_calls, tool_call_history, context
+            )
 
             return {
                 "test_case": test_case,
@@ -713,8 +742,9 @@ async def main(
             }
         except Exception as e:
             import traceback
+
             traceback.print_exc()
-            logger.error(f"  ❌ 测试用例 {idx+1} 失败: {str(e)}")
+            logger.error(f"  ❌ 测试用例 {idx + 1} 失败: {e!s}")
             return {
                 "test_case": test_case,
                 "context": context,
@@ -726,12 +756,12 @@ async def main(
                     "param_all_match": False,
                 },
             }
-    
+
     # 顺序执行所有测试用例（避免并行导致的限流重试，减少LLM调用次数）
     results = []
     logger.info("  使用顺序执行，避免限流重试")
     logger.info(f"  Agent ID 循环使用: {context_agent_ids}")
-    
+
     for idx, test_case in enumerate(tqdm(instructions, desc="测试用例")):
         result = await run_single_test(idx, test_case)
         results.append(result)
@@ -741,12 +771,13 @@ async def main(
 
     # 分类结果：成功（无错误、无异常）vs 失败（有错误或有异常）
     successful_results = [
-        r for r in results
+        r
+        for r in results
         if "error" not in r and not r.get("metrics", {}).get("has_exception", False)
     ]
     failed_results = [r for r in results if r not in successful_results]
     all_results = results  # 所有结果用于计算统计
-    
+
     # 初始化统计变量（避免未定义错误）
     avg_tool_selection_iou = 0.0
     avg_sequence_lcs = 0.0
@@ -760,27 +791,41 @@ async def main(
     avg_llm_calls_per_test = 0.0
     avg_input_tokens_per_test = 0.0
     avg_output_tokens_per_test = 0.0
-    
+
     if all_results:
         n = len(all_results)
         # 计算平均指标（包括失败的结果，因为 IOU 和 LCS 仍然有效）
-        avg_tool_selection_iou = sum(r["metrics"]["tool_selection_iou"] for r in all_results) / n
-        avg_sequence_lcs = sum(r["metrics"]["sequence_lcs_score"] for r in all_results) / n
-        
+        avg_tool_selection_iou = (
+            sum(r["metrics"]["tool_selection_iou"] for r in all_results) / n
+        )
+        avg_sequence_lcs = (
+            sum(r["metrics"]["sequence_lcs_score"] for r in all_results) / n
+        )
+
         # 成功调用统计（无异常 + 完美 LCS + 完美参数）
-        successful_calls = sum(1 for r in all_results if r["metrics"].get("successful_call", False))
+        successful_calls = sum(
+            1 for r in all_results if r["metrics"].get("successful_call", False)
+        )
         successful_call_rate = successful_calls / n
-        
+
         # 参数准确度仅针对无异常的结果
         avg_param_accuracy = (
-            sum(r["metrics"]["param_accuracy"] for r in successful_results) / len(successful_results)
-            if successful_results else 0.0
+            sum(r["metrics"]["param_accuracy"] for r in successful_results)
+            / len(successful_results)
+            if successful_results
+            else 0.0
         )
-        
+
         # Token 使用统计（仅 coder 模型，包括所有结果，因为异常调用也消耗 token）
-        total_llm_calls = sum(r.get("token_usage", {}).get("total_llm_calls", 0) for r in all_results)
-        total_input_tokens = sum(r.get("token_usage", {}).get("total_input_tokens", 0) for r in all_results)
-        total_output_tokens = sum(r.get("token_usage", {}).get("total_output_tokens", 0) for r in all_results)
+        total_llm_calls = sum(
+            r.get("token_usage", {}).get("total_llm_calls", 0) for r in all_results
+        )
+        total_input_tokens = sum(
+            r.get("token_usage", {}).get("total_input_tokens", 0) for r in all_results
+        )
+        total_output_tokens = sum(
+            r.get("token_usage", {}).get("total_output_tokens", 0) for r in all_results
+        )
         total_tokens = total_input_tokens + total_output_tokens
         avg_llm_calls_per_test = total_llm_calls / n
         avg_input_tokens_per_test = total_input_tokens / n
@@ -789,7 +834,9 @@ async def main(
         logger.info(f"总测试用例数: {len(results)}")
         logger.info(f"无异常: {len(successful_results)}")
         logger.info(f"有异常: {len(failed_results)}")
-        logger.info(f"成功调用（无异常+完美LCS+完美参数）: {successful_calls} ({successful_call_rate*100:.2f}%)")
+        logger.info(
+            f"成功调用（无异常+完美LCS+完美参数）: {successful_calls} ({successful_call_rate * 100:.2f}%)"
+        )
         logger.info("\n平均指标（所有测试用例）:")
         logger.info(f"  工具选择准确率 (IOU): {avg_tool_selection_iou:.4f}")
         logger.info(f"  调用序列准确率 (LCS): {avg_sequence_lcs:.4f}")
@@ -799,12 +846,18 @@ async def main(
             logger.info("  参数准确率（仅无异常）: N/A（所有测试用例都有异常）")
         logger.info("\nToken 使用统计（仅 coder 模型，包括所有结果，含异常调用）:")
         logger.info(f"  总 LLM 调用次数 (coder): {total_llm_calls}")
-        logger.info(f"  平均每次测试 LLM 调用次数 (coder): {avg_llm_calls_per_test:.2f}")
+        logger.info(
+            f"  平均每次测试 LLM 调用次数 (coder): {avg_llm_calls_per_test:.2f}"
+        )
         logger.info(f"  总 Input Tokens (coder): {total_input_tokens:,}")
         logger.info(f"  总 Output Tokens (coder): {total_output_tokens:,}")
         logger.info(f"  总 Tokens (coder): {total_tokens:,}")
-        logger.info(f"  平均每次测试 Input Tokens (coder): {avg_input_tokens_per_test:,.0f}")
-        logger.info(f"  平均每次测试 Output Tokens (coder): {avg_output_tokens_per_test:,.0f}")
+        logger.info(
+            f"  平均每次测试 Input Tokens (coder): {avg_input_tokens_per_test:,.0f}"
+        )
+        logger.info(
+            f"  平均每次测试 Output Tokens (coder): {avg_output_tokens_per_test:,.0f}"
+        )
 
     # ==================== 保存结果 ====================
     output_path = f"logs/instruction_test_{router_class.__name__}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pkl"
@@ -846,9 +899,18 @@ async def main(
             n_cat = len(category_results)
             summary["by_category"][category] = {
                 "count": n_cat,
-                "avg_tool_selection_iou": sum(r["metrics"]["tool_selection_iou"] for r in category_results) / n_cat,
-                "avg_sequence_lcs": sum(r["metrics"]["sequence_lcs_score"] for r in category_results) / n_cat,
-                "avg_param_accuracy": sum(r["metrics"]["param_accuracy"] for r in category_results) / n_cat,
+                "avg_tool_selection_iou": sum(
+                    r["metrics"]["tool_selection_iou"] for r in category_results
+                )
+                / n_cat,
+                "avg_sequence_lcs": sum(
+                    r["metrics"]["sequence_lcs_score"] for r in category_results
+                )
+                / n_cat,
+                "avg_param_accuracy": sum(
+                    r["metrics"]["param_accuracy"] for r in category_results
+                )
+                / n_cat,
             }
 
     summary_path = output_path.replace(".pkl", "_summary.json")
@@ -870,9 +932,9 @@ async def _main():
 
     for name, router_class in router_classes.items():
         logger = get_logger()
-        logger.info(f"\n{'='*80}")
+        logger.info(f"\n{'=' * 80}")
         logger.info(f"Testing router: {name} ({router_class.__name__})")
-        logger.info(f"{'='*80}")
+        logger.info(f"{'=' * 80}")
 
         # 为每个路由器初始化环境
         await main(

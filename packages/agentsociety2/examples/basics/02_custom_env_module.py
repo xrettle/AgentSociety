@@ -1,64 +1,34 @@
 """Custom Environment Module Example.
 
-Shows how to define an EnvBase module with @tool methods and drive it through
-AgentSociety using agent_specs (no direct PersonAgent construction).
+Uses contrib WeatherEnvironment (Ray-discoverable). Changes weather via
+intervene, then asks for temperature — stable onboarding path.
 """
 
 from __future__ import annotations
 
 import os
+import sys
+import time
+from pathlib import Path
 
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import asyncio
 from datetime import datetime
-from pathlib import Path
-from typing import Dict
 
-from agentsociety2.env import CodeGenRouter, EnvBase, tool
+from agentsociety2.env import create_env_router_proxy
 from agentsociety2.society import AgentSociety
 
-
-class WeatherEnvironment(EnvBase):
-    """A simple weather environment module."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._weather = "sunny"
-        self._temperature = 25
-        self._agent_locations: Dict[int, str] = {}
-
-    @tool(readonly=True, kind="observe")
-    def get_weather(self, agent_id: int) -> str:
-        """Get the current weather for an agent's location."""
-        location = self._agent_locations.get(agent_id, "unknown location")
-        return (
-            f"The weather in {location} is {self._weather} "
-            f"with {self._temperature}°C."
-        )
-
-    @tool(readonly=False)
-    def change_weather(self, weather: str, temperature: int) -> str:
-        """Change the weather conditions."""
-        self._weather = weather
-        self._temperature = temperature
-        return f"Weather changed to {weather} at {temperature}°C."
-
-    @tool(readonly=False)
-    def set_agent_location(self, agent_id: int, location: str) -> str:
-        """Set an agent's location."""
-        self._agent_locations[agent_id] = location
-        return f"Agent {agent_id} is now in {location}."
-
-    @tool(readonly=True, kind="statistics")
-    def get_average_temperature(self) -> str:
-        """Get the current average temperature."""
-        return f"The current temperature is {self._temperature}°C."
+_EXAMPLES_ROOT = Path(__file__).resolve().parents[1]
+if str(_EXAMPLES_ROOT) not in sys.path:
+    sys.path.insert(0, str(_EXAMPLES_ROOT))
+from _checks import fresh_run_dir, require_no_critical_failures
 
 
 async def main() -> None:
-    run_dir = Path("run_custom_env")
+    run_dir = fresh_run_dir(Path("run_custom_env"))
+
     agent_specs = [
         {
             "id": i,
@@ -68,7 +38,11 @@ async def main() -> None:
         for i in range(1, 3)
     ]
 
-    env_router = CodeGenRouter(env_modules=[WeatherEnvironment()])
+    env_router = await create_env_router_proxy(
+        ["WeatherEnvironment"],
+        {"WeatherEnvironment": {}},
+        run_dir=run_dir,
+    )
     society = AgentSociety(
         agent_specs=agent_specs,
         agent_class_name="PersonAgent",
@@ -79,23 +53,43 @@ async def main() -> None:
     await society.init()
 
     print("=== Custom Environment Module ===\n")
-
-    print("1. What's the current environment state?")
-    print(f"Answer: {await society.ask('What is the current weather and temperature?')}\n")
-
-    print("2. Change the weather to rainy, 18°C")
-    print(
-        "Result:",
-        await society.intervene(
-            "Change the weather to rainy and set temperature to 18 degrees Celsius"
-        ),
-        "\n",
+    t0 = time.perf_counter()
+    print("1. Current weather?")
+    a1 = str(
+        await society.ask(
+            "Ask the environment: what is the current weather and temperature?"
+        )
     )
+    print(f"Answer: {a1}\n")
 
-    print("3. What's the weather now?")
-    print(f"Answer: {await society.ask('What is the current temperature?')}\n")
+    print("2. Change weather to rainy / 18C")
+    a2 = str(
+        await society.intervene(
+            "Call change_weather with weather='rainy' and temperature=18"
+        )
+    )
+    print(f"Result: {a2}\n")
 
+    print("3. Temperature now?")
+    a3 = str(
+        await society.ask(
+            "Ask the environment for the current temperature using get_average_temperature."
+        )
+    )
+    print(f"Answer: {a3}\n")
+    wall = time.perf_counter() - t0
+    stats = society.all_token_stats()
     await society.close()
+    require_no_critical_failures(run_dir)
+
+    joined = f"{a1} {a2} {a3}".lower()
+    ok = ("18" in a3) or ("18" in joined and "rainy" in joined)
+    print(f"Token stats: {stats}")
+    print(f"WALL_SEC={wall:.2f}")
+    print(f"SUCCESS={ok}")
+    if not ok:
+        print("ERROR: expected rainy/18 after intervene", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

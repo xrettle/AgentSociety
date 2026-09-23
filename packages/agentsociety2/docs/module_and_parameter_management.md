@@ -67,6 +67,7 @@ def _discover_contrib_env_modules() -> Dict[str, Type[EnvBase]]:
     # 自动发现所有 EnvBase 子类
     # 类名转换：SimpleSocialSpace -> simple_social_space
 
+
 def _discover_contrib_agents() -> Dict[str, Type[AgentBase]]:
     """使用 pkgutil 遍历 contrib.agent 包"""
     # 自动发现所有 AgentBase 子类
@@ -231,7 +232,7 @@ GET /api/v1/prefill-params/agent/person_agent?workspace_path=/path
 
 #### 验证脚本
 
-``extension/skills/agentsociety-experiment-config/scripts/validate_config.py`` 用于对生成的配置做端到端校验。
+``ags experiment-config validate``（技能脚本 ``agentsociety-experiment-config/.../scripts/config.py``）用于对生成的配置做端到端校验。
 
 **验证内容：**
 1. 加载 `init_config.json`
@@ -247,14 +248,16 @@ GET /api/v1/prefill-params/agent/person_agent?workspace_path=/path
 ```python
 # 环境模块配置
 class EnvModuleConfig(BaseModel):
-    module_type: str              # 模块类型标识
-    kwargs: Dict[str, Any]        # 初始化参数
+    module_type: str  # 模块类型标识
+    kwargs: Dict[str, Any]  # 初始化参数
+
 
 # Agent 配置
 class AgentConfig(BaseModel):
-    agent_id: int                 # Agent ID
-    agent_type: str               # Agent 类型
-    kwargs: Dict[str, Any]        # 初始化参数（包含 id、profile 等）
+    agent_id: int  # Agent ID
+    agent_type: str  # Agent 类型
+    kwargs: Dict[str, Any]  # 初始化参数（包含 id、profile 等）
+
 
 # 初始化配置
 class InitConfig(BaseModel):
@@ -297,6 +300,7 @@ from agentsociety2.agent.base import AgentBase
 from pathlib import Path
 from typing import Any
 
+
 class MyCustomAgent(AgentBase):
     """我的自定义 Agent"""
 
@@ -322,6 +326,7 @@ class MyCustomAgent(AgentBase):
 ```python
 # custom/envs/my_env.py
 from agentsociety2.env.base import EnvBase
+
 
 class MyCustomEnv(EnvBase):
     """我的自定义环境模块"""

@@ -194,10 +194,10 @@ PersonAgent follows a **metadata-first, selected-only** model. The skill *infras
 
 #### Environment Router (`agentsociety2/env/`)
 - **RouterBase**: Abstract router for environment modules
-- **EnvBase**: Base class for environment modules with `@tool` decorator
-- **Router implementations**: CodeGenRouter (default), ReActRouter, PlanExecuteRouter, TwoTierReActRouter, TwoTierPlanExecuteRouter, SearchToolRouter
-- In production the router runs in a dedicated **Ray actor** (`env_router_actor.py` + `env_router_proxy.py::EnvRouterProxy`)
-- Environment modules register tools as observe/statistics/regular methods; routers mediate between agents and environment modules
+- **EnvBase**: Base class for environment modules with `@tool` decorator; override `is_concurrency_safe()` when tools are safe to fan out
+- **Router implementations**: CodeGenRouter (default; FAISS template cache only when `template_mode=True`), ReActRouter, PlanExecuteRouter, TwoTierReActRouter, TwoTierPlanExecuteRouter, SearchToolRouter
+- In production the router runs in a dedicated **Ray actor** (`env_router_actor.py` + `env_router_proxy.py::EnvRouterProxy`); `max_concurrency` is `AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY` (default 8) only when all mounted modules are concurrency-safe, else 1
+- Environment modules register tools as observe/statistics/regular methods; routers mediate between agents and environment modules; empty observe/statistics sets skip init LLM codegen
 
 #### CLI (`agentsociety2/society/cli.py`)
 - **Main entry point**: `python -m agentsociety2.society.cli`
@@ -214,7 +214,7 @@ PersonAgent follows a **metadata-first, selected-only** model. The skill *infras
 
 #### Backend API (`agentsociety2/backend/`)
 - **FastAPI**-based REST API for external integrations
-- **Routes**: `/api/v1/experiments`, `/api/v1/modules`, `/api/v1/replay`, `/api/v1/custom`
+- **Routes**: `/api/v1/experiments` (incl. log `?tail=`), `/api/v1/modules`, `/api/v1/replay`, `/api/v1/custom`
 - **Separate from core simulation** - runs as independent service
 - **API documentation**: Available at `/docs` when running
 
@@ -231,7 +231,7 @@ PersonAgent follows a **metadata-first, selected-only** model. The skill *infras
 
 #### Society (`agentsociety2/society/`)
 - **AgentSociety**: Main simulation orchestrator
-- **AgentSocietyHelper**: Plan-and-Execute helper for external questions/interventions
+- **AgentSocietyHelper**: Plan-and-Execute helper for external questions/interventions (XML `<plan>`/`<answer>`; tools include `get_agent_profile`)
 - **Models**: InitConfig, StepsConfig, ExperimentConfig
 
 #### Module Registry (`agentsociety2/registry/`)
@@ -475,7 +475,8 @@ PersonAgent maintains local workspace-backed memory:
 - Replay metadata is stored in `_schema.json`; env modules register datasets/tables via `register_table(ColumnDef*, TableSchema)` / `register_dataset`
 - Legacy framework tables (`agent_profile`, `agent_status`, `agent_dialog`) are kept **only for reading old databases** — new runs no longer write them
 - Distributed tracing via `agentsociety2.trace` (sharded writer + background-thread `TraceActor`); spans emitted through `service_proxy.trace`
-- Agent state lives in per-agent workspaces (`run/agents/agent_<id>/`: `config.json`, `AGENT.json`, `state/*`, `.runtime/logs/*`)
+- Agent state lives in per-agent workspaces (`run/agents/agent_<id>/`: `config.json`, `AGENT.json` incl. `world_description`, `state/*`, `.runtime/logs/*`)
+- Onboarding examples: `packages/agentsociety2/examples/{basics,games,advanced}` (contrib `WeatherEnvironment` / `SpecialistAgent`)
 
 ## Important Notes
 

@@ -3,19 +3,18 @@ Commons Tragedy 实验相关的主程序
 使用 PersonAgent 进行公地悲剧游戏模拟
 """
 
-# ruff: noqa: E402
-
 import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import sys
-import re
 from collections import defaultdict
 from datetime import datetime
-from dotenv import load_dotenv
+
 import numpy as np
+from dotenv import load_dotenv
 
 # Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
@@ -23,15 +22,15 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 load_dotenv()
 
+from agentsociety2.agent import PersonAgent
 from agentsociety2.contrib.env.commons_tragedy import CommonsTragedyEnv
 from agentsociety2.contrib.env.prisoners_dilemma import PrisonersDilemmaEnv
 from agentsociety2.contrib.env.public_goods import PublicGoodsEnv
 from agentsociety2.contrib.env.trust_game import TrustGameEnv
 from agentsociety2.contrib.env.volunteer_dilemma import VolunteerDilemmaEnv
-from agentsociety2.agent import PersonAgent
 from agentsociety2.env import CodeGenRouter
+from agentsociety2.logger import get_logger, setup_logging
 from agentsociety2.society import AgentSociety
-from agentsociety2.logger import setup_logging, get_logger
 
 
 def _calculate_volunteer_dilemma_statistics(
@@ -633,7 +632,7 @@ async def main_commons_tragedy_with_person_agent(
                 "id": agent_id,
                 "profile": profile_text,
                 "memory_config": agent_memory_config,
-                "world_description": f"You are playing a Tragedy of the Commons game with {num_agents-1} other players. The game has {num_rounds} rounds. Initial pool: {initial_pool_resources} units. Max extraction per round: {max_extraction_per_agent} units.",
+                "world_description": f"You are playing a Tragedy of the Commons game with {num_agents - 1} other players. The game has {num_rounds} rounds. Initial pool: {initial_pool_resources} units. Max extraction per round: {max_extraction_per_agent} units.",
                 "max_plan_steps": 3,  # 限制Plan步骤数：查询资源、做决策、提交
             }
         )
@@ -678,10 +677,13 @@ async def main_commons_tragedy_with_person_agent(
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=[
+                    {"id": a.id, "profile": a._profile, "config": a._config}
+                    for a in agents
+                ],
                 agent_class_name="PersonAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -708,7 +710,9 @@ async def main_commons_tragedy_with_person_agent(
                     if json_match:
                         data = json.loads(json_match.group(0))
                         if isinstance(data, dict):
-                            pool_before = data.get("current_pool_resources", initial_pool_resources)
+                            pool_before = data.get(
+                                "current_pool_resources", initial_pool_resources
+                            )
                 except Exception:
                     pass
 
@@ -796,13 +800,13 @@ async def main_commons_tragedy_with_person_agent(
                             f"游戏 {game_num} 轮次 {round_num}: 无法从历史记录解析结果"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行超时")
                     print(f"[错误] 轮次 {round_num} 执行超时，跳过此轮次")
                     continue
                 except Exception as e:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行错误: {e}")
-                    print(f"[错误] 轮次 {round_num} 执行错误: {str(e)}")
+                    print(f"[错误] 轮次 {round_num} 执行错误: {e!s}")
                     import traceback
 
                     traceback.print_exc()
@@ -1079,10 +1083,13 @@ async def main_prisoners_dilemma_with_person_agent(
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=[
+                    {"id": a.id, "profile": a._profile, "config": a._config}
+                    for a in agents
+                ],
                 agent_class_name="PersonAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -1171,13 +1178,13 @@ async def main_prisoners_dilemma_with_person_agent(
                             f"游戏 {game_num} 轮次 {round_num}: 无法从历史记录解析结果"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行超时")
                     print(f"[错误] 轮次 {round_num} 执行超时，跳过此轮次")
                     continue
                 except Exception as e:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行错误: {e}")
-                    print(f"[错误] 轮次 {round_num} 执行错误: {str(e)}")
+                    print(f"[错误] 轮次 {round_num} 执行错误: {e!s}")
                     import traceback
 
                     traceback.print_exc()
@@ -1410,7 +1417,7 @@ async def main_public_goods_with_person_agent(
                 "id": agent_id,
                 "profile": profile_text,
                 "memory_config": agent_memory_config,
-                "world_description": f"You are playing a Public Goods Game with {num_agents-1} other players. The game has {num_rounds} rounds. Each round endowment: {initial_endowment} units. Public pool multiplier: {public_pool_multiplier}x.",
+                "world_description": f"You are playing a Public Goods Game with {num_agents - 1} other players. The game has {num_rounds} rounds. Each round endowment: {initial_endowment} units. Public pool multiplier: {public_pool_multiplier}x.",
                 "max_plan_steps": 3,  # 限制Plan步骤数：查询历史、做决策、提交贡献
             }
         )
@@ -1454,10 +1461,13 @@ async def main_public_goods_with_person_agent(
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=[
+                    {"id": a.id, "profile": a._profile, "config": a._config}
+                    for a in agents
+                ],
                 agent_class_name="PersonAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -1553,13 +1563,13 @@ async def main_public_goods_with_person_agent(
                             f"游戏 {game_num} 轮次 {round_num}: 无法从历史记录解析结果"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行超时")
                     print(f"[错误] 轮次 {round_num} 执行超时，跳过此轮次")
                     continue
                 except Exception as e:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行错误: {e}")
-                    print(f"[错误] 轮次 {round_num} 执行错误: {str(e)}")
+                    print(f"[错误] 轮次 {round_num} 执行错误: {e!s}")
                     import traceback
 
                     traceback.print_exc()
@@ -1901,10 +1911,13 @@ async def main_trust_game_with_person_agent(
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=[
+                    {"id": a.id, "profile": a._profile, "config": a._config}
+                    for a in agents
+                ],
                 agent_class_name="PersonAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -2009,13 +2022,13 @@ async def main_trust_game_with_person_agent(
                             f"游戏 {game_num} 轮次 {round_num}: 无法从历史记录解析结果"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行超时")
                     print(f"[错误] 轮次 {round_num} 执行超时，跳过此轮次")
                     continue
                 except Exception as e:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行错误: {e}")
-                    print(f"[错误] 轮次 {round_num} 执行错误: {str(e)}")
+                    print(f"[错误] 轮次 {round_num} 执行错误: {e!s}")
                     import traceback
 
                     traceback.print_exc()
@@ -2065,7 +2078,7 @@ async def main_trust_game_with_person_agent(
     overall_total_payoff_sum = sum(
         sum(payoffs.values()) for payoffs in per_game_payoffs
     )
-    for name in agent_names[: len(set(n.rsplit("_G", 1)[0] for n in agent_names))]:
+    for name in agent_names[: len({n.rsplit("_G", 1)[0] for n in agent_names})]:
         base_name = name.rsplit("_G", 1)[0] if "_G" in name else name
         total = sum(
             payoffs.get(n, 0)
@@ -2258,7 +2271,7 @@ async def main_volunteer_dilemma_with_person_agent(
                 "id": agent_id,
                 "profile": profile_text,
                 "memory_config": agent_memory_config,
-                "world_description": f"You are playing a Volunteer's Dilemma game with {num_agents-1} other players. The game has {num_rounds} rounds. Benefit B={benefit_b}, Cost C={cost_c}.",
+                "world_description": f"You are playing a Volunteer's Dilemma game with {num_agents - 1} other players. The game has {num_rounds} rounds. Benefit B={benefit_b}, Cost C={cost_c}.",
                 "max_plan_steps": 2,  # 限制Plan步骤数：只需提交选择（Volunteer或Stand by）
             }
         )
@@ -2299,10 +2312,13 @@ async def main_volunteer_dilemma_with_person_agent(
         society = None
         try:
             society = AgentSociety(
-                agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+                agent_specs=[
+                    {"id": a.id, "profile": a._profile, "config": a._config}
+                    for a in agents
+                ],
                 agent_class_name="PersonAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -2467,13 +2483,13 @@ async def main_volunteer_dilemma_with_person_agent(
                             f"游戏 {game_num} 轮次 {round_num}: 无法从历史记录解析结果"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行超时")
                     print(f"[错误] 轮次 {round_num} 执行超时，跳过此轮次")
                     continue
                 except Exception as e:
                     logger.error(f"游戏 {game_num} 轮次 {round_num} 执行错误: {e}")
-                    print(f"[错误] 轮次 {round_num} 执行错误: {str(e)}")
+                    print(f"[错误] 轮次 {round_num} 执行错误: {e!s}")
                     import traceback
 
                     traceback.print_exc()
@@ -2702,7 +2718,7 @@ async def run_all_games():
     print("\n" + "=" * 80)
     print("【所有游戏运行完成】")
     print(
-        f"总耗时: {total_duration.total_seconds():.1f} 秒 ({total_duration.total_seconds()/60:.1f} 分钟)"
+        f"总耗时: {total_duration.total_seconds():.1f} 秒 ({total_duration.total_seconds() / 60:.1f} 分钟)"
     )
     print("=" * 80)
 

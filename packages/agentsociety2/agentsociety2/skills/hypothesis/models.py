@@ -5,7 +5,6 @@ Pydantic models for hypothesis and experiment groups.
 
 from __future__ import annotations
 
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -37,7 +36,7 @@ class ExperimentGroupModel(BaseModel):
         ...,
         description="What is manipulated/varied in this group and what outcome is expected to change",
     )
-    agent_selection_criteria: Optional[str] = Field(
+    agent_selection_criteria: str | None = Field(
         default=None,
         description=(
             "Explicit criteria for selecting agents, described in CONCEPTUAL terms. "
@@ -55,12 +54,12 @@ class HypothesisDataModel(BaseModel):
         ...,
         description="Hypothesis to be tested",
     )
-    groups: List[ExperimentGroupModel] = Field(
+    groups: list[ExperimentGroupModel] = Field(
         ...,
         min_length=1,
         description="Experiment groups designed to test this hypothesis (at least 1 group required)",
     )
-    agent_classes: Optional[List[str]] = Field(
+    agent_classes: list[str] | None = Field(
         default=None,
         description=(
             "List of agent class types to use in this hypothesis's simulation. "
@@ -68,7 +67,7 @@ class HypothesisDataModel(BaseModel):
             "If not provided, will be empty and can be configured later."
         ),
     )
-    env_modules: Optional[List[str]] = Field(
+    env_modules: list[str] | None = Field(
         default=None,
         description=(
             "List of environment module types to use in this hypothesis's simulation. "

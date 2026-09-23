@@ -31,19 +31,18 @@
     await society.run(steps)
 """
 
-from .society import AgentSociety
 from .helper import AgentSocietyHelper
 from .models import (
-    EnvModuleConfig,
     AgentConfig,
-    InitConfig,
-    RunStep,
     AskStep,
+    EnvModuleConfig,
+    InitConfig,
     InterveneStep,
     QuestionItem,
     QuestionnaireStep,
-    StepUnion,
+    RunStep,
     StepsConfig,
+    StepUnion,
 )
 from .questionnaire import (
     AgentQuestionnaireResult,
@@ -51,6 +50,7 @@ from .questionnaire import (
     QuestionnaireAnswer,
     QuestionnaireResponse,
 )
+from .society import AgentSociety
 
 __all__ = [
     "AgentConfig",

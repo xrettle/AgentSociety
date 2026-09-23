@@ -1,25 +1,24 @@
 #!/usr/bin/env python
-# ruff: noqa: F841
-# -*- coding: utf-8 -*-
 """
 Prisoner's Dilemma Game - V2 Framework Implementation
 Main entry point for running Prisoner's Dilemma game using V2 framework
 """
-import os
-import json
-from collections import defaultdict
+
 import asyncio
-from datetime import datetime
+import json
 import logging
+import os
+from collections import defaultdict
+from datetime import datetime
 
 # Disable telemetry before any imports
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 # V2 framework imports
+from agentsociety2.contrib.env.prisoners_dilemma import PrisonersDilemmaEnv
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
-from agentsociety2.contrib.env.prisoners_dilemma import PrisonersDilemmaEnv
 
 # Ensure results directory exists
 os.makedirs("result_prisoners_dilemma", exist_ok=True)
@@ -224,7 +223,7 @@ async def main():
                 agent_specs=agent_specs,
                 agent_class_name="PrisonersDilemmaAgent",
                 env_router=env_router,
-                start_t=start_time
+                start_t=start_time,
             )
             await society.init()
 
@@ -327,7 +326,7 @@ async def main():
                             f"Game {game_num} Round {round_num}: Could not parse round result from history"
                         )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logging.error(
                         f"Game {game_num} Round {round_num} execution timeout"
                     )
@@ -339,7 +338,7 @@ async def main():
                     logging.error(
                         f"Game {game_num} Round {round_num} execution error: {e}"
                     )
-                    print(f"[Error] Round {round_num} execution error: {str(e)}")
+                    print(f"[Error] Round {round_num} execution error: {e!s}")
                     import traceback
 
                     traceback.print_exc()

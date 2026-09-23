@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_ROOT = REPO_ROOT / "extension/skills/agentsociety-paper-review"
 SKILL_VERSION_ROOT = SKILL_ROOT / "v1.0.0"
@@ -36,19 +35,17 @@ def test_paper_review_skill_bundle_is_complete() -> None:
     for relative_path in required_references:
         assert (SKILL_VERSION_ROOT / "references" / relative_path).is_file()
 
-    assert (
-        SKILL_VERSION_ROOT / "scripts/prepare_pdf_review.py"
-    ).is_file()
+    assert (SKILL_VERSION_ROOT / "scripts/prepare_pdf_review.py").is_file()
 
 
 def test_paper_review_requires_three_isolated_reviewers_and_meta_review() -> None:
     skill_text = (SKILL_VERSION_ROOT / "SKILL.md").read_text(encoding="utf-8")
-    ensemble_text = (
-        SKILL_VERSION_ROOT / "references/ensemble-protocol.md"
-    ).read_text(encoding="utf-8")
-    meta_text = (
-        SKILL_VERSION_ROOT / "references/meta-review-contract.md"
-    ).read_text(encoding="utf-8")
+    ensemble_text = (SKILL_VERSION_ROOT / "references/ensemble-protocol.md").read_text(
+        encoding="utf-8"
+    )
+    meta_text = (SKILL_VERSION_ROOT / "references/meta-review-contract.md").read_text(
+        encoding="utf-8"
+    )
 
     assert "exactly three isolated subagents" in skill_text
     assert "R1`, `R2`, and `R3` run concurrently" in ensemble_text
@@ -60,17 +57,20 @@ def test_paper_review_requires_three_isolated_reviewers_and_meta_review() -> Non
     assert "per-dimension agreement table" in meta_text
     assert "robustness_status" in meta_text
     assert "adjudication_required" in meta_text
-    assert "Never create a normal final MetaReview from fewer than three valid reviews" in meta_text
+    assert (
+        "Never create a normal final MetaReview from fewer than three valid reviews"
+        in meta_text
+    )
 
 
 def test_paper_review_uses_one_frozen_pdf_intake_for_all_agents() -> None:
     skill_text = (SKILL_VERSION_ROOT / "SKILL.md").read_text(encoding="utf-8")
-    pdf_text = (
-        SKILL_VERSION_ROOT / "references/pdf-intake-contract.md"
-    ).read_text(encoding="utf-8")
-    ensemble_text = (
-        SKILL_VERSION_ROOT / "references/ensemble-protocol.md"
-    ).read_text(encoding="utf-8")
+    pdf_text = (SKILL_VERSION_ROOT / "references/pdf-intake-contract.md").read_text(
+        encoding="utf-8"
+    )
+    ensemble_text = (SKILL_VERSION_ROOT / "references/ensemble-protocol.md").read_text(
+        encoding="utf-8"
+    )
 
     assert "scripts/prepare_pdf_review.py" in skill_text
     assert "Do not let reviewer subagents independently extract" in skill_text
@@ -83,9 +83,9 @@ def test_paper_review_uses_one_frozen_pdf_intake_for_all_agents() -> None:
 
 
 def test_paper_review_reroutes_use_existing_pipeline_stage_names() -> None:
-    reroute_text = (
-        SKILL_VERSION_ROOT / "references/reroute-guide.md"
-    ).read_text(encoding="utf-8")
+    reroute_text = (SKILL_VERSION_ROOT / "references/reroute-guide.md").read_text(
+        encoding="utf-8"
+    )
     skill_text = (SKILL_VERSION_ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     expected_reroutes = {
@@ -108,9 +108,9 @@ def test_paper_review_is_advisory_not_a_cli_or_progress_stage() -> None:
         REPO_ROOT
         / "extension/skills/agentsociety-research-pipeline/v1.0.0/scripts/progress.py"
     ).read_text(encoding="utf-8")
-    launcher_text = (
-        REPO_ROOT / "extension/runtime/agentsociety/bin/ags.py"
-    ).read_text(encoding="utf-8")
+    launcher_text = (REPO_ROOT / "extension/runtime/agentsociety/bin/ags.py").read_text(
+        encoding="utf-8"
+    )
 
     assert '"paper_review"' not in pipeline_script
     assert '"paper-review"' not in launcher_text
@@ -119,8 +119,7 @@ def test_paper_review_is_advisory_not_a_cli_or_progress_stage() -> None:
 
 def test_paper_review_is_routed_after_draft_generation() -> None:
     pipeline_text = (
-        REPO_ROOT
-        / "extension/skills/agentsociety-research-pipeline/v1.0.0/SKILL.md"
+        REPO_ROOT / "extension/skills/agentsociety-research-pipeline/v1.0.0/SKILL.md"
     ).read_text(encoding="utf-8")
     workspace_text = (REPO_ROOT / "extension/src/workspaceManager.ts").read_text(
         encoding="utf-8"

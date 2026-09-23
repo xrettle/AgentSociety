@@ -42,8 +42,7 @@ literature
 .. note::
 
    当前仓库中可公开使用的 research skills 模块为 ``analysis``、``experiment``、
-   ``hypothesis``、``literature``。``web_research`` 目录当前没有保留
-   可读源码，因此未列为文档 API 表面。
+   ``hypothesis``、``literature``。
 
 Agent Skills
 ------------

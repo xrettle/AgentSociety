@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
@@ -49,13 +49,13 @@ def _env_int_or_cpu(name: str) -> int:
     return int(raw) if raw and raw.strip() else (os.cpu_count() or 1)
 
 
-def _env_str(name: str) -> Optional[str]:
+def _env_str(name: str) -> str | None:
     """Read a stripped env var, treating unset/blank as ``None``."""
     raw = os.getenv(name)
     return raw.strip() if raw and raw.strip() else None
 
 
-def _env_json_obj(name: str) -> Optional[dict[str, Any]]:
+def _env_json_obj(name: str) -> dict[str, Any] | None:
     """Parse an env var holding a JSON object; warn and ignore if malformed.
 
     A malformed env var must never abort a run, so every failure path here is a
@@ -70,7 +70,9 @@ def _env_json_obj(name: str) -> Optional[dict[str, Any]]:
         logger.warning("Ignoring %s: not valid JSON (%r)", name, raw[:120])
         return None
     if not isinstance(value, dict):
-        logger.warning("Ignoring %s: expected a JSON object, got %s", name, type(value).__name__)
+        logger.warning(
+            "Ignoring %s: expected a JSON object, got %s", name, type(value).__name__
+        )
         return None
     return value
 
@@ -108,12 +110,13 @@ def get_llm_thinking(role: str = "default") -> dict[str, Any]:
         "extra_body": dict|None}``。
     """
     if role == "coder":
-        def _read(suffix: str) -> Optional[str]:
+
+        def _read(suffix: str) -> str | None:
             return _env_str(f"AGENTSOCIETY_CODER_LLM_{suffix}") or _env_str(
                 f"AGENTSOCIETY_LLM_{suffix}"
             )
 
-        def _read_json(suffix: str) -> Optional[dict[str, Any]]:
+        def _read_json(suffix: str) -> dict[str, Any] | None:
             coder_var = f"AGENTSOCIETY_CODER_LLM_{suffix}"
             if _env_str(coder_var) is not None:
                 return _env_json_obj(coder_var)
@@ -200,7 +203,7 @@ class Config:
     # Default LLM settings
     # These are used for general-purpose language model operations throughout the system.
 
-    LLM_API_KEY: Optional[str] = os.getenv("AGENTSOCIETY_LLM_API_KEY")
+    LLM_API_KEY: str | None = os.getenv("AGENTSOCIETY_LLM_API_KEY")
     """
     API key for authenticating with the default LLM service.
 
@@ -242,7 +245,7 @@ class Config:
     # Coder LLM settings
     # These are specifically optimized for code generation and programming tasks.
 
-    CODER_LLM_API_KEY: Optional[str] = (
+    CODER_LLM_API_KEY: str | None = (
         os.getenv("AGENTSOCIETY_CODER_LLM_API_KEY") or LLM_API_KEY
     )
     """
@@ -286,7 +289,7 @@ class Config:
     # Embedding model settings
     # These are used for converting text into vector embeddings for semantic search and similarity.
 
-    EMBEDDING_API_KEY: Optional[str] = (
+    EMBEDDING_API_KEY: str | None = (
         os.getenv("AGENTSOCIETY_EMBEDDING_API_KEY") or LLM_API_KEY
     )
     """
@@ -381,7 +384,7 @@ class Config:
     alone (the previous behavior).
     """
 
-    LLM_SLOW_LATENCY_MS: Optional[float] = (
+    LLM_SLOW_LATENCY_MS: float | None = (
         float(v) if (v := os.getenv("AGENTSOCIETY_LLM_SLOW_LATENCY_MS")) else None
     )
     """
@@ -451,7 +454,7 @@ class Config:
 
     # 推理（thinking）开关。这些类属性只是文档用途：实际解析发生在
     # :func:`get_llm_thinking` 调用时（读取 os.getenv），以便按角色回退与测试覆盖。
-    LLM_THINKING: Optional[str] = os.getenv("AGENTSOCIETY_LLM_THINKING")
+    LLM_THINKING: str | None = os.getenv("AGENTSOCIETY_LLM_THINKING")
     """
     是否启用模型推理（thinking）：``on`` / ``off``（兼容 ``1/0/true/false``）。
 
@@ -465,7 +468,7 @@ class Config:
     仅适用于 OpenAI 兼容 chat-completions 接口，不做模型族自动探测。
     """
 
-    LLM_REASONING_EFFORT: Optional[str] = os.getenv("AGENTSOCIETY_LLM_REASONING_EFFORT")
+    LLM_REASONING_EFFORT: str | None = os.getenv("AGENTSOCIETY_LLM_REASONING_EFFORT")
     """
     显式的 ``reasoning_effort`` 取值（``minimal`` / ``low`` / ``medium`` / ``high``）。
 
@@ -473,7 +476,7 @@ class Config:
     Default: unset（``off`` 时回退到 ``"minimal"``；``on`` 时不发送该字段）
     """
 
-    LLM_EXTRA_BODY: Optional[str] = os.getenv("AGENTSOCIETY_LLM_EXTRA_BODY")
+    LLM_EXTRA_BODY: str | None = os.getenv("AGENTSOCIETY_LLM_EXTRA_BODY")
     """
     网关私有的 OpenAI 兼容开关，JSON 对象字符串，合并进请求的 ``extra_body``。
 
@@ -485,7 +488,9 @@ class Config:
     warning 并忽略，不会中断实验。
     """
 
-    CODER_LLM_THINKING: Optional[str] = os.getenv("AGENTSOCIETY_CODER_LLM_THINKING") or LLM_THINKING
+    CODER_LLM_THINKING: str | None = (
+        os.getenv("AGENTSOCIETY_CODER_LLM_THINKING") or LLM_THINKING
+    )
     """
     ``AGENTSOCIETY_LLM_THINKING`` 的 coder 角色覆盖（env router 的代码生成）。
 
@@ -493,7 +498,7 @@ class Config:
     Default: 回退到 ``AGENTSOCIETY_LLM_THINKING``
     """
 
-    CODER_LLM_REASONING_EFFORT: Optional[str] = (
+    CODER_LLM_REASONING_EFFORT: str | None = (
         os.getenv("AGENTSOCIETY_CODER_LLM_REASONING_EFFORT") or LLM_REASONING_EFFORT
     )
     """
@@ -503,7 +508,7 @@ class Config:
     Default: 回退到 ``AGENTSOCIETY_LLM_REASONING_EFFORT``
     """
 
-    CODER_LLM_EXTRA_BODY: Optional[str] = (
+    CODER_LLM_EXTRA_BODY: str | None = (
         os.getenv("AGENTSOCIETY_CODER_LLM_EXTRA_BODY") or LLM_EXTRA_BODY
     )
     """
@@ -593,7 +598,9 @@ class Config:
             # Configure fallback chain: coder -> default
             fallbacks = [{coder_model: [default_model]}]
 
-            logger.debug("Coder router models: %s", [m.get("model_name") for m in model_list])
+            logger.debug(
+                "Coder router models: %s", [m.get("model_name") for m in model_list]
+            )
             return Router(
                 model_list=model_list,
                 fallbacks=fallbacks,
@@ -618,7 +625,9 @@ class Config:
                 },
             ]
 
-            logger.debug("Default router models: %s", [m.get("model_name") for m in model_list])
+            logger.debug(
+                "Default router models: %s", [m.get("model_name") for m in model_list]
+            )
             return Router(
                 model_list=model_list,
                 cache_responses=True,
@@ -672,8 +681,8 @@ if not Config.LLM_API_BASE:
 
 
 # Global router instances (lazy initialization)
-_default_router: Optional[Router] = None
-_coder_router: Optional[Router] = None
+_default_router: Router | None = None
+_coder_router: Router | None = None
 
 
 def get_llm_router(model_type: str = "default") -> Router:
@@ -720,7 +729,11 @@ def get_llm_connection(
     :returns: ``(base_url, api_key, model_name)``；未配置的用途 ``api_key`` 可能为 ``None``。
     """
     if model_type == "coder":
-        return Config.CODER_LLM_API_BASE, Config.CODER_LLM_API_KEY, Config.CODER_LLM_MODEL
+        return (
+            Config.CODER_LLM_API_BASE,
+            Config.CODER_LLM_API_KEY,
+            Config.CODER_LLM_MODEL,
+        )
     if model_type == "embedding":
         return (
             Config.EMBEDDING_API_BASE,

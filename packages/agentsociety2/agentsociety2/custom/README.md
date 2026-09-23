@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 import json
 
+
 class MyAgent(AgentBase):
     """我的自定义 Agent"""
 
@@ -63,12 +64,16 @@ class MyAgent(AgentBase):
         (workspace_path / "AGENT.json").write_text(
             json.dumps(
                 {"id": agent_id, "name": name, "profile": profile, "step_count": 0},
-                ensure_ascii=False, indent=2,
-            ), encoding="utf-8",
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
         )
 
     @classmethod
-    async def from_workspace(cls, workspace_path: Path, service_proxy: Any) -> "MyAgent":
+    async def from_workspace(
+        cls, workspace_path: Path, service_proxy: Any
+    ) -> "MyAgent":
         agent = cls()  # 无参 __init__（新契约）
         await agent.restore(workspace_path, service_proxy)
         return agent
@@ -89,13 +94,21 @@ class MyAgent(AgentBase):
         workspace_path = Path(workspace_path)
         (workspace_path / "AGENT.json").write_text(
             json.dumps(
-                {"id": self._id, "name": self._name, "profile": self.get_profile(),
-                 "step_count": getattr(self, "_step_count", 0)},
-                ensure_ascii=False, indent=2,
-            ), encoding="utf-8",
+                {
+                    "id": self._id,
+                    "name": self._name,
+                    "profile": self.get_profile(),
+                    "step_count": getattr(self, "_step_count", 0),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
         )
 
-    async def ask(self, message: str, readonly: bool = True, *, t: datetime | None = None) -> str:
+    async def ask(
+        self, message: str, readonly: bool = True, *, t: datetime | None = None
+    ) -> str:
         """回答问题"""
         prompt = f"问题：{message}\n请回答："
         response = await self.acompletion([{"role": "user", "content": prompt}])
@@ -117,6 +130,7 @@ class MyAgent(AgentBase):
 ```python
 from agentsociety2.env import EnvBase, tool
 from datetime import datetime
+
 
 class MyEnv(EnvBase):
     """我的自定义环境"""
@@ -228,10 +242,10 @@ curl -X POST http://localhost:8001/api/v1/custom/test \
 
 ```python
 @tool(
-    readonly=True,           # 是否只读
-    kind="observe",          # 工具类型: "observe", "statistics", 或 None
-    name="custom_name",      # 自定义工具名（可选）
-    description="描述"       # 工具描述（可选）
+    readonly=True,  # 是否只读
+    kind="observe",  # 工具类型: "observe", "statistics", 或 None
+    name="custom_name",  # 自定义工具名（可选）
+    description="描述",  # 工具描述（可选）
 )
 async def my_tool(self, agent_id: int) -> dict:
     """工具方法"""
@@ -308,6 +322,7 @@ description: One-line description of what this skill does.
 import argparse, json
 from pathlib import Path
 
+
 def dispatch(args: dict, workspace_root: Path) -> str:
     result = {"ok": True, "summary": f"ran (tick={args.get('tick')})"}
     state_dir = workspace_root / "state"
@@ -315,11 +330,13 @@ def dispatch(args: dict, workspace_root: Path) -> str:
     (state_dir / "result.json").write_text(json.dumps(result), encoding="utf-8")
     return json.dumps(result)
 
+
 def entrypoint(argv, ctx) -> str:
     parser = argparse.ArgumentParser()
     parser.add_argument("--args-json", default="{}")
     args = json.loads(parser.parse_args().args_json or "{}")
     return dispatch(args, Path(ctx.workspace_root))
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -327,6 +344,7 @@ def main() -> int:
     args = json.loads(parser.parse_args().args_json or "{}")
     print(dispatch(args, Path.cwd()))
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

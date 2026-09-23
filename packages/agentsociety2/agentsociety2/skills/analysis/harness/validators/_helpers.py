@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 from agentsociety2.skills.analysis.harness.models import (
     ValidationIssue,
@@ -10,7 +9,7 @@ from agentsociety2.skills.analysis.harness.models import (
 
 
 def blocked(
-    issues: List[ValidationIssue],
+    issues: list[ValidationIssue],
     *,
     recommended_next_step: str = "",
 ) -> ValidationResult:
@@ -25,7 +24,7 @@ def passed() -> ValidationResult:
 
 
 def merge_results(*results: ValidationResult) -> ValidationResult:
-    issues: List[ValidationIssue] = []
+    issues: list[ValidationIssue] = []
     for result in results:
         issues.extend(result.issues)
     if issues:

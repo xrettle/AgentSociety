@@ -226,7 +226,7 @@ class TodoState(BaseModel):
         return text or _now_iso()
 
     @model_validator(mode="after")
-    def _enforce_unique_ids_and_active(self) -> "TodoState":
+    def _enforce_unique_ids_and_active(self) -> TodoState:
         """状态级约束：TODO id 唯一，且最多只有一个 active。
 
         规则：

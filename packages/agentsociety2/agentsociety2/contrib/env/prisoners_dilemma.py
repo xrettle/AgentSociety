@@ -2,10 +2,11 @@
 Prisoner's Dilemma Game Environment
 Environment for Prisoner's Dilemma game based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional, Tuple
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -30,13 +31,22 @@ class GetPayoffMatrixResponse(BaseModel):
     """Response model for get_payoff_matrix() function"""
 
     payoff_cc: int = Field(..., description="Payoff when both cooperate")
-    payoff_cd: int = Field(..., description="Payoff when cooperate but opponent defects")
-    payoff_dc: int = Field(..., description="Payoff when defect but opponent cooperates")
+    payoff_cd: int = Field(
+        ..., description="Payoff when cooperate but opponent defects"
+    )
+    payoff_dc: int = Field(
+        ..., description="Payoff when defect but opponent cooperates"
+    )
     payoff_dd: int = Field(..., description="Payoff when both defect")
 
 
 class PrisonersDilemmaEnv(EnvBase):
     """Environment for Prisoner's Dilemma game based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _env_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("round_number", "INTEGER", nullable=False),
@@ -70,10 +80,10 @@ class PrisonersDilemmaEnv(EnvBase):
         self.payoff_dd = payoff_dd
 
         self.round_number = 0
-        self.round_history: List[dict] = []
+        self.round_history: list[dict] = []
 
         # Pending actions for current round (agent_name -> action)
-        self._pending_actions: Dict[str, str] = {}
+        self._pending_actions: dict[str, str] = {}
 
         self._lock = asyncio.Lock()
         self._step_counter: int = 0
@@ -145,7 +155,8 @@ class PrisonersDilemmaEnv(EnvBase):
     def description(cls) -> str:
         """Return a short module description."""
         return "Prisoner's Dilemma game environment for simultaneous cooperation/defection decisions."
-    def _calculate_payoff(self, action1: str, action2: str) -> Tuple[int, int]:
+
+    def _calculate_payoff(self, action1: str, action2: str) -> tuple[int, int]:
         """Calculate payoffs based on actions"""
         action1 = action1.capitalize()
         action2 = action2.capitalize()
@@ -199,7 +210,7 @@ class PrisonersDilemmaEnv(EnvBase):
             )
 
     @tool(readonly=True)
-    async def get_round_history(self, round_num: Optional[int] = None) -> List[dict]:
+    async def get_round_history(self, round_num: int | None = None) -> list[dict]:
         """
         Get round history.
 
@@ -209,9 +220,7 @@ class PrisonersDilemmaEnv(EnvBase):
         """
         async with self._lock:
             if round_num is not None:
-                return [
-                    r for r in self.round_history if r.get("round") == round_num
-                ]
+                return [r for r in self.round_history if r.get("round") == round_num]
             return self.round_history.copy()
 
     async def init(self, start_datetime: datetime):
@@ -297,5 +306,6 @@ class PrisonersDilemmaEnv(EnvBase):
             payoff_dd=self.payoff_dd,
         )
         self._step_counter += 1
+
 
 __all__ = ["PrisonersDilemmaEnv"]

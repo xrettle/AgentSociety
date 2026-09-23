@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List
-
 from agentsociety2.skills.analysis.harness.models import (
     AttestationStatus,
     PhaseAttestation,
@@ -14,7 +12,7 @@ from agentsociety2.skills.analysis.harness.validators._helpers import (
     passed,
 )
 
-PHASE_RUBRIC_KEYS: Dict[str, List[str]] = {
+PHASE_RUBRIC_KEYS: dict[str, list[str]] = {
     "frame": ["research_question_confirmed", "success_criteria"],
     "explore": ["tables_inspected", "data_limitations", "eda_takeaway"],
     "claims": ["claims_user_approved", "confirmatory_vs_exploratory_clear"],
@@ -33,7 +31,7 @@ PHASE_RUBRIC_KEYS: Dict[str, List[str]] = {
 
 
 def validate_attestation(att: PhaseAttestation) -> ValidationResult:
-    issues: List[ValidationIssue] = []
+    issues: list[ValidationIssue] = []
     phase = att.phase.strip()
     if phase not in PHASE_RUBRIC_KEYS:
         issues.append(

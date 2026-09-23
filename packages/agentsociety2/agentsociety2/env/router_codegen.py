@@ -14,7 +14,6 @@ import ast
 import asyncio
 import inspect
 import json
-from contextlib import nullcontext
 import math
 import os
 import pickle
@@ -23,21 +22,23 @@ import re
 import sys
 import time
 import types
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import StringIO
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol
 
 if TYPE_CHECKING:
     from agentsociety2.storage import ReplayWriter
 
 import faiss
 import numpy as np
+from litellm import AllMessageValues, aembedding
+
 from agentsociety2.config import Config
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.router_base import RouterBase
 from agentsociety2.logger import get_logger
-from litellm import AllMessageValues, aembedding
 
 __all__ = ["AskContext", "CodeGenRouter"]
 
@@ -45,7 +46,6 @@ __all__ = ["AskContext", "CodeGenRouter"]
 @dataclass
 class CacheStats:
     """缓存统计信息"""
-
 
     request_count: int = 0  # 总请求次数
     predefined_hit_count: int = 0  # 预定义指令命中次数（observe/statistics）
@@ -105,9 +105,9 @@ class CacheEntry:
     variable_keys: tuple[str, ...]  # 变量键的元组（用于子集检查）
     variable_types: dict[str, str]  # 变量类型字典 {key: type_name}
     code: str  # 生成的代码
-    embedding: Optional[np.ndarray] = None  # 指令的embedding（用于相似度计算）
+    embedding: np.ndarray | None = None  # 指令的embedding（用于相似度计算）
     env_class_type: str = ""  # 接入的env module classes指纹，仅一致时才能使用
-    entry_id: Optional[int] = None  # 数据库中的条目ID（持久化时使用）
+    entry_id: int | None = None  # 数据库中的条目ID（持久化时使用）
     success_count: int = 0  # 成功执行次数
     failure_count: int = 0  # 失败执行次数
     last_used: datetime = field(default_factory=datetime.now)  # 最后使用时间
@@ -168,9 +168,7 @@ class _EnsureAwaitTransformer(ast.NodeTransformer):
         func = node.func
         if isinstance(func, ast.Attribute) and func.attr in self._async_names:
             return True
-        if isinstance(func, ast.Name) and func.id in self._async_names:
-            return True
-        return False
+        return bool(isinstance(func, ast.Name) and func.id in self._async_names)
 
     def visit_Await(self, node: ast.Await) -> Any:
         """Don't visit the awaited Call itself (prevent double-wrap).
@@ -246,31 +244,29 @@ class AskContext:
     resolved_instruction: str = ""  # <observe>/<statistics> 解析后的实际指令
 
     # === Code 获取 (责任链) ===
-    code: Optional[str] = None
+    code: str | None = None
     cache_entry: Optional["CacheEntry"] = None
-    cache_miss_reason: Optional[str] = None
-    code_source: Optional[str] = None  # "predefined" | "cache" | "llm" | "builtin"
+    cache_miss_reason: str | None = None
+    code_source: str | None = None  # "predefined" | "cache" | "llm" | "builtin"
 
     # === LLM 重试状态 ===
     retry_count: int = 0
-    previous_code: Optional[str] = None
-    previous_errors: List[str] = field(default_factory=list)
-    dialog_history: List[AllMessageValues] = field(default_factory=list)
+    previous_code: str | None = None
+    previous_errors: list[str] = field(default_factory=list)
+    dialog_history: list[AllMessageValues] = field(default_factory=list)
 
     # === 执行结果 ===
-    execution_result: Optional[Dict[str, Any]] = None
+    execution_result: dict[str, Any] | None = None
     execution_attempted: bool = False  # 是否尝试过执行代码（供 observer 统计）
-    success_data: Optional[Dict[str, Any]] = (
+    success_data: dict[str, Any] | None = (
         None  # 成功时的 {ctx, instruction, results, process_text, status, error, code}
     )
 
     # === 输出 ===
     final_answer: str = ""
     results: dict = field(default_factory=dict)
-    early_return: Optional[Tuple[dict, str]] = (
-        None  # 非 None 表示提前返回，不再继续管道
-    )
-    token_usage_responses: List[Dict[str, int]] = field(
+    early_return: tuple[dict, str] | None = None  # 非 None 表示提前返回，不再继续管道
+    token_usage_responses: list[dict[str, int]] = field(
         default_factory=list
     )  # 每次 LLM 调用的 token 使用，供 observer 统计
 
@@ -360,7 +356,7 @@ def _strip_code_fence(text: str) -> str:
     return stripped
 
 
-def _compact_results_text(results: Dict[str, Any]) -> str:
+def _compact_results_text(results: dict[str, Any]) -> str:
     try:
         return json.dumps(
             results, ensure_ascii=False, separators=(",", ":"), default=str
@@ -370,7 +366,7 @@ def _compact_results_text(results: Dict[str, Any]) -> str:
 
 
 def _build_deterministic_final_answer(
-    router: "CodeGenRouter", success_data: Dict[str, Any]
+    router: "CodeGenRouter", success_data: dict[str, Any]
 ) -> str:
     time_tag = f"[{router.t.strftime('%A')}, {router.t.strftime('%Y-%m-%d %H:%M:%S')}]"
     status = success_data.get("status", "unknown")
@@ -426,7 +422,7 @@ class TemplateCacheDB:
 
     def load_entries(
         self, env_class_type: str
-    ) -> Tuple[List[CacheEntry], Optional["faiss.Index"], List[int]]:
+    ) -> tuple[list[CacheEntry], Optional["faiss.Index"], list[int]]:
         """
         加载指定 env_class_type 的缓存条目并构建 FAISS 索引。
         :returns: (entries, faiss_index, faiss_entry_indices)
@@ -437,9 +433,9 @@ class TemplateCacheDB:
             : self._max_size_per_env
         ]
 
-        entries: List[CacheEntry] = []
-        embeddings: List[np.ndarray] = []
-        entry_indices: List[int] = []
+        entries: list[CacheEntry] = []
+        embeddings: list[np.ndarray] = []
+        entry_indices: list[int] = []
 
         for i, e in enumerate(raw):
             e.env_class_type = env_class_type
@@ -509,7 +505,7 @@ class TemplateCacheDB:
         self,
         env_class_type: str,
         instruction_template: str,
-    ) -> Optional[CacheEntry]:
+    ) -> CacheEntry | None:
         """按 instruction_template 查找已有条目（用于更新而非新增）。"""
         data = self._load_data()
         lst = data.get("by_env", {}).get(env_class_type, [])
@@ -526,8 +522,7 @@ class TemplateCacheDB:
 class AskObserver(Protocol):
     """Ask流程观察者协议：流程结束后接收最终 context"""
 
-    async def on_final(self, context: AskContext) -> None:
-        ...
+    async def on_final(self, context: AskContext) -> None: ...
 
 
 # ==================== 责任链：Code 获取 ====================
@@ -543,7 +538,7 @@ class CodeProvider(Protocol):
 
     async def get_code(
         self, context: AskContext, router: "CodeGenRouter"
-    ) -> Optional[str]:
+    ) -> str | None:
         """返回代码则链终止，返回 None 则传递至下一节点"""
         ...
 
@@ -556,8 +551,7 @@ class PipelineStage(Protocol):
 
     async def process(
         self, context: AskContext, router: "CodeGenRouter"
-    ) -> AskContext:
-        ...
+    ) -> AskContext: ...
 
 
 # --- 观察者具体实现：统一在 on_final 中根据 context 记录 ---
@@ -683,7 +677,7 @@ class PredefinedCodeProvider:
 
     async def get_code(
         self, context: AskContext, router: "CodeGenRouter"
-    ) -> Optional[str]:
+    ) -> str | None:
         if not context.is_observe_or_statistics:
             return None
         if context.instruction_stripped == "<observe>":
@@ -703,7 +697,7 @@ class CacheCodeProvider:
     @staticmethod
     async def _compute_embedding(
         router: "CodeGenRouter", text: str
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         try:
             async with router._embedding_cache_lock:
                 if text in router._embedding_cache:
@@ -728,7 +722,7 @@ class CacheCodeProvider:
     @staticmethod
     async def _lookup(
         router: "CodeGenRouter", instruction: str, variables: dict
-    ) -> Tuple[Optional[CacheEntry], Optional[str]]:
+    ) -> tuple[CacheEntry | None, str | None]:
         if not router._template_cache_enabled:
             return None, "template_cache_disabled"
         async with router._template_cache_lock:
@@ -776,7 +770,7 @@ class CacheCodeProvider:
 
     async def get_code(
         self, context: AskContext, router: "CodeGenRouter"
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             not router._template_cache_enabled
             or not context.template_mode
@@ -895,7 +889,7 @@ else:
 Your generated code:"""
 
     @staticmethod
-    def _build_error_message(previous_errors: List[str]) -> str:
+    def _build_error_message(previous_errors: list[str]) -> str:
         errors_text = "\n".join(
             f"- {i + 1}. {e}" for i, e in enumerate(previous_errors)
         )
@@ -911,7 +905,7 @@ Please generate the corrected code:"""
     @staticmethod
     async def _call_llm(
         router: "CodeGenRouter", context: AskContext
-    ) -> Tuple[str, Optional[Dict[str, int]]]:
+    ) -> tuple[str, dict[str, int] | None]:
         try:
             response = await router.acompletion_with_system_prompt(
                 model="coder", messages=context.dialog_history
@@ -934,7 +928,7 @@ Please generate the corrected code:"""
 
     async def get_code(
         self, context: AskContext, router: "CodeGenRouter"
-    ) -> Optional[str]:
+    ) -> str | None:
         if context.retry_count == 0:
             prompt = self._build_prompt(
                 router,
@@ -962,9 +956,7 @@ Please generate the corrected code:"""
             # Layer 1 guard at generation time: ensure async tool calls use
             # ``await`` so the code stored in context.code (and thus in the
             # template cache) is already correct — no per-execution rewrite.
-            code = _ensure_await_async_calls(
-                code, _collect_async_tool_names(router)
-            )
+            code = _ensure_await_async_calls(code, _collect_async_tool_names(router))
         return code.strip() if code else None
 
 
@@ -1008,7 +1000,7 @@ class CodeStage:
         return False
 
     @staticmethod
-    def _validate_code_safety(router: "CodeGenRouter", code: str) -> Tuple[bool, str]:
+    def _validate_code_safety(router: "CodeGenRouter", code: str) -> tuple[bool, str]:
         violations = []
         try:
             tree = ast.parse(code, mode="exec")
@@ -1093,7 +1085,7 @@ class CodeStage:
     @staticmethod
     async def _execute_code(
         router: "CodeGenRouter", code: str, ctx: dict, readonly: bool
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         results = {}
 
         def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -1204,12 +1196,10 @@ class CodeStage:
                 "print_outputs": print_outputs,
                 "success": True,
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError(
                 "Code execution timeout: exceeded 10 seconds limit"
             ) from None
-        except TimeoutError:
-            raise
         except Exception as e:
             return {
                 "results": results,
@@ -1483,11 +1473,10 @@ class CodeGenRouter(RouterBase):
         template_cache_enabled: bool = True,  # 是否启用模板缓存
         template_cache_similarity_threshold: float = 0.85,  # 缓存相似度阈值
         template_cache_max_size: int = 1000,  # 单 env 类型最大缓存条目数
-        template_cache_dir: Optional[
-            str
-        ] = None,  # 缓存数据库目录，None 则用 {Config.HOME_DIR}/codegen_router_cache
+        template_cache_dir: str
+        | None = None,  # 缓存数据库目录，None 则用 {Config.HOME_DIR}/codegen_router_cache
         # Injected serializable LLM clients. See RouterBase.
-        llm_clients_spec: Optional[Dict[str, Any]] = None,
+        llm_clients_spec: dict[str, Any] | None = None,
     ):
         super().__init__(
             env_modules=env_modules,
@@ -1499,7 +1488,7 @@ class CodeGenRouter(RouterBase):
 
         # Pre-generate all tools code in a dictionary: key is (readonly, kind)
         # kind can be None, "observe", "statistics", etc.
-        self._tools_pyi_dict: Dict[Tuple[bool, str | None], str] = {}
+        self._tools_pyi_dict: dict[tuple[bool, str | None], str] = {}
 
         self._code_format = code_format
         self._max_body_code_lines = max_body_code_lines
@@ -1538,21 +1527,21 @@ class CodeGenRouter(RouterBase):
         )
         # 每步统计：用于计算 delta 并写入 JSONL
         self._cache_stats_jsonl_path = os.path.join(cache_dir, "cache_stats.jsonl")
-        self._prev_step_stats: Optional[CacheStats] = None
+        self._prev_step_stats: CacheStats | None = None
         self._step_index: int = 0
-        self._run_id: Optional[str] = None  # 在 init() 时设置，用于区分不同次模拟
+        self._run_id: str | None = None  # 在 init() 时设置，用于区分不同次模拟
 
         # 当前 env 的缓存集（从 DB 加载，在 init() 时填充）
-        self._cache_entries: List[CacheEntry] = []
-        self._cache_faiss_index: Optional[faiss.Index] = None
-        self._cache_faiss_entry_indices: List[int] = []
+        self._cache_entries: list[CacheEntry] = []
+        self._cache_faiss_index: faiss.Index | None = None
+        self._cache_faiss_entry_indices: list[int] = []
         self._template_cache_lock: asyncio.Lock = asyncio.Lock()
 
         # 缓存统计信息
         self._cache_stats = CacheStats()
 
         # Embedding缓存
-        self._embedding_cache: Dict[str, np.ndarray] = {}
+        self._embedding_cache: dict[str, np.ndarray] = {}
 
         # Embedding模型配置（从Config获取）
         self._embedding_model = Config.EMBEDDING_MODEL
@@ -1571,13 +1560,13 @@ class CodeGenRouter(RouterBase):
         self._embedding_cache_lock: asyncio.Lock = asyncio.Lock()
 
         # 观察者（缓存统计、instruction log、缓存写入）
-        self._observers: List[AskObserver] = [
+        self._observers: list[AskObserver] = [
             CacheStatsObserver(self),
             CacheAddObserver(self),
         ]
 
         # Code 获取责任链：Predefined -> Cache -> LLM（LLM 在 pipeline 中单独处理）
-        self._code_provider_chain: List[CodeProvider] = [
+        self._code_provider_chain: list[CodeProvider] = [
             PredefinedCodeProvider(),
             CacheCodeProvider(),
             LLMCodegenProvider(),
@@ -1623,16 +1612,18 @@ class CodeGenRouter(RouterBase):
         readonly_observe_tools_info = self._filter_tools_info(
             all_tools_info, readonly=True, kind="observe"
         )
-        self._tools_pyi_dict[(True, "observe")] = self._get_tools_code(
-            readonly_observe_tools_info
-        )
+        if readonly_observe_tools_info:
+            self._tools_pyi_dict[(True, "observe")] = self._get_tools_code(
+                readonly_observe_tools_info
+            )
 
         readonly_statistics_tools_info = self._filter_tools_info(
             all_tools_info, readonly=True, kind="statistics"
         )
-        self._tools_pyi_dict[(True, "statistics")] = self._get_tools_code(
-            readonly_statistics_tools_info
-        )
+        if readonly_statistics_tools_info:
+            self._tools_pyi_dict[(True, "statistics")] = self._get_tools_code(
+                readonly_statistics_tools_info
+            )
 
     async def _notify_observers_final(self, context: AskContext) -> None:
         """流程结束后，将最终 context 交给所有观察者记录"""
@@ -1647,7 +1638,7 @@ class CodeGenRouter(RouterBase):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """
         使用代码生成方式处理指令。通过管道-过滤器架构执行。
 
@@ -1671,7 +1662,7 @@ class CodeGenRouter(RouterBase):
         agent_id = ctx.get("agent_id") if isinstance(ctx, dict) else None
         _trace_token = self._set_trace_context(trace_id, parent_span_id, agent_id)
         try:
-            stages: List[PipelineStage] = [
+            stages: list[PipelineStage] = [
                 InitStage(),
                 CodeStage(),  # 代码获取 + 验证 + 执行
                 SummaryStage(),
@@ -1730,7 +1721,6 @@ class CodeGenRouter(RouterBase):
         """Run forward one step for all simulation modules."""
         await super().step(tick, t)
 
-
     async def _generate_initialization_code_with_retry(
         self,
         instruction: str,
@@ -1741,9 +1731,9 @@ class CodeGenRouter(RouterBase):
         llm_provider = LLMCodegenProvider()
         code_stage = CodeStage()
         prompt = llm_provider._build_prompt(self, instruction, ctx, True, kind)
-        dialog_history: List[AllMessageValues] = [{"role": "user", "content": prompt}]
-        previous_code: Optional[str] = None
-        previous_errors: List[str] = []
+        dialog_history: list[AllMessageValues] = [{"role": "user", "content": prompt}]
+        previous_code: str | None = None
+        previous_errors: list[str] = []
         retry_count = 0
 
         while retry_count <= self.max_llm_call_retry:

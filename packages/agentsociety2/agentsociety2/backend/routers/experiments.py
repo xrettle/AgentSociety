@@ -10,16 +10,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from agentsociety2.backend.path_security import (
+    require_safe_segment,
     resolve_artifact_path,
     resolve_experiment_dir,
     resolve_under_root,
-    require_safe_segment,
 )
 from agentsociety2.logger import get_logger
 from agentsociety2.storage.replay_metadata import AGENT_PROFILE_DATASET_CAPABILITY
@@ -29,6 +31,67 @@ logger = get_logger()
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 
+_LOG_CANDIDATES = ("output.log", "stderr.log")
+_DEFAULT_LOG_TAIL_LINES = 2000
+_MAX_LOG_TAIL_LINES = 100_000
+_LOG_READ_CHUNK = 64 * 1024
+
+
+def _resolve_experiment_log_path(run_dir: Path, source: str) -> Path:
+    """Pick the log file under ``run/`` for the requested source."""
+    if source == "auto":
+        for name in _LOG_CANDIDATES:
+            candidate = run_dir / name
+            if candidate.is_file():
+                return candidate
+        raise HTTPException(status_code=404, detail="Experiment log not found")
+    if source not in _LOG_CANDIDATES:
+        raise HTTPException(status_code=400, detail=f"Unsupported log source: {source}")
+    path = run_dir / source
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"Log file not found: {source}")
+    return path
+
+
+def read_log_tail(path: Path, *, tail: int) -> str:
+    """Return the last ``tail`` lines of ``path`` without loading the whole file.
+
+    Reads backward in fixed-size chunks from EOF until enough newlines are
+    found (or the file starts). Suitable for multi-MB ``output.log`` files.
+
+    :param path: Log file path.
+    :param tail: Number of trailing lines to keep (must be ``>= 1``).
+    :returns: Trailing text, preserving a final newline when the source had one.
+    :raises ValueError: If ``tail < 1``.
+    """
+    if tail < 1:
+        raise ValueError("tail must be >= 1")
+    size = path.stat().st_size
+    if size == 0:
+        return ""
+
+    newline_target = max(tail - 1, 0)
+    chunks: list[bytes] = []
+    newlines = 0
+    with path.open("rb") as fh:
+        pos = size
+        while pos > 0 and newlines <= newline_target:
+            read_size = min(_LOG_READ_CHUNK, pos)
+            pos -= read_size
+            fh.seek(pos)
+            block = fh.read(read_size)
+            chunks.append(block)
+            newlines += block.count(b"\n")
+            if pos == 0:
+                break
+
+    data = b"".join(reversed(chunks))
+    text = data.decode("utf-8", errors="replace")
+    lines = text.splitlines()
+    if len(lines) > tail:
+        lines = lines[-tail:]
+    return "\n".join(lines) + ("\n" if text.endswith("\n") and lines else "")
+
 
 class ExperimentInfo(BaseModel):
     """实验信息。"""
@@ -36,8 +99,8 @@ class ExperimentInfo(BaseModel):
     experiment_id: str
     hypothesis_id: str
     status: str
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    start_time: str | None = None
+    end_time: str | None = None
     agent_count: int
     step_count: int
 
@@ -50,7 +113,7 @@ def _get_experiment_path(
     return resolve_experiment_dir(workspace_path, hypothesis_id, experiment_id)
 
 
-def _list_agent_state_datasets(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _list_agent_state_datasets(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items = [
         dataset
         for dataset in datasets
@@ -69,8 +132,8 @@ def _list_agent_state_datasets(datasets: List[Dict[str, Any]]) -> List[Dict[str,
 
 
 def _get_agent_profile_dataset(
-    datasets: List[Dict[str, Any]],
-) -> Optional[Dict[str, Any]]:
+    datasets: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     candidates = [
         dataset
         for dataset in datasets
@@ -81,7 +144,7 @@ def _get_agent_profile_dataset(
     return candidates[0] if candidates else None
 
 
-def _get_timeline_dataset(datasets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _get_timeline_dataset(datasets: list[dict[str, Any]]) -> dict[str, Any] | None:
     agent_datasets = [
         dataset
         for dataset in _list_agent_state_datasets(datasets)
@@ -195,7 +258,7 @@ async def list_artifacts(
     hypothesis_id: str,
     experiment_id: str,
     workspace_path: str = Query(..., description="Workspace directory path"),
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """列出实验运行过程中生成的 Markdown 产出文件。"""
 
     # Validate path parameters at the API boundary
@@ -226,7 +289,7 @@ async def get_artifact(
     experiment_id: str,
     artifact_name: str,
     workspace_path: str = Query(..., description="Workspace directory path"),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """获取指定 Markdown 产出文件内容。"""
 
     artifact_path = resolve_artifact_path(
@@ -236,3 +299,38 @@ async def get_artifact(
         "name": artifact_name,
         "content": artifact_path.read_text(encoding="utf-8"),
     }
+
+
+@router.get(
+    "/{hypothesis_id}/{experiment_id}/log",
+    response_class=PlainTextResponse,
+)
+async def get_experiment_log(
+    hypothesis_id: str,
+    experiment_id: str,
+    workspace_path: str = Query(..., description="Workspace directory path"),
+    tail: int = Query(
+        _DEFAULT_LOG_TAIL_LINES,
+        ge=1,
+        le=_MAX_LOG_TAIL_LINES,
+        description="Return only the last N lines of the log",
+    ),
+    source: str = Query(
+        "auto",
+        description="Log file: auto | output.log | stderr.log",
+    ),
+) -> PlainTextResponse:
+    """Return the tail of an experiment run log (``run/output.log`` by default)."""
+
+    require_safe_segment(hypothesis_id, field="hypothesis_id")
+    require_safe_segment(experiment_id, field="experiment_id")
+    exp_path = _get_experiment_path(workspace_path, hypothesis_id, experiment_id)
+    run_dir = exp_path / "run"
+    if not run_dir.is_dir():
+        raise HTTPException(
+            status_code=404, detail="Experiment run directory not found"
+        )
+
+    log_path = _resolve_experiment_log_path(run_dir, source)
+    content = await asyncio.to_thread(read_log_tail, log_path, tail=tail)
+    return PlainTextResponse(content)

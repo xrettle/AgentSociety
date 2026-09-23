@@ -1,20 +1,10 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 import { Navigate, createBrowserRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
-import { ConfigProvider, ThemeConfig } from 'antd'
+import { ConfigProvider, Spin, ThemeConfig } from 'antd'
 import RootLayout from './Layout'
-import Console from './pages/Console/index'
-import Replay from './pages/Replay/index'
-import Survey from './pages/Survey/index'
-import LLM from './pages/LLM'
-import AgentList from './pages/Agent/'
-import WorkflowList from './pages/Workflow'
-import Map from './pages/Map'
-import CreateExperiment from './pages/Experiment/CreateExperiment'
-import ProfileList from './pages/AgentProfile'
-import AgentTemplate from './pages/AgentTemplate/AgentTemplateList'
 import Home from './pages/Home'
 import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
@@ -22,10 +12,31 @@ import Callback from './pages/Callback'
 import { AuthProvider, sdkConfig } from './components/Auth'
 import './i18n'
 import { useTranslation } from 'react-i18next'
-import Bill from './pages/Bill'
-import AgentTemplateForm from './pages/AgentTemplate/AgentTemplateForm'
-import Skills from './pages/Skills'
 import { WITH_AUTH } from './components/fetch'
+
+const Console = lazy(() => import('./pages/Console/index'))
+const Replay = lazy(() => import('./pages/Replay/index'))
+const Survey = lazy(() => import('./pages/Survey/index'))
+const LLM = lazy(() => import('./pages/LLM'))
+const AgentList = lazy(() => import('./pages/Agent/'))
+const WorkflowList = lazy(() => import('./pages/Workflow'))
+const Map = lazy(() => import('./pages/Map'))
+const CreateExperiment = lazy(() => import('./pages/Experiment/CreateExperiment'))
+const ProfileList = lazy(() => import('./pages/AgentProfile'))
+const AgentTemplate = lazy(() => import('./pages/AgentTemplate/AgentTemplateList'))
+const Bill = lazy(() => import('./pages/Bill'))
+const AgentTemplateForm = lazy(() => import('./pages/AgentTemplate/AgentTemplateForm'))
+const Skills = lazy(() => import('./pages/Skills'))
+
+const routeFallback = (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+        <Spin size="large" />
+    </div>
+)
+
+const withSuspense = (node: React.ReactNode) => (
+    <Suspense fallback={routeFallback}>{node}</Suspense>
+)
 
 const authProvider = (children: React.ReactNode) => {
     if (WITH_AUTH) {
@@ -47,7 +58,7 @@ const router = createBrowserRouter([
         path: "/console",
         element: (
             authProvider(
-                <RootLayout selectedKey='/console'><Console /></RootLayout>
+                <RootLayout selectedKey='/console'>{withSuspense(<Console />)}</RootLayout>
             )
         ),
     },
@@ -55,7 +66,7 @@ const router = createBrowserRouter([
         path: "/exp/:id",
         element: (
             authProvider(
-                <RootLayout selectedKey='/console'><Replay /></RootLayout>
+                <RootLayout selectedKey='/console'>{withSuspense(<Replay />)}</RootLayout>
             )
         ),
     },
@@ -63,7 +74,7 @@ const router = createBrowserRouter([
         path: "/survey",
         element: (
             authProvider(
-                <RootLayout selectedKey='/survey'><Survey /></RootLayout>
+                <RootLayout selectedKey='/survey'>{withSuspense(<Survey />)}</RootLayout>
             )
         ),
     },
@@ -71,7 +82,7 @@ const router = createBrowserRouter([
         path: "/create-experiment",
         element: (
             authProvider(
-                <RootLayout selectedKey='/create-experiment'><CreateExperiment /></RootLayout>
+                <RootLayout selectedKey='/create-experiment'>{withSuspense(<CreateExperiment />)}</RootLayout>
             )
         ),
     },
@@ -79,7 +90,7 @@ const router = createBrowserRouter([
         path: "/llms",
         element: (
             authProvider(
-                <RootLayout selectedKey='/llms'><LLM /></RootLayout>
+                <RootLayout selectedKey='/llms'>{withSuspense(<LLM />)}</RootLayout>
             )
         ),
     },
@@ -87,7 +98,7 @@ const router = createBrowserRouter([
         path: "/agents",
         element: (
             authProvider(
-                <RootLayout selectedKey='/agents'><AgentList /></RootLayout>
+                <RootLayout selectedKey='/agents'>{withSuspense(<AgentList />)}</RootLayout>
             )
         ),
     },
@@ -95,7 +106,7 @@ const router = createBrowserRouter([
         path: "/profiles",
         element: (
             authProvider(
-                <RootLayout selectedKey='/profiles'><ProfileList /></RootLayout>
+                <RootLayout selectedKey='/profiles'>{withSuspense(<ProfileList />)}</RootLayout>
             )
         ),
     },
@@ -103,7 +114,7 @@ const router = createBrowserRouter([
         path: "/workflows",
         element: (
             authProvider(
-                <RootLayout selectedKey='/workflows'><WorkflowList /></RootLayout>
+                <RootLayout selectedKey='/workflows'>{withSuspense(<WorkflowList />)}</RootLayout>
             )
         ),
     },
@@ -111,7 +122,7 @@ const router = createBrowserRouter([
         path: "/maps",
         element: (
             authProvider(
-                <RootLayout selectedKey='/maps'><Map /></RootLayout>
+                <RootLayout selectedKey='/maps'>{withSuspense(<Map />)}</RootLayout>
             )
         ),
     },
@@ -119,7 +130,7 @@ const router = createBrowserRouter([
         path: "/bill",
         element: (
             authProvider(
-                <RootLayout selectedKey='/bill'><Bill /></RootLayout>
+                <RootLayout selectedKey='/bill'>{withSuspense(<Bill />)}</RootLayout>
             )
         ),
     },
@@ -131,7 +142,7 @@ const router = createBrowserRouter([
         path: "/agent-templates",
         element: (
             authProvider(
-                <RootLayout selectedKey='/agent-templates'><AgentTemplate /></RootLayout>
+                <RootLayout selectedKey='/agent-templates'>{withSuspense(<AgentTemplate />)}</RootLayout>
             )
         ),
     },
@@ -139,7 +150,7 @@ const router = createBrowserRouter([
         path: "/agent-templates/create",
         element: (
             authProvider(
-                <RootLayout selectedKey='/agent-templates'><AgentTemplateForm /></RootLayout>
+                <RootLayout selectedKey='/agent-templates'>{withSuspense(<AgentTemplateForm />)}</RootLayout>
             )
         ),
     },
@@ -147,7 +158,7 @@ const router = createBrowserRouter([
         path: "/agent-templates/edit/:id",
         element: (
             authProvider(
-                <RootLayout selectedKey='/agent-templates'><AgentTemplateForm /></RootLayout>
+                <RootLayout selectedKey='/agent-templates'>{withSuspense(<AgentTemplateForm />)}</RootLayout>
             )
         ),
     },
@@ -155,7 +166,7 @@ const router = createBrowserRouter([
         path: "/skills",
         element: (
             authProvider(
-                <RootLayout selectedKey='/skills'><Skills /></RootLayout>
+                <RootLayout selectedKey='/skills'>{withSuspense(<Skills />)}</RootLayout>
             )
         ),
     },

@@ -37,10 +37,10 @@
 """
 
 from agentsociety2.skills import (
-    literature,
+    analysis,
     experiment,
     hypothesis,
-    analysis,
+    literature,
 )
 
 __all__ = [

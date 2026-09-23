@@ -8,11 +8,11 @@ from .report_quality import validate_report_quality
 from .synthesis import validate_synthesis
 
 __all__ = [
-    "validate_plan",
-    "validate_explore",
-    "validate_claims",
     "validate_chart_file",
     "validate_chart_script",
+    "validate_claims",
+    "validate_explore",
+    "validate_plan",
     "validate_refine",
     "validate_release",
     "validate_report_quality",

@@ -1,6 +1,7 @@
 """Analysis tool layer: data access, execution helpers, output helpers, and path utilities."""
 
-from .data import ContextLoader, DataReader, DataStats, DataSummary, DatabaseSchema
+from .chart_export import export_altair_html, export_plotly_html, export_pygwalker_html
+from .data import ContextLoader, DatabaseSchema, DataReader, DataStats, DataSummary
 from .executor import ExecutionResult, ToolInfo, ToolResult
 from .models import (
     AnalysisResult,
@@ -14,7 +15,6 @@ from .models import (
     ReportContent,
     SynthesisPaths,
 )
-from .chart_export import export_altair_html, export_plotly_html, export_pygwalker_html
 from .output import AssetManager, EDAGenerator, ReportPaths
 from .utils import (
     collect_experiment_files,
@@ -34,9 +34,6 @@ __all__ = [
     "DataSummary",
     "DatabaseSchema",
     "EDAGenerator",
-    "export_altair_html",
-    "export_plotly_html",
-    "export_pygwalker_html",
     "ExecutionResult",
     "ExperimentContext",
     "ExperimentDesign",
@@ -52,6 +49,9 @@ __all__ = [
     "ToolResult",
     "collect_experiment_files",
     "experiment_paths",
+    "export_altair_html",
+    "export_plotly_html",
+    "export_pygwalker_html",
     "extract_database_schema",
     "format_database_schema_markdown",
     "presentation_paths",

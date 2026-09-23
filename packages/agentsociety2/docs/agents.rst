@@ -124,7 +124,7 @@ ReAct 工具循环
    * - ``execute_skill_script``
      - 执行 skill 脚本（默认进程内 ``entrypoint``，见 :doc:`agent_skills`）。
    * - ``ask_env``
-     - 向环境 router 发请求（查询或修改环境），返回答案。
+     - 向环境 router 发请求（查询或修改环境），返回 ``(ctx, answer)`` 二元组。
    * - ``finish``
      - 结束当前仿真步（可附 summary）。
 
@@ -179,8 +179,9 @@ TODO 条目用 UUID 标识，自动归档，可通过 ``dispatch_todo_tool`` 分
        └── step_replay.jsonl
 
 ``config.json`` 是静态的；``AGENT.json`` 由 ``persist_agent_json``（调 ``build_agent_json``）在
-``to_workspace`` 时写回，是 agent 对自己的自描述快照。线程与工具日志位于 ``.runtime/logs/``。
-跨 step 的运行时摘要见 ``AGENT_MEMORY.md``。
+``to_workspace`` 时写回，是 agent 对自己的自描述快照（含 ``world_description`` 等字段，供 Ray
+重建时从磁盘恢复；注入 prompt 的 ``<agent>`` 视图会剥离该字段以免与 ``<world>`` 重复）。
+线程与工具日志位于 ``.runtime/logs/``。跨 step 的运行时摘要见 ``AGENT_MEMORY.md``。
 
 
 .. _agent-config:

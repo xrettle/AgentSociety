@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import { localize } from './i18n';
+import { localize, isExtensionZh } from './i18n';
 
 const HYPOTHESIS_PHASES = ['frame', 'explore', 'claims', 'refine', 'produce'] as const;
 
@@ -123,7 +123,7 @@ export class AnalysisHarnessStatusViewer {
       return;
     }
 
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     const title =
       scope === 'synthesis'
         ? localize('extension.viewAnalysisHarness.titleSynthesis')

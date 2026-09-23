@@ -50,7 +50,7 @@ Pipeline: `run-eda`/`run-code` → `sync-report-assets` → `assets/` only in re
 | Table      | pipe table or small HTML                                | `.table-wrap` + `.data-table`                                       |
 | EDA        | bullets + summary table in §数据                        | tab **摘要** + iframe `data/eda_hub.html` (see `references/eda.md`) |
 
-Never reference `charts/` in final report body. Numbers must trace to `sqlite.db` or registered artifacts.
+Never reference `charts/` in final report body. Numbers must trace to replay datasets (`run/replay/` + DuckDB/`ReplayReader`) or registered artifacts; legacy `sqlite.db` only for old runs.
 
 ## HTML blocks (from shell)
 

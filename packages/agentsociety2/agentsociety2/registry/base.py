@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Type, Optional, Any
-from pathlib import Path
 import inspect
 import os
+from pathlib import Path
+from typing import Any, Self
 
 from agentsociety2.agent.base import AgentBase
-from agentsociety2.env.base import EnvBase
 from agentsociety2.backend.path_security import resolve_workspace_root
+from agentsociety2.env.base import EnvBase
 from agentsociety2.logger import get_logger
 
 logger = get_logger()
@@ -26,9 +26,9 @@ class ModuleRegistry:
     默认启用惰性加载：只有在第一次访问 registry 内容时才触发发现与注册。
     """
 
-    _instance: Optional["ModuleRegistry"] = None
+    _instance: ModuleRegistry | None = None
 
-    def __new__(cls) -> "ModuleRegistry":
+    def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -39,9 +39,9 @@ class ModuleRegistry:
             return
 
         self._initialized = True
-        self._env_modules: Dict[str, Type[EnvBase]] = {}
-        self._agent_modules: Dict[str, Type[AgentBase]] = {}
-        self._workspace_path: Optional[Path] = None
+        self._env_modules: dict[str, type[EnvBase]] = {}
+        self._agent_modules: dict[str, type[AgentBase]] = {}
+        self._workspace_path: Path | None = None
 
         # Lazy loading flags
         self._builtin_loaded: bool = False
@@ -86,19 +86,19 @@ class ModuleRegistry:
         self._ensure_custom_loaded()
 
     @property
-    def env_modules(self) -> Dict[str, Type[EnvBase]]:
+    def env_modules(self) -> dict[str, type[EnvBase]]:
         """返回已注册环境模块映射，并在访问时触发惰性加载。"""
         self._ensure_loaded()
         return self._env_modules.copy()
 
     @property
-    def agent_modules(self) -> Dict[str, Type[AgentBase]]:
+    def agent_modules(self) -> dict[str, type[AgentBase]]:
         """返回已注册 agent 映射，并在访问时触发惰性加载。"""
         self._ensure_loaded()
         return self._agent_modules.copy()
 
     def register_env_module(
-        self, module_type: str, module_class: Type[EnvBase], is_custom: bool = False
+        self, module_type: str, module_class: type[EnvBase], is_custom: bool = False
     ) -> None:
         """注册环境模块。
 
@@ -114,7 +114,7 @@ class ModuleRegistry:
         logger.debug(f"Registered env module: {module_type} -> {module_class.__name__}")
 
     def register_agent_module(
-        self, agent_type: str, agent_class: Type[AgentBase], is_custom: bool = False
+        self, agent_type: str, agent_class: type[AgentBase], is_custom: bool = False
     ) -> None:
         """注册 agent。
 
@@ -129,7 +129,7 @@ class ModuleRegistry:
         self._agent_modules[agent_type] = agent_class
         logger.debug(f"Registered agent: {agent_type} -> {agent_class.__name__}")
 
-    def get_env_module(self, module_type: str) -> Optional[Type[EnvBase]]:
+    def get_env_module(self, module_type: str) -> type[EnvBase] | None:
         """按 type 获取环境模块类（会触发惰性加载）。
 
         :param module_type: type identifier。
@@ -138,7 +138,7 @@ class ModuleRegistry:
         self._ensure_loaded()
         return self._env_modules.get(module_type)
 
-    def get_agent_module(self, agent_type: str) -> Optional[Type[AgentBase]]:
+    def get_agent_module(self, agent_type: str) -> type[AgentBase] | None:
         """按 type 获取 agent 类（会触发惰性加载）。
 
         :param agent_type: type identifier。
@@ -147,12 +147,12 @@ class ModuleRegistry:
         self._ensure_loaded()
         return self._agent_modules.get(agent_type)
 
-    def list_env_modules(self) -> List[Tuple[str, Type[EnvBase]]]:
+    def list_env_modules(self) -> list[tuple[str, type[EnvBase]]]:
         """返回已注册环境模块列表，并在访问时触发惰性加载。"""
         self._ensure_loaded()
         return list(self._env_modules.items())
 
-    def list_agent_modules(self) -> List[Tuple[str, Type[AgentBase]]]:
+    def list_agent_modules(self) -> list[tuple[str, type[AgentBase]]]:
         """返回已注册 agent 列表，并在访问时触发惰性加载。"""
         self._ensure_loaded()
         return list(self._agent_modules.items())
@@ -167,7 +167,7 @@ class ModuleRegistry:
         self._custom_loaded = False
         logger.debug(f"Registry workspace set to: {self._workspace_path}")
 
-    def _resolve_workspace_path(self) -> Optional[Path]:
+    def _resolve_workspace_path(self) -> Path | None:
         """返回用于 custom 模块发现的 workspace 路径；若无法推断则返回 ``None``。"""
 
         if self._workspace_path is not None:
@@ -230,7 +230,7 @@ class ModuleRegistry:
 
         logger.info(f"Cleared {len(to_remove)} custom modules")
 
-    def get_module_info(self, module_type: str, kind: str) -> Dict[str, Any]:
+    def get_module_info(self, module_type: str, kind: str) -> dict[str, Any]:
         """获取模块信息（会触发惰性加载）。
 
         :param module_type: type identifier。
@@ -295,7 +295,7 @@ class ModuleRegistry:
 
 
 # Global registry instance
-_registry: Optional[ModuleRegistry] = None
+_registry: ModuleRegistry | None = None
 
 
 def get_registry() -> ModuleRegistry:

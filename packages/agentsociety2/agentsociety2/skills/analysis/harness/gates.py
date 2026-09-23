@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from agentsociety2.skills.analysis.harness.attestation import PHASE_RUBRIC_KEYS, validate_attestation
+from agentsociety2.skills.analysis.harness.attestation import (
+    PHASE_RUBRIC_KEYS,
+    validate_attestation,
+)
 from agentsociety2.skills.analysis.harness.models import (
     HYPOTHESIS_PHASE_ORDER,
     AnalysisPhase,
@@ -19,10 +22,10 @@ from agentsociety2.skills.analysis.harness.validators._helpers import issue
 def prior_phase_gate_issues(
     state: HypothesisAnalysisState,
     target: AnalysisPhase,
-) -> List[ValidationIssue]:
+) -> list[ValidationIssue]:
     """All phases before ``target`` must have gate_pass on checkpoint."""
     idx = HYPOTHESIS_PHASE_ORDER.index(target)
-    issues: List[ValidationIssue] = []
+    issues: list[ValidationIssue] = []
     for prior in HYPOTHESIS_PHASE_ORDER[:idx]:
         cp = state.phase_checkpoints.get(prior.value)
         if cp is None or not cp.gate_pass:
@@ -51,14 +54,14 @@ def evaluate_hypothesis_gate(
     *,
     state: HypothesisAnalysisState,
     structural_result,
-    attestation: Optional[PhaseAttestation] = None,
+    attestation: PhaseAttestation | None = None,
 ) -> GateReport:
     cp = _checkpoint(state, phase)
-    structural_issues: List[ValidationIssue] = list(structural_result.issues)
+    structural_issues: list[ValidationIssue] = list(structural_result.issues)
     cp.structural_pass = structural_result.status == "PASS"
     cp.structural_issues = [i.code for i in structural_issues]
 
-    attestation_issues: List[ValidationIssue] = []
+    attestation_issues: list[ValidationIssue] = []
     cp.attestation_required = True
     if attestation is None:
         attestation = state.phase_attestations.get(phase)
@@ -105,12 +108,12 @@ def evaluate_synthesis_gate(
     *,
     state: SynthesisAnalysisState,
     structural_result,
-    attestation: Optional[PhaseAttestation] = None,
+    attestation: PhaseAttestation | None = None,
 ) -> GateReport:
     phase = "synthesis"
     if attestation is None:
         attestation = state.phase_attestation
-    attestation_issues: List[ValidationIssue] = []
+    attestation_issues: list[ValidationIssue] = []
     attestation_pass = False
     if attestation is None:
         attestation_issues.append(
@@ -142,7 +145,7 @@ def evaluate_synthesis_gate(
     )
 
 
-def gate_status_hypothesis(state: HypothesisAnalysisState) -> Dict[str, Any]:
+def gate_status_hypothesis(state: HypothesisAnalysisState) -> dict[str, Any]:
     phases = [p.value for p in AnalysisPhase]
     rows = []
     for ph in phases:
@@ -165,7 +168,7 @@ def gate_status_hypothesis(state: HypothesisAnalysisState) -> Dict[str, Any]:
     current_cp = state.phase_checkpoints.get(
         state.current_phase.value, PhaseCheckpoint(phase=state.current_phase.value)
     )
-    blocked_by: List[str] = []
+    blocked_by: list[str] = []
     if not current_cp.structural_pass:
         blocked_by.append("structural")
     if not current_cp.attestation_pass:
@@ -180,7 +183,7 @@ def gate_status_hypothesis(state: HypothesisAnalysisState) -> Dict[str, Any]:
     }
 
 
-def _next_phase(state: HypothesisAnalysisState) -> Optional[str]:
+def _next_phase(state: HypothesisAnalysisState) -> str | None:
     order = list(AnalysisPhase)
     idx = order.index(state.current_phase)
     cp = state.phase_checkpoints.get(state.current_phase.value)

@@ -2,11 +2,12 @@
 Trust Game Environment
 Environment for Trust Game based on AgentSociety2
 """
+
 import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -26,7 +27,9 @@ class SubmitInvestmentResponse(BaseModel):
     trustor_name: str = Field(..., description="Trustor name")
     investment: int = Field(..., description="Investment amount")
     status: str = Field(..., description="Status: 'success' if submitted successfully")
-    message: str = Field(default="", description="Human-readable message about the submission")
+    message: str = Field(
+        default="", description="Human-readable message about the submission"
+    )
 
 
 class SubmitReturnResponse(BaseModel):
@@ -35,7 +38,9 @@ class SubmitReturnResponse(BaseModel):
     trustee_name: str = Field(..., description="Trustee name")
     return_amount: int = Field(..., description="Return amount")
     status: str = Field(..., description="Status: 'success' if submitted successfully")
-    message: str = Field(default="", description="Human-readable message about the return")
+    message: str = Field(
+        default="", description="Human-readable message about the return"
+    )
 
 
 class GetPairDataResponse(BaseModel):
@@ -54,12 +59,22 @@ class GetPendingInvestmentResponse(BaseModel):
     """Response model for get_pending_investment() function"""
 
     trustor_name: str = Field(..., description="Trustor name")
-    investment: Optional[int] = Field(None, description="Pending investment amount, None if not submitted yet")
-    received_amount: Optional[float] = Field(None, description="Amount that trustee would receive (investment * multiplication_factor)")
+    investment: int | None = Field(
+        None, description="Pending investment amount, None if not submitted yet"
+    )
+    received_amount: float | None = Field(
+        None,
+        description="Amount that trustee would receive (investment * multiplication_factor)",
+    )
 
 
 class TrustGameEnv(EnvBase):
     """Environment for Trust Game based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _env_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("round_number", "INTEGER", nullable=False),
@@ -91,12 +106,14 @@ class TrustGameEnv(EnvBase):
         self.multiplication_factor = multiplication_factor
 
         self.round_number = 0
-        self.round_history: List[dict] = []
-        self.partner_mapping: Dict[str, str] = {}  # trustor_name -> trustee_name, trustee_name -> trustor_name
+        self.round_history: list[dict] = []
+        self.partner_mapping: dict[
+            str, str
+        ] = {}  # trustor_name -> trustee_name, trustee_name -> trustor_name
 
         # Pending decisions for current round
-        self._pending_investments: Dict[str, int] = {}  # trustor_name -> investment
-        self._pending_returns: Dict[str, int] = {}  # trustee_name -> return_amount
+        self._pending_investments: dict[str, int] = {}  # trustor_name -> investment
+        self._pending_returns: dict[str, int] = {}  # trustee_name -> return_amount
 
         self._lock = asyncio.Lock()
         self._step_counter: int = 0
@@ -165,12 +182,15 @@ class TrustGameEnv(EnvBase):
     @classmethod
     def description(cls) -> str:
         """Return a short module description."""
-        return "Trust Game environment for trustor-trustee transfer and return decisions."
-    def set_partner_mapping(self, partner_mapping: Dict[str, str]):
+        return (
+            "Trust Game environment for trustor-trustee transfer and return decisions."
+        )
+
+    def set_partner_mapping(self, partner_mapping: dict[str, str]):
         """Set partner mapping (trustor_name -> trustee_name, trustee_name -> trustor_name)"""
         self.partner_mapping = partner_mapping
 
-    def _auto_setup_partner_mapping(self, agent_name: Optional[str] = None) -> None:
+    def _auto_setup_partner_mapping(self, agent_name: str | None = None) -> None:
         """Auto-setup partner mapping based on agent name convention.
 
         Convention: Agent-{id}_Trustor_G{n} pairs with Agent-{id'}_Trustee_G{n}
@@ -221,22 +241,29 @@ class TrustGameEnv(EnvBase):
                 normalized_name = trustor_name
             elif trustor_name.isdigit():
                 # If given a bare ID like "1", search for matching full name
-                for mapped_name in self.partner_mapping.keys():
-                    if "_Trustor_" in mapped_name and mapped_name.startswith(f"Agent-{trustor_name}_"):
+                for mapped_name in self.partner_mapping:
+                    if "_Trustor_" in mapped_name and mapped_name.startswith(
+                        f"Agent-{trustor_name}_"
+                    ):
                         normalized_name = mapped_name
                         break
             else:
                 # Try to extract agent ID from name and find correct name
                 # Handle cases like "Agent-2_Trustor_G1" -> should be "Agent-2_Trustor_G2"
                 import re
+
                 match = re.match(r"Agent-(\d+)_Trustor_G\d+", trustor_name)
                 if match:
                     agent_id = match.group(1)
                     # Find the correct name for this agent ID
-                    for mapped_name in self.partner_mapping.keys():
-                        if "_Trustor_" in mapped_name and mapped_name.startswith(f"Agent-{agent_id}_"):
+                    for mapped_name in self.partner_mapping:
+                        if "_Trustor_" in mapped_name and mapped_name.startswith(
+                            f"Agent-{agent_id}_"
+                        ):
                             normalized_name = mapped_name
-                            logger.info(f"Normalized trustor name from '{trustor_name}' to '{normalized_name}'")
+                            logger.info(
+                                f"Normalized trustor name from '{trustor_name}' to '{normalized_name}'"
+                            )
                             break
 
             # Validate investment
@@ -283,28 +310,39 @@ class TrustGameEnv(EnvBase):
                 normalized_name = trustee_name
             elif trustee_name.isdigit():
                 # If given a bare ID like "5", search for matching full name
-                for mapped_name in self.partner_mapping.keys():
-                    if "_Trustee_" in mapped_name and mapped_name.startswith(f"Agent-{trustee_name}_"):
+                for mapped_name in self.partner_mapping:
+                    if "_Trustee_" in mapped_name and mapped_name.startswith(
+                        f"Agent-{trustee_name}_"
+                    ):
                         normalized_name = mapped_name
                         break
             elif trustee_name.startswith("agent"):
                 # Handle lowercase variations like "agent_5"
-                for mapped_name in self.partner_mapping.keys():
-                    if "_Trustee_" in mapped_name and mapped_name.lower().replace("_", "").replace("-", "") == trustee_name.lower().replace("_", "").replace("-", ""):
+                for mapped_name in self.partner_mapping:
+                    if "_Trustee_" in mapped_name and mapped_name.lower().replace(
+                        "_", ""
+                    ).replace("-", "") == trustee_name.lower().replace("_", "").replace(
+                        "-", ""
+                    ):
                         normalized_name = mapped_name
                         break
             else:
                 # Try to extract agent ID from name and find correct name
                 # Handle cases like "Agent-3_Trustee_G3" -> should be "Agent-7_Trustee_G3"
                 import re
+
                 match = re.match(r"Agent-(\d+)_Trustee_G\d+", trustee_name)
                 if match:
                     agent_id = match.group(1)
                     # Find the correct name for this agent ID
-                    for mapped_name in self.partner_mapping.keys():
-                        if "_Trustee_" in mapped_name and mapped_name.startswith(f"Agent-{agent_id}_"):
+                    for mapped_name in self.partner_mapping:
+                        if "_Trustee_" in mapped_name and mapped_name.startswith(
+                            f"Agent-{agent_id}_"
+                        ):
                             normalized_name = mapped_name
-                            logger.info(f"Normalized trustee name from '{trustee_name}' to '{normalized_name}'")
+                            logger.info(
+                                f"Normalized trustee name from '{trustee_name}' to '{normalized_name}'"
+                            )
                             break
 
             # Validate return amount (will be validated against received amount in step)
@@ -393,7 +431,7 @@ class TrustGameEnv(EnvBase):
             )
 
     @tool(readonly=True)
-    async def get_round_history(self, round_num: Optional[int] = None) -> List[dict]:
+    async def get_round_history(self, round_num: int | None = None) -> list[dict]:
         """
         Get round history.
 
@@ -403,13 +441,13 @@ class TrustGameEnv(EnvBase):
         """
         async with self._lock:
             if round_num is not None:
-                return [
-                    r for r in self.round_history if r.get("round") == round_num
-                ]
+                return [r for r in self.round_history if r.get("round") == round_num]
             return self.round_history.copy()
 
     @tool(readonly=True)
-    async def get_pending_investment(self, trustor_name: str) -> GetPendingInvestmentResponse:
+    async def get_pending_investment(
+        self, trustor_name: str
+    ) -> GetPendingInvestmentResponse:
         """
         Get pending investment for a trustor in the current round.
         This allows trustees to check if their partner trustor has submitted an investment.
@@ -449,11 +487,13 @@ class TrustGameEnv(EnvBase):
             for game_num in range(1, self.num_pairs + 1):
                 trustor_name = f"Agent-{game_num}_Trustor_G{game_num}"
                 trustee_name = f"Agent-{game_num + self.num_pairs}_Trustee_G{game_num}"
-                pairs.append({
-                    "game_num": game_num,
-                    "trustor": trustor_name,
-                    "trustee": trustee_name,
-                })
+                pairs.append(
+                    {
+                        "game_num": game_num,
+                        "trustor": trustor_name,
+                        "trustee": trustee_name,
+                    }
+                )
 
             return {
                 "game_type": "TrustGame",
@@ -485,18 +525,24 @@ class TrustGameEnv(EnvBase):
         async with self._lock:
             # Auto-setup partner mapping if not set
             if not self.partner_mapping:
-                logger.info(f"[get_trust_game_status] partner_mapping is empty, calling _auto_setup_partner_mapping for agent_id={agent_id}")
+                logger.info(
+                    f"[get_trust_game_status] partner_mapping is empty, calling _auto_setup_partner_mapping for agent_id={agent_id}"
+                )
                 self._auto_setup_partner_mapping(f"Agent-{agent_id}_Trustor_G1")
-                logger.info(f"[get_trust_game_status] after _auto_setup_partner_mapping, partner_mapping={self.partner_mapping}")
+                logger.info(
+                    f"[get_trust_game_status] after _auto_setup_partner_mapping, partner_mapping={self.partner_mapping}"
+                )
 
             # Find agent info from partner_mapping
             agent_name = None
             agent_role = None
             partner_name = None
 
-            logger.info(f"[get_trust_game_status] Searching for agent_id={agent_id} in partner_mapping keys: {list(self.partner_mapping.keys())}")
+            logger.info(
+                f"[get_trust_game_status] Searching for agent_id={agent_id} in partner_mapping keys: {list(self.partner_mapping.keys())}"
+            )
 
-            for name in self.partner_mapping.keys():
+            for name in self.partner_mapping:
                 # Check if this name matches the agent_id
                 if f"Agent-{agent_id}_" in name:
                     agent_name = name
@@ -532,7 +578,9 @@ class TrustGameEnv(EnvBase):
                     }
                 elif agent_name in last_round.get("trustee_returns", {}):
                     my_return = last_round["trustee_returns"][agent_name]
-                    trustor_investment = last_round["trustor_investments"].get(partner_name, 0)
+                    trustor_investment = last_round["trustor_investments"].get(
+                        partner_name, 0
+                    )
                     received = trustor_investment * self.multiplication_factor
                     my_payoff = last_round["payoffs"].get(agent_name, 0)
                     last_round_data = {
@@ -612,11 +660,14 @@ class TrustGameEnv(EnvBase):
                 # Validate returns against received amounts
                 # If a trustee hasn't submitted a return, default to 0 (no return)
                 validated_returns = {}
-                for trustee_name in trustee_received.keys():
+                for trustee_name in trustee_received:
                     if trustee_name in self._pending_returns:
                         return_amount = self._pending_returns[trustee_name]
                         received = trustee_received.get(trustee_name, 0)
-                        if isinstance(return_amount, int) and 0 <= return_amount <= received:
+                        if (
+                            isinstance(return_amount, int)
+                            and 0 <= return_amount <= received
+                        ):
                             validated_returns[trustee_name] = return_amount
                         else:
                             validated_returns[trustee_name] = 0
@@ -630,10 +681,10 @@ class TrustGameEnv(EnvBase):
                     trustee_name = self.partner_mapping.get(trustor_name)
                     if trustee_name:
                         returned = validated_returns.get(trustee_name, 0)
-                        trustor_payoff = (
-                            self.initial_funds - investment + returned
+                        trustor_payoff = self.initial_funds - investment + returned
+                        trustee_payoff = (
+                            trustee_received.get(trustee_name, 0) - returned
                         )
-                        trustee_payoff = trustee_received.get(trustee_name, 0) - returned
                         payoffs[trustor_name] = trustor_payoff
                         payoffs[trustee_name] = trustee_payoff
 
@@ -670,5 +721,6 @@ class TrustGameEnv(EnvBase):
             multiplication_factor=self.multiplication_factor,
         )
         self._step_counter += 1
+
 
 __all__ = ["TrustGameEnv"]

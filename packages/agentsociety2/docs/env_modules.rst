@@ -83,6 +83,19 @@
   * ``"statistics"``: 聚合查询（无参数，需要 readonly=True）
   * ``None`` 或省略: 常规工具（任何签名，任何 readonly 值）
 
+并发安全
+~~~~~~~~~~
+
+环境模块可覆盖类方法 ``is_concurrency_safe() -> bool``（默认 ``False``）：
+
+* 返回 ``True``：工具只触达 per-agent / 已自带锁保护的状态，可与其它 ask 并行执行。
+* 当**挂载的全部模块**都返回 ``True`` 时：
+
+  * CLI / ``EnvRouterProxy`` 创建的 Ray actor 使用
+    ``AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY``（默认 ``8``）作为 ``max_concurrency``；
+  * ``CodeGenRouter`` 跳过全局 ``_execute_lock``，改依赖各模块本地锁。
+* 任一模块不安全时，actor 退回 ``max_concurrency=1``，保证串行正确性。
+
 工具类型
 ----------
 
@@ -254,6 +267,7 @@
 请参阅 ``agentsociety2.contrib.env`` 中的内置环境类（类名以当前代码为准）：
 
 * ``SimpleSocialSpace`` — 社交互动
+* ``WeatherEnvironment`` — 天气查询 / 干预（onboarding 见 ``examples/basics/02_custom_env_module.py``）
 * ``PublicGoodsEnv`` — 公共物品博弈
 * ``PrisonersDilemmaEnv`` — 囚徒困境
 * ``TrustGameEnv`` — 信任博弈

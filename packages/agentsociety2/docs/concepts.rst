@@ -176,13 +176,16 @@ CodeGenRouter 通过以下方式将智能体连接到环境模块：
 
 ``RouterBase`` 有多个实现，可按需替换：
 
-* ``CodeGenRouter`` （默认）：生成调用代码并在沙盒执行，带 AST 守卫与缓存。
+* ``CodeGenRouter`` （默认）：生成调用代码并在沙盒执行，带 AST 守卫；
+  FAISS 指令模板缓存**仅在** ``ask(..., template_mode=True)`` 时生效；
+  若模块未声明 observe/statistics 工具，init 会跳过对应 LLM 代码生成。
 * ``ReActRouter``：ReAct 式工具选择。
 * ``PlanExecuteRouter``：先规划再执行。
 * ``TwoTierReActRouter`` / ``TwoTierPlanExecuteRouter``：两级路由，适合大工具集。
 * ``SearchToolRouter``：以检索方式选择工具。
 
-生产环境下路由跑在专用 Ray actor（``EnvRouterProxy``）里，详见 :doc:`architecture`。
+生产环境下路由跑在专用 Ray actor（``EnvRouterProxy``）里；actor 并发由模块
+``is_concurrency_safe()`` 决定，详见 :doc:`architecture` 与 :doc:`env_modules`。
 
 工具类别
 ---------------

@@ -393,10 +393,10 @@ def validate_command_date(
     sim_date = sim_time.date().isoformat()
     date = getattr(args, "date", "")
     if date and date != sim_date:
-        setattr(args, "corrected_date", {"from": date, "to": sim_date})
+        args.corrected_date = {"from": date, "to": sim_date}
     elif not hasattr(args, "corrected_date"):
-        setattr(args, "corrected_date", None)
-    setattr(args, "date", sim_date)
+        args.corrected_date = None
+    args.date = sim_date
     return sim_time
 
 
@@ -1837,7 +1837,7 @@ def entrypoint(argv: list[str], ctx: Any) -> str:
     Returns:
         The YAML text the subprocess would have printed to stdout.
     """
-    workspace_root = Path(str(getattr(ctx, "workspace_root"))).resolve()
+    workspace_root = Path(str(ctx.workspace_root)).resolve()
     ws_token = _WORKSPACE_ROOT.set(workspace_root)
     buf_token = _EMIT_BUFFER.set([])
     try:

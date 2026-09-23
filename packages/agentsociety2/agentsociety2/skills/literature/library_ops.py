@@ -10,7 +10,7 @@ import argparse
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,7 @@ class SyncStats:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _extra(entry: dict[str, Any]) -> dict[str, Any]:
@@ -95,9 +95,7 @@ def _needs_metadata(entry: dict[str, Any]) -> bool:
         return True
     if not (entry.get("abstract") or "").strip():
         return True
-    if not (entry.get("journal") or "").strip():
-        return True
-    return False
+    return bool(not (entry.get("journal") or "").strip())
 
 
 def _lookup_raw(entry: dict[str, Any]) -> str | None:
@@ -417,7 +415,12 @@ def _parse_bibtex(text: str) -> list[dict[str, str]]:
         }
         for field in _BIB_FIELD_RE.finditer(match.group("body")):
             name = field.group("name").lower()
-            value = field.group("braced") or field.group("quoted") or field.group("bare") or ""
+            value = (
+                field.group("braced")
+                or field.group("quoted")
+                or field.group("bare")
+                or ""
+            )
             fields[name] = value.strip().rstrip(",")
         records.append(fields)
     return records
@@ -468,12 +471,7 @@ def import_bibtex(workspace: Path, bib_path: Path) -> dict[str, Any]:
             "source": "bibtex_import",
             "source_name": "bibtex",
         }
-        stamp = (
-            datetime.now(timezone.utc)
-            .isoformat()
-            .replace(":", "-")
-            .replace(".", "-")[:19]
-        )
+        stamp = datetime.now(UTC).isoformat().replace(":", "-").replace(".", "-")[:19]
         note_name = f"{sanitize_filename(title)}_{stamp}.md"
         note_path = papers_dir / note_name
         note_path.write_text(

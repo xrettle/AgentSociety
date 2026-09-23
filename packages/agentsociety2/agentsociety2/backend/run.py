@@ -13,9 +13,10 @@
 """
 
 if __name__ == "__main__":
-    import uvicorn
-    import os
     import argparse
+    import os
+
+    import uvicorn
     from dotenv import load_dotenv
 
     # 解析命令行参数

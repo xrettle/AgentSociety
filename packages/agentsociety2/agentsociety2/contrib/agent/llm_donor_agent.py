@@ -3,11 +3,12 @@ import json
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from agentsociety2.agent.base import AgentBase
 from mem0 import AsyncMemory
 from mem0.memory.main import MemoryConfig
+
+from agentsociety2.agent.base import AgentBase
 
 
 class LLMDonorAgent(AgentBase):
@@ -170,9 +171,9 @@ This agent participates in a reputation-based donation game where it can choose 
         )
 
         # 状态追踪
-        self._decision_history: List[Dict] = list(meta.get("decision_history", []))
+        self._decision_history: list[dict] = list(meta.get("decision_history", []))
         # 缓存 Z 值（种群大小），第一次使用时从环境查询
-        self._cached_Z: Optional[int] = None
+        self._cached_Z: int | None = None
 
         # 主观情绪/个性状态（用于影响决策）
         self._personality = custom_fields.get(
@@ -240,7 +241,7 @@ This agent participates in a reputation-based donation game where it can choose 
         return random.choice(personalities)
 
     @staticmethod
-    def _extract_custom_fields(profile: Any) -> Dict[str, Any]:
+    def _extract_custom_fields(profile: Any) -> dict[str, Any]:
         """从 profile 中提取 custom_fields"""
         if isinstance(profile, dict):
             return profile.get("custom_fields", {}) or {}
@@ -305,7 +306,7 @@ This agent participates in a reputation-based donation game where it can choose 
 
         # 从环境查询 Z 值
         try:
-            ctx, _ans, _ = await self.ask_env(
+            ctx, _ans = await self.ask_env(
                 {}, "Query the population size (Z) of the environment.", readonly=True
             )
             Z = ctx.get("population_size") or ctx.get("Z")
@@ -315,7 +316,10 @@ This agent participates in a reputation-based donation game where it can choose 
         except Exception:
             # Query failed; use default value
             import logging
-            logging.getLogger(__name__).debug("Failed to query population size", exc_info=True)
+
+            logging.getLogger(__name__).debug(
+                "Failed to query population size", exc_info=True
+            )
 
         # 如果查询失败，使用默认值（向后兼容）
         self._cached_Z = self.DEFAULT_POPULATION_SIZE
@@ -335,7 +339,7 @@ This agent participates in a reputation-based donation game where it can choose 
 
     async def _query_agent_reputation(self, agent_id: int) -> str:
         """查询智能体的声誉"""
-        ctx, _, _ = await self.ask_env(
+        ctx, _ = await self.ask_env(
             {"agent_id": agent_id},
             f"Query the current reputation of Agent {agent_id}. Use agent_id={agent_id} exactly.",
             readonly=True,
@@ -344,7 +348,7 @@ This agent participates in a reputation-based donation game where it can choose 
 
     async def _query_agent_payoff(self, agent_id: int) -> float:
         """查询智能体的收益"""
-        ctx, _, _ = await self.ask_env(
+        ctx, _ = await self.ask_env(
             {"agent_id": agent_id},
             f"Query the cumulative payoff of Agent {agent_id}. Use agent_id={agent_id} exactly.",
             readonly=True,
@@ -372,10 +376,13 @@ This agent participates in a reputation-based donation game where it can choose 
         except Exception:
             # Memory query failed; continue without memory context
             import logging
-            logging.getLogger(__name__).debug("Failed to query recent memories", exc_info=True)
+
+            logging.getLogger(__name__).debug(
+                "Failed to query recent memories", exc_info=True
+            )
         return ""
 
-    async def _gather_context(self, recipient_id: int) -> Dict[str, Any]:
+    async def _gather_context(self, recipient_id: int) -> dict[str, Any]:
         """收集决策所需的情境信息（并行查询以提高效率）"""
         # 并行查询自己的声誉和收益，以及接受者的声誉
         my_rep_task = self._query_agent_reputation(self.id)
@@ -398,7 +405,7 @@ This agent participates in a reputation-based donation game where it can choose 
         }
 
     async def _make_decision(
-        self, context_info: Dict[str, Any], recipient_id: int
+        self, context_info: dict[str, Any], recipient_id: int
     ) -> str:
         """LLM 决策：合作或背叛（基于主观情绪和个性）"""
 
@@ -495,7 +502,7 @@ Only return "cooperate" or "defect", do not return any other content.
 
         return decision
 
-    def _update_mood(self, context_info: Dict[str, Any]):
+    def _update_mood(self, context_info: dict[str, Any]):
         """根据当前情境更新情绪状态"""
         # 如果收益较低，情绪可能变差
         my_payoff = context_info.get("my_payoff", 0.0)
@@ -553,7 +560,7 @@ Only return "cooperate" or "defect", do not return any other content.
             f"Use donor_id={self.id} and recipient_id={recipient_id} exactly."
         )
 
-        _ctx2, ans, _ = await self.ask_env(ctx, message, readonly=False)
+        _ctx2, ans = await self.ask_env(ctx, message, readonly=False)
 
         # 保存记忆
         if self._memory:
@@ -567,14 +574,17 @@ Only return "cooperate" or "defect", do not return any other content.
             except Exception:
                 # Memory save failure is non-critical; continue without persisting
                 import logging
-                logging.getLogger(__name__).debug("Failed to save memory", exc_info=True)
+
+                logging.getLogger(__name__).debug(
+                    "Failed to save memory", exc_info=True
+                )
 
         return ans
 
     async def _learn_from_top_agents(self):
         """从顶尖智能体学习"""
         # 查询顶尖智能体
-        ctx, ans, _ = await self.ask_env(
+        ctx, ans = await self.ask_env(
             {"top_k": self.TOP_AGENTS_COUNT},
             f"Query the summary of top {self.TOP_AGENTS_COUNT} agents by payoff, including their reputation and recent actions. Use top_k={self.TOP_AGENTS_COUNT}.",
             readonly=True,
@@ -616,11 +626,17 @@ Please summarize their success patterns and provide suggestions: How should I ad
                     )
                 except Exception:
                     import logging
-                    logging.getLogger(__name__).debug("Failed to add memory entry", exc_info=True)
+
+                    logging.getLogger(__name__).debug(
+                        "Failed to add memory entry", exc_info=True
+                    )
         except Exception:
             # Learning failure is non-critical; continue without learning
             import logging
-            logging.getLogger(__name__).debug("Learning from top agents failed", exc_info=True)
+
+            logging.getLogger(__name__).debug(
+                "Learning from top agents failed", exc_info=True
+            )
 
     async def ask(self, message: str, readonly: bool = True) -> str:
         """Answer a question using LLM and optionally memory.
@@ -647,7 +663,10 @@ Please summarize their success patterns and provide suggestions: How should I ad
                         memory_context = "\n".join(memory_items)
             except Exception:
                 import logging
-                logging.getLogger(__name__).debug("Failed to retrieve memory context", exc_info=True)
+
+                logging.getLogger(__name__).debug(
+                    "Failed to retrieve memory context", exc_info=True
+                )
 
         # Build prompt with memory context
         if memory_context:
@@ -686,4 +705,4 @@ Please answer the question."""
 
     async def close(self):
         """清理资源"""
-        return None
+        return

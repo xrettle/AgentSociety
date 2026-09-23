@@ -4,15 +4,15 @@ ReAct Router Implementation
 """
 
 import json
-from typing import Tuple, Dict, Any, List
+from typing import Any
 
 import json_repair
 from litellm import AllMessageValues
 from openai.types.chat import ChatCompletionToolParam
 
-from agentsociety2.logger import get_logger
 from agentsociety2.env.base import EnvBase
 from agentsociety2.env.router_base import RouterBase
+from agentsociety2.logger import get_logger
 
 __all__ = ["ReActRouter"]
 
@@ -42,10 +42,10 @@ class ReActRouter(RouterBase):
         )
 
         # 预收集所有工具（包括readonly和非readonly）
-        self._all_tools: List[ChatCompletionToolParam] = []
-        self._all_readonly_tools: List[ChatCompletionToolParam] = []
-        self._tool_name_to_module: Dict[str, EnvBase] = {}
-        self._tool_name_to_tool_obj: Dict[str, Any] = {}
+        self._all_tools: list[ChatCompletionToolParam] = []
+        self._all_readonly_tools: list[ChatCompletionToolParam] = []
+        self._tool_name_to_module: dict[str, EnvBase] = {}
+        self._tool_name_to_tool_obj: dict[str, Any] = {}
 
         self._collect_all_tools()
 
@@ -108,7 +108,7 @@ class ReActRouter(RouterBase):
         template_mode: bool = False,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
-    ) -> Tuple[dict, str]:
+    ) -> tuple[dict, str]:
         """
         使用ReAct模式处理指令。
 
@@ -130,7 +130,10 @@ class ReActRouter(RouterBase):
 
             if not self.env_modules:
                 get_logger().warning("No environment modules available")
-                results = {"status": "fail", "reason": "No environment modules available"}
+                results = {
+                    "status": "fail",
+                    "reason": "No environment modules available",
+                }
                 return (
                     results,
                     "No environment modules available to handle the request.",
@@ -148,7 +151,9 @@ class ReActRouter(RouterBase):
 
             # 构建初始对话，包含ctx和instruction
             initial_prompt = self._build_initial_prompt(instruction, ctx, readonly)
-            dialog: List[AllMessageValues] = [{"role": "user", "content": initial_prompt}]
+            dialog: list[AllMessageValues] = [
+                {"role": "user", "content": initial_prompt}
+            ]
 
             # 添加set_status工具到可用工具列表
             tools_with_status = [*available_tools, self._set_status_tool_schema]
@@ -156,7 +161,7 @@ class ReActRouter(RouterBase):
             # ReAct循环
             step_count = 0
             results = {}
-            execution_log: List[Dict[str, Any]] = []  # 记录执行历史
+            execution_log: list[dict[str, Any]] = []  # 记录执行历史
             # status 表示用户的指令在环境模块中是否被有效地完成了，还是需要等待一段时间后由用户主动检测指令的完成性
             status = "success"
             error: str | None = None
@@ -301,7 +306,10 @@ class ReActRouter(RouterBase):
                                 "tool_call_id": tool_call.id,
                                 "name": func_name,
                                 "content": json.dumps(
-                                    {"status": status, "message": "Status set successfully"}
+                                    {
+                                        "status": status,
+                                        "message": "Status set successfully",
+                                    }
                                 ),
                             }
                         )
@@ -318,7 +326,9 @@ class ReActRouter(RouterBase):
 
                     # 执行工具调用
                     try:
-                        result = await self._execute_tool(func_name, func_args, readonly)
+                        result = await self._execute_tool(
+                            func_name, func_args, readonly
+                        )
                         result_str = json.dumps(result, default=str)
                         tool_results.append(
                             {
@@ -380,7 +390,9 @@ class ReActRouter(RouterBase):
             get_logger().warning(f"ReActRouter: Reached max steps ({self.max_steps})")
             # 构建过程文本
             process_text = (
-                json.dumps(execution_log, indent=2, default=str) if execution_log else ""
+                json.dumps(execution_log, indent=2, default=str)
+                if execution_log
+                else ""
             )
             # 使用基类的generate_final_answer生成最终答案
             final_answer, determined_status = await self.generate_final_answer(

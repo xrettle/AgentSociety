@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
 
 from agentsociety2.skills.analysis.data import DataReader
 from agentsociety2.skills.analysis.harness.models import AnalysisPlan, ValidationResult
@@ -12,7 +11,7 @@ from agentsociety2.skills.analysis.harness.validators._helpers import (
 )
 
 
-def _run_table_checks(db_path: Path, plan: AnalysisPlan) -> List:
+def _run_table_checks(db_path: Path, plan: AnalysisPlan) -> list:
     issues = []
     if not plan.table_checks:
         return issues
@@ -59,10 +58,10 @@ def validate_explore(
     *,
     db_path: Path,
     plan: AnalysisPlan,
-    data_dir: Optional[Path] = None,
-    recorded_artifacts: Optional[List[str]] = None,
+    data_dir: Path | None = None,
+    recorded_artifacts: list[str] | None = None,
 ) -> ValidationResult:
-    issues: List = []
+    issues: list = []
     if not db_path.exists():
         issues.append(
             issue(

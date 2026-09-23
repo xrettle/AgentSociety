@@ -163,7 +163,7 @@
     "errorTitle": "Error loading replay",
     "retry": "Retry",
     "noData": "No replay data available",
-    "noDataHint": "This experiment doesn't have any recorded simulation steps. Make sure the simulation was run with replay recording enabled.",
+    "noDataHint": "No playable simulation timeline is available yet.",
     "left": {
       "agentInfo": "Agent Information",
       "selectAgent": "Select an Agent on the map to view details",
@@ -230,7 +230,11 @@
       "mapIntegration": "Map integration",
       "mapIntegrationHint": "For interactive maps with DeckGL + Mapbox, install dependencies:",
       "installHint": "npm install deck.gl react-map-gl mapbox-gl"
-    }
+    },
+    "noDataRunning": "Simulation is still running ({{completed}} steps completed). Timeline markers are written at step start; if empty, refresh shortly.",
+    "noDataCompleted": "The experiment finished but no replayable step snapshots were found. Check that env modules write agent/env state in step().",
+    "noDataRegistered": "{{datasets}} datasets registered, {{nonempty}} with data. An empty timeline usually means the first tick has not finished.",
+    "refreshTimeline": "Refresh timeline"
   },
   "configPage": {
     "title": "AI Social Scientist Configuration",

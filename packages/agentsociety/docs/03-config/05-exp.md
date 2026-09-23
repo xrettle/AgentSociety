@@ -31,35 +31,39 @@
   - `ticks_per_step` (int): 每步时间间隔（秒）
 
 (intervene)=
-**智能体交互类型**：
+### 智能体交互类型
+
 - `interview`: 向指定智能体发送访谈消息
-  - `target_agent`: [目标智能体筛选设置](#target_agent)
+  - `target_agent`: {ref}`目标智能体筛选设置 <target_agent>`
   - `interview_message` (str): 访谈消息
 
 - `survey`: 向指定智能体发送问卷调查
-  - `target_agent`: [目标智能体筛选设置](#target_agent)
-  - `survey`: 调查问卷对象，详见下方[问卷调查配置](#survey)
+  - `target_agent`: {ref}`目标智能体筛选设置 <target_agent>`
+  - `survey`: 调查问卷对象，详见下方{ref}`问卷调查配置 <exp-survey>`
 
 - `message`: 向智能体发送干预消息
-  - `target_agent`: [目标智能体筛选设置](#target_agent)
+  - `target_agent`: {ref}`目标智能体筛选设置 <target_agent>`
   - `intervene_message` (str): 干预消息
 
 - `update_state`: 直接更新智能体状态
-  - `target_agent`: [目标智能体筛选设置](#target_agent)
+  - `target_agent`: {ref}`目标智能体筛选设置 <target_agent>`
   - `key` (str): 智能体状态键
   - `value` (Any): 状态值
 
 (save_context)=
+### 保存智能体上下文
+
 - `save_context`: 保存智能体上下文到全局Context变量（dict），该变量最后存储为文件
-  - `target_agent`: [目标智能体筛选设置](#target_agent)
+  - `target_agent`: {ref}`目标智能体筛选设置 <target_agent>`
   - `key` (str): 智能体状态键
   - `save_as` (str): 全局变量`context`中保存智能体状态的上下文键
 
 - `delete_agent`: 删除指定智能体
-  - `target_agent`: [目标智能体筛选设置](#target_agent)
+  - `target_agent`: {ref}`目标智能体筛选设置 <target_agent>`
 
 (environment)=
-**环境控制类型**：
+### 环境控制类型
+
 - `environment`: 修改环境变量，即`EnvironmentConfig`中除`start_tick`外的其他字段
   - `key` (str): 环境变量键
   - `value` (Any): 环境变量值
@@ -132,7 +136,7 @@ target_agent:
 - 如果智能体属性为空或不存在筛选条件中的属性，该智能体将被排除
 - 筛选条件中的属性名必须与智能体配置文件中的属性名完全匹配
 
-(survey)=
+(exp-survey)=
 ### 问卷调查配置
 
 问卷调查配置用于定义在`survey`工作流步骤中使用的调查问卷。

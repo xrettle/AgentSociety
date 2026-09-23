@@ -192,11 +192,12 @@ _EMIT_BUFFER: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
     "dg_emit_buffer", default=None
 )
 
+
 def agent_work_dir() -> Path:
     override = _WORKSPACE_ROOT.get()
     if override is not None:
         return override
-    raw = os.environ.get("AGENT_WORK_DIR")          # 子进程回退路径才用
+    raw = os.environ.get("AGENT_WORK_DIR")  # 子进程回退路径才用
     return Path(raw).resolve() if raw else Path.cwd().resolve()
 ```
 
@@ -224,28 +225,33 @@ def agent_work_dir() -> Path:
 
 ```python
 def dispatch(args: argparse.Namespace) -> int:
-    if args.cmd == "plan":    return command_plan(args)
-    if args.cmd == "current": return command_current(args)
+    if args.cmd == "plan":
+        return command_plan(args)
+    if args.cmd == "current":
+        return command_current(args)
     # …其余命令…
     return command_hook_init(args)
+
 
 def entrypoint(argv: list[str], ctx: Any) -> str:
     workspace_root = Path(str(getattr(ctx, "workspace_root"))).resolve()
     ws_token = _WORKSPACE_ROOT.set(workspace_root)
     buf_token = _EMIT_BUFFER.set([])
     try:
-        args = parse_args(list(argv))      # parse_args 接受显式 argv
+        args = parse_args(list(argv))  # parse_args 接受显式 argv
         dispatch(args)
-        return "".join(_EMIT_BUFFER.get() or [])   # 把 emit 累积的 YAML 文本返回
+        return "".join(_EMIT_BUFFER.get() or [])  # 把 emit 累积的 YAML 文本返回
     finally:
         _EMIT_BUFFER.reset(buf_token)
         _WORKSPACE_ROOT.reset(ws_token)
 
+
 def main() -> int:
     return dispatch(parse_args())
 
+
 if __name__ == "__main__":
-    raise SystemExit(main())               # 子进程回退路径仍可用
+    raise SystemExit(main())  # 子进程回退路径仍可用
 ```
 
 `emit()` 改为写入 ContextVar 缓冲（entrypoint 模式）或 `print`（子进程模式）：

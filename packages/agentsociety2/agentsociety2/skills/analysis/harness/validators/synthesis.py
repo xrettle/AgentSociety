@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from agentsociety2.skills.analysis.harness.json_io import load_model_from_file
+from agentsociety2.skills.analysis.harness.models import ValidationResult
 from agentsociety2.skills.analysis.harness.paths import hypothesis_report_review_path
 from agentsociety2.skills.analysis.harness.schemas import SynthesisBrief
-from agentsociety2.skills.analysis.harness.models import ValidationResult
 from agentsociety2.skills.analysis.harness.validators._helpers import (
     blocked,
     issue,
@@ -14,7 +13,7 @@ from agentsociety2.skills.analysis.harness.validators._helpers import (
 )
 
 
-def _load_brief(path: Path) -> tuple[SynthesisBrief | None, List]:
+def _load_brief(path: Path) -> tuple[SynthesisBrief | None, list]:
     if not path.exists():
         return None, [
             issue(
@@ -40,10 +39,10 @@ def validate_synthesis(
     workspace: Path,
     *,
     synthesis_dir: Path,
-    scope_hypothesis_ids: List[str],
+    scope_hypothesis_ids: list[str],
     max_synthesis_charts: int = 0,
 ) -> ValidationResult:
-    issues: List = []
+    issues: list = []
     report_zh = synthesis_dir / "synthesis_report_zh.md"
     report_en = synthesis_dir / "synthesis_report_en.md"
     brief_path = synthesis_dir / "synthesis_brief.json"

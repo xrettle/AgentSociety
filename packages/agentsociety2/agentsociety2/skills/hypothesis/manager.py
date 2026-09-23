@@ -9,24 +9,22 @@ import json
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 from pydantic import ValidationError
 
+from agentsociety2.logger import get_logger
 from agentsociety2.skills.hypothesis.models import (
     ExperimentGroupModel,
     HypothesisDataModel,
 )
-from agentsociety2.logger import get_logger
 
 logger = get_logger()
 
 
 def validate_hypothesis_with_modules(
-    hypothesis_data: Dict[str, Any],
-) -> Tuple[bool, Optional[str], Optional[HypothesisDataModel], Optional[Dict[str, Any]]]:
+    hypothesis_data: dict[str, Any],
+) -> tuple[bool, str | None, HypothesisDataModel | None, dict[str, Any] | None]:
     """Validate hypothesis data with module selection validation
 
     This is an enhanced validation that checks:
@@ -47,8 +45,8 @@ def validate_hypothesis_with_modules(
     # Then validate module selection
     try:
         from agentsociety2.skills.experiment.module_discovery import (
-            validate_hypothesis_modules,
             get_module_selection_guidance,
+            validate_hypothesis_modules,
         )
 
         module_valid, module_errors, guidance = validate_hypothesis_modules(
@@ -76,7 +74,7 @@ def validate_hypothesis_with_modules(
         return True, None, hypothesis_model, None
 
 
-def find_existing_hypotheses(workspace_path: Path) -> List[Path]:
+def find_existing_hypotheses(workspace_path: Path) -> list[Path]:
     """Find existing hypothesis directories
 
     :param workspace_path: Path to workspace directory
@@ -112,8 +110,8 @@ def get_next_hypothesis_id(workspace_path: Path) -> str:
 
 
 def validate_hypothesis_schema(
-    hypothesis_data: Dict[str, Any],
-) -> Tuple[bool, Optional[str], Optional[HypothesisDataModel]]:
+    hypothesis_data: dict[str, Any],
+) -> tuple[bool, str | None, HypothesisDataModel | None]:
     """Validate hypothesis data against schema
 
     :param hypothesis_data: Hypothesis data dictionary
@@ -246,7 +244,7 @@ def generate_experiment_markdown(group: ExperimentGroupModel, exp_idx: int) -> s
     return "\n".join(lines)
 
 
-def generate_sim_settings(hypothesis_model: HypothesisDataModel) -> Dict[str, Any]:
+def generate_sim_settings(hypothesis_model: HypothesisDataModel) -> dict[str, Any]:
     """Generate SIM_SETTINGS.json content
 
     :param hypothesis_model: Validated hypothesis data model
@@ -271,8 +269,8 @@ def generate_sim_settings(hypothesis_model: HypothesisDataModel) -> Dict[str, An
 
 def add_hypothesis(
     workspace_path: Path,
-    hypothesis_data: Dict[str, Any],
-) -> Dict[str, Any]:
+    hypothesis_data: dict[str, Any],
+) -> dict[str, Any]:
     """Add a new hypothesis
 
     :param workspace_path: Path to workspace directory
@@ -314,9 +312,9 @@ def add_hypothesis(
 
 def add_hypothesis_with_validation(
     workspace_path: Path,
-    hypothesis_data: Dict[str, Any],
+    hypothesis_data: dict[str, Any],
     validate_modules: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Add a new hypothesis with enhanced module validation
 
     This function provides enhanced validation that checks:
@@ -342,9 +340,7 @@ def add_hypothesis_with_validation(
             }
     else:
         # Fallback to basic schema validation
-        valid, error_msg, hypothesis_model = validate_hypothesis_schema(
-            hypothesis_data
-        )
+        valid, error_msg, hypothesis_model = validate_hypothesis_schema(hypothesis_data)
         if not valid or hypothesis_model is None:
             return {
                 "success": False,
@@ -381,9 +377,9 @@ def add_hypothesis_with_validation(
 
 def get_hypothesis(
     workspace_path: Path,
-    hypothesis_id: Optional[str] = None,
-    hypothesis_path: Optional[str] = None,
-) -> Dict[str, Any]:
+    hypothesis_id: str | None = None,
+    hypothesis_path: str | None = None,
+) -> dict[str, Any]:
     """Get hypothesis details
 
     :param workspace_path: Path to workspace directory
@@ -466,7 +462,7 @@ def get_hypothesis(
     }
 
 
-def list_hypotheses(workspace_path: Path) -> Dict[str, Any]:
+def list_hypotheses(workspace_path: Path) -> dict[str, Any]:
     """List all hypotheses
 
     :param workspace_path: Path to workspace directory
@@ -529,9 +525,9 @@ def list_hypotheses(workspace_path: Path) -> Dict[str, Any]:
 
 def delete_hypothesis(
     workspace_path: Path,
-    hypothesis_id: Optional[str] = None,
-    hypothesis_path: Optional[str] = None,
-) -> Dict[str, Any]:
+    hypothesis_id: str | None = None,
+    hypothesis_path: str | None = None,
+) -> dict[str, Any]:
     """Delete a hypothesis folder
 
     :param workspace_path: Path to workspace directory

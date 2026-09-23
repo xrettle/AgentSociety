@@ -2,25 +2,24 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
 from agentsociety2.skills.analysis.harness.json_io import load_model_from_file
-
 from agentsociety2.skills.analysis.harness.models import (
     AnalysisPlan,
     ClaimsDocument,
     HypothesisAnalysisState,
     MemoryIndex,
-    ReflectionReview,
     ReflectionReport,
+    ReflectionReview,
     SynthesisAnalysisState,
     UserFeedback,
 )
 from agentsociety2.skills.analysis.harness.paths import (
-    hypothesis_feedback_path,
     hypothesis_claims_path,
+    hypothesis_feedback_path,
     hypothesis_plan_path,
     hypothesis_reflection_path,
     hypothesis_reflection_review_path,
@@ -99,7 +98,7 @@ def save_claims(workspace: Path, hypothesis_id: str, doc: ClaimsDocument) -> Non
     )
 
 
-def parse_payload_dict(payload: str) -> Dict[str, Any]:
+def parse_payload_dict(payload: str) -> dict[str, Any]:
     from agentsociety2.skills.analysis.harness.json_io import load_dict_payload
 
     return load_dict_payload(payload)
@@ -213,7 +212,7 @@ def save_memory_index(workspace: Path, index: MemoryIndex) -> None:
     _save_yaml(memory_index_path(workspace), index)
 
 
-def merge_plan_payload(plan: AnalysisPlan, payload: Dict[str, Any]) -> AnalysisPlan:
+def merge_plan_payload(plan: AnalysisPlan, payload: dict[str, Any]) -> AnalysisPlan:
     merged = plan.model_dump()
     merged.update({k: v for k, v in payload.items() if v is not None})
     return AnalysisPlan.model_validate(merged)

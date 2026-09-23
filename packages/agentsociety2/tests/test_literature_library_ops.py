@@ -176,11 +176,14 @@ def test_enrich_metadata_rejects_pdf_path_escape(tmp_path: Path) -> None:
             }
         ],
     )
-    with patch(
-        "agentsociety2.skills.literature.library_ops.lookup_identifier"
-    ) as mocked, patch(
-        "agentsociety2.skills.literature.library_ops.extract_identifier_from_pdf"
-    ) as scanned:
+    with (
+        patch(
+            "agentsociety2.skills.literature.library_ops.lookup_identifier"
+        ) as mocked,
+        patch(
+            "agentsociety2.skills.literature.library_ops.extract_identifier_from_pdf"
+        ) as scanned,
+    ):
         stats = enrich_metadata(workspace)
 
     mocked.assert_not_called()
@@ -255,13 +258,13 @@ def test_export_and_import_bibtex(tmp_path: Path) -> None:
     other.mkdir()
     bib_file = tmp_path / "sample.bib"
     bib_file.write_text(
-        '@article{smith2020test,\n'
-        '  title = {Imported Paper},\n'
-        '  author = {Alice Smith and Bob Jones},\n'
-        '  year = {2020},\n'
-        '  journal = {Test Journal},\n'
-        '  doi = {10.1000/import},\n'
-        '}\n',
+        "@article{smith2020test,\n"
+        "  title = {Imported Paper},\n"
+        "  author = {Alice Smith and Bob Jones},\n"
+        "  year = {2020},\n"
+        "  journal = {Test Journal},\n"
+        "  doi = {10.1000/import},\n"
+        "}\n",
         encoding="utf-8",
     )
     result = import_bibtex(other, bib_file)

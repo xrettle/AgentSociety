@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import Dict, Iterable, Literal, Tuple
+from collections.abc import Iterable
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentsociety2.skills.analysis.harness.operations import EDA_PROFILE_NAMES
 
-
-CapabilityState = Literal[
-    "available", "missing_dependency", "unhealthy", "disabled"
-]
+CapabilityState = Literal["available", "missing_dependency", "unhealthy", "disabled"]
 
 
 class AnalysisCapabilityStatus(BaseModel):
@@ -20,10 +18,10 @@ class AnalysisCapabilityStatus(BaseModel):
     name: str
     state: CapabilityState
     detail: str = ""
-    required_modules: Tuple[str, ...] = Field(default_factory=tuple)
+    required_modules: tuple[str, ...] = Field(default_factory=tuple)
 
 
-EDA_PROFILE_MODULES: Dict[str, Tuple[str, ...]] = {
+EDA_PROFILE_MODULES: dict[str, tuple[str, ...]] = {
     "quick-stats": ("pandas",),
     "ydata": ("pandas", "ydata_profiling"),
     "sweetviz": ("pandas", "sweetviz"),

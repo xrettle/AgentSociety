@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Set, Type, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 
 from agentsociety2.skills.analysis.harness.json_io import load_model_from_file
 from agentsociety2.skills.analysis.harness.layout import list_presentation_layout_issues
+from agentsociety2.skills.analysis.harness.models import ValidationResult
 from agentsociety2.skills.analysis.harness.report_assets import (
     charts_path_refs_in_reports,
 )
@@ -17,7 +18,6 @@ from agentsociety2.skills.analysis.harness.schemas import (
     ArtifactManifest,
     ReportOutline,
 )
-from agentsociety2.skills.analysis.harness.models import ValidationResult
 from agentsociety2.skills.analysis.harness.validators._helpers import (
     blocked,
     issue,
@@ -34,8 +34,8 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def _load_json_model(
-    path: Path, model: Type[ModelT], label: str
-) -> tuple[ModelT | None, List]:
+    path: Path, model: type[ModelT], label: str
+) -> tuple[ModelT | None, list]:
     if not path.exists():
         return None, [
             issue(
@@ -65,7 +65,7 @@ def _load_json_model(
 
 
 def validate_release(presentation_dir: Path) -> ValidationResult:
-    issues: List = []
+    issues: list = []
     for raw in charts_path_refs_in_reports(presentation_dir):
         issues.append(
             issue(
@@ -139,7 +139,7 @@ def validate_release(presentation_dir: Path) -> ValidationResult:
     )
     issues.extend(outline_issues)
 
-    summary, summary_issues = _load_json_model(
+    _summary, summary_issues = _load_json_model(
         summary_path, AnalysisSummary, "analysis_summary"
     )
     issues.extend(summary_issues)
@@ -156,15 +156,15 @@ def validate_release(presentation_dir: Path) -> ValidationResult:
                 )
             )
 
-    disk_files: Set[str] = set()
+    disk_files: set[str] = set()
     if assets_dir.exists():
         disk_files = {p.name for p in assets_dir.iterdir() if p.is_file()}
 
-    manifest_files: Set[str] = set()
+    manifest_files: set[str] = set()
     if manifest is not None:
         manifest_files = {a.filename for a in manifest.artifacts if a.filename}
 
-    refs: Set[str] = set()
+    refs: set[str] = set()
     for report_path in (report_zh, report_en):
         if report_path.exists():
             text = report_path.read_text(encoding="utf-8")

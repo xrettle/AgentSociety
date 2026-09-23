@@ -2,10 +2,11 @@
 Endowment Effect Experiment Environment
 Environment for Endowment Effect experiment based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -32,15 +33,20 @@ class GetMyEvaluationsResponse(BaseModel):
     """Response model for get_my_evaluations() function"""
 
     agent_id: int = Field(..., description="Agent ID")
-    evaluations: Dict[str, Dict[str, float]] = Field(
+    evaluations: dict[str, dict[str, float]] = Field(
         ..., description="Dictionary of item -> {'wta': float, 'wtp': float}"
     )
-    completed_items: List[str] = Field(..., description="List of completed items")
-    remaining_items: List[str] = Field(..., description="List of remaining items")
+    completed_items: list[str] = Field(..., description="List of completed items")
+    remaining_items: list[str] = Field(..., description="List of remaining items")
 
 
 class EndowmentEffectEnv(EnvBase):
     """Environment for Endowment Effect experiment based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     # Valid items for the experiment
     VALID_ITEMS: ClassVar[list[str]] = ["pen", "plate", "glass", "doll"]
@@ -49,7 +55,7 @@ class EndowmentEffectEnv(EnvBase):
         ColumnDef("completed_items", "INTEGER", nullable=False),
     ]
 
-    def __init__(self, agent_ids: List[int]):
+    def __init__(self, agent_ids: list[int]):
         """
         Initialize the Endowment Effect environment.
 
@@ -61,7 +67,7 @@ class EndowmentEffectEnv(EnvBase):
         self.num_agents = len(agent_ids)
 
         # Store evaluations: {agent_id: {item: {"wta": float, "wtp": float}}}
-        self._evaluations: Dict[int, Dict[str, Dict[str, float]]] = {
+        self._evaluations: dict[int, dict[str, dict[str, float]]] = {
             agent_id: {} for agent_id in agent_ids
         }
 
@@ -126,6 +132,7 @@ class EndowmentEffectEnv(EnvBase):
     def description(cls) -> str:
         """Return a short module description."""
         return "Endowment Effect experiment environment for collecting WTA and WTP evaluations."
+
     @tool(readonly=False)
     async def submit_wta_wtp(
         self, agent_id: int, item: str, wta: float, wtp: float
@@ -212,7 +219,7 @@ class EndowmentEffectEnv(EnvBase):
             )
 
     @tool(readonly=True, kind="statistics")
-    async def get_all_evaluations(self) -> Dict[int, Dict[str, Dict[str, float]]]:
+    async def get_all_evaluations(self) -> dict[int, dict[str, dict[str, float]]]:
         """
         Get all agents' evaluations.
 
@@ -262,7 +269,7 @@ class EndowmentEffectEnv(EnvBase):
         )
         self._step_counter += 1
 
-    def get_results(self) -> Dict[int, Dict[str, Dict[str, float]]]:
+    def get_results(self) -> dict[int, dict[str, dict[str, float]]]:
         """
         Get all evaluation results (synchronous method for result extraction).
 
@@ -272,5 +279,6 @@ class EndowmentEffectEnv(EnvBase):
             agent_id: {item: eval_data.copy() for item, eval_data in items.items()}
             for agent_id, items in self._evaluations.items()
         }
+
 
 __all__ = ["EndowmentEffectEnv"]

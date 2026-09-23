@@ -1,7 +1,7 @@
 """Pydantic models for AgentSociety2 experiment configuration validation"""
 
 from datetime import datetime
-from typing import Dict, Any, List, Union, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -24,7 +24,9 @@ class EnvModuleConfig(BaseModel):
     """环境模块配置模型"""
 
     module_type: str = Field(..., description="环境模块类型")
-    kwargs: Dict[str, Any] = Field(default_factory=dict, description="环境模块初始化参数")
+    kwargs: dict[str, Any] = Field(
+        default_factory=dict, description="环境模块初始化参数"
+    )
 
 
 class AgentConfig(BaseModel):
@@ -32,11 +34,13 @@ class AgentConfig(BaseModel):
 
     agent_id: int = Field(..., description="Agent的唯一ID")
     agent_type: str = Field(..., description="Agent类型")
-    kwargs: Dict[str, Any] = Field(..., description="Agent初始化参数，包含id、profile等所有参数")
+    kwargs: dict[str, Any] = Field(
+        ..., description="Agent初始化参数，包含id、profile等所有参数"
+    )
 
     @field_validator("kwargs")
     @classmethod
-    def validate_kwargs(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_kwargs(cls, v: dict[str, Any]) -> dict[str, Any]:
         """验证kwargs中必须包含id字段"""
         if "id" not in v:
             raise ValueError("kwargs must contain 'id' field")
@@ -52,8 +56,10 @@ class CodeGenRouterConfig(BaseModel):
 class InitConfig(BaseModel):
     """初始化配置文件模型"""
 
-    env_modules: List[EnvModuleConfig] = Field(..., min_length=1, description="环境模块列表")
-    agents: List[AgentConfig] = Field(..., min_length=1, description="Agent列表")
+    env_modules: list[EnvModuleConfig] = Field(
+        ..., min_length=1, description="环境模块列表"
+    )
+    agents: list[AgentConfig] = Field(..., min_length=1, description="Agent列表")
     codegen_router: CodeGenRouterConfig = Field(
         default_factory=CodeGenRouterConfig,
         description="CodeGenRouter 配置",
@@ -91,17 +97,17 @@ class QuestionItem(BaseModel):
         "text",
         description="回答类型",
     )
-    choices: List[str] = Field(default_factory=list, description="choice 题型可选项")
+    choices: list[str] = Field(default_factory=list, description="choice 题型可选项")
 
     @field_validator("choices")
     @classmethod
-    def validate_choices(cls, value: List[str]) -> List[str]:
+    def validate_choices(cls, value: list[str]) -> list[str]:
         cleaned = [str(item).strip() for item in value if str(item).strip()]
         return cleaned
 
     @field_validator("choices")
     @classmethod
-    def validate_choice_question(cls, value: List[str], info) -> List[str]:
+    def validate_choice_question(cls, value: list[str], info) -> list[str]:
         if info.data.get("response_type") == "choice" and not value:
             raise ValueError("choices are required when response_type='choice'")
         return value
@@ -114,21 +120,21 @@ class QuestionnaireStep(BaseModel):
     questionnaire_id: str = Field(..., min_length=1, description="问卷唯一标识")
     title: str | None = Field(None, description="问卷标题")
     description: str | None = Field(None, description="问卷说明")
-    target_agent_ids: List[int] | None = Field(
+    target_agent_ids: list[int] | None = Field(
         None,
         description="目标 Agent ID 列表；为空时发给全部 Agent",
     )
-    questions: List[QuestionItem] = Field(..., min_length=1, description="题目列表")
+    questions: list[QuestionItem] = Field(..., min_length=1, description="题目列表")
 
 
-StepUnion = Union[RunStep, AskStep, InterveneStep, QuestionnaireStep]
+StepUnion = RunStep | AskStep | InterveneStep | QuestionnaireStep
 
 
 class StepsConfig(BaseModel):
     """Steps.yaml配置文件模型"""
 
     start_t: str = Field(..., description="仿真开始时间（ISO格式）")
-    steps: List[StepUnion] = Field(..., min_length=1, description="步骤列表")
+    steps: list[StepUnion] = Field(..., min_length=1, description="步骤列表")
 
     @field_validator("start_t")
     @classmethod

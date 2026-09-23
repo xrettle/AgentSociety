@@ -1,5 +1,3 @@
-# ruff: noqa: E402
-
 import asyncio
 import json
 import logging
@@ -13,13 +11,13 @@ load_dotenv()
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
-from agentsociety2.contrib.env.mobility_space import MobilitySpace
+from agentsociety2.agent import PersonAgent
 from agentsociety2.contrib.env.event_space import EventSpace
 from agentsociety2.contrib.env.global_information import GlobalInformationEnv
-from agentsociety2.agent import PersonAgent
+from agentsociety2.contrib.env.mobility_space import MobilitySpace
 from agentsociety2.env import CodeGenRouter
+from agentsociety2.logger import get_logger, setup_logging
 from agentsociety2.society import AgentSociety
-from agentsociety2.logger import setup_logging, get_logger
 
 
 async def main_disaster_mobility(
@@ -46,7 +44,9 @@ async def main_disaster_mobility(
     logger.info("=" * 80)
 
     # 时间设置：每小时一步，共11天
-    start_time = datetime.now().replace(year=2026, month=2, day=9, hour=0, minute=0, second=0, microsecond=0)
+    start_time = datetime.now().replace(
+        year=2026, month=2, day=9, hour=0, minute=0, second=0, microsecond=0
+    )
     time_step_seconds = 60 * 60  # 1小时
     total_days = 11
     steps_per_day = 24
@@ -56,7 +56,9 @@ async def main_disaster_mobility(
     logger.info("\n【步骤1/4】加载 agent_profiles_ca_paradise.json...")
     if profiles_path is None:
         profiles_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../..", "agent_profiles_ca_paradise.json")
+            os.path.join(
+                os.path.dirname(__file__), "../../..", "agent_profiles_ca_paradise.json"
+            )
         )
     if not os.path.exists(profiles_path):
         logger.error(f"  ❌ agent profiles 文件不存在: {profiles_path}")
@@ -152,7 +154,9 @@ async def main_disaster_mobility(
 
     agents = [PersonAgent(**args) for args in agent_args]
     society = AgentSociety(
-        agent_specs=[{"id": a.id, "profile": a._profile, "config": a._config} for a in agents],
+        agent_specs=[
+            {"id": a.id, "profile": a._profile, "config": a._config} for a in agents
+        ],
         agent_class_name="PersonAgent",
         env_router=env_router,
         start_t=start_time,
@@ -168,10 +172,17 @@ async def main_disaster_mobility(
     for step_idx in range(total_steps):
         # Day 3 当日一早广播“突发山火”
         if step_idx == 2 * steps_per_day:
-            await global_info_env.set("紧急广播：极端寒潮袭击我市，请广大民众注意适当减少非必要出行")
+            await global_info_env.set(
+                "紧急广播：极端寒潮袭击我市，请广大民众注意适当减少非必要出行"
+            )
         # Day 4 到 Day 9 每天开始时广播“山火还在持续”
-        elif step_idx % steps_per_day == 0 and 3 * steps_per_day <= step_idx < 9 * steps_per_day:
-            await global_info_env.set("广播：寒潮仍在持续，请广大民众注意适当减少非必要出行")
+        elif (
+            step_idx % steps_per_day == 0
+            and 3 * steps_per_day <= step_idx < 9 * steps_per_day
+        ):
+            await global_info_env.set(
+                "广播：寒潮仍在持续，请广大民众注意适当减少非必要出行"
+            )
         # Day 10 当日一早广播灾害结束
         elif step_idx == 9 * steps_per_day:
             await global_info_env.set("广播：寒潮已经结束，可恢复正常秩序")
@@ -184,7 +195,9 @@ async def main_disaster_mobility(
 
         # 在环境 step 前记录当前移动中的人
         moving_before_env = {
-            pid for pid, person in mobility_env._persons.items() if person.status == "moving"
+            pid
+            for pid, person in mobility_env._persons.items()
+            if person.status == "moving"
         }
 
         await society._env_router.step(time_step_seconds, society._t)

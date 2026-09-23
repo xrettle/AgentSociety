@@ -9,7 +9,7 @@ The generated env module must satisfy the repository contract:
 - At least one valid `@tool`
 - `step()` exists
 - `cls()` works without required constructor args
-- Observation capability is exposed through readonly `kind="observe"` tools
+- Observation / statistics 均为可选：需要时用 `@tool(readonly=True, kind="observe"|"statistics")`；两者皆空时 CodeGenRouter 会跳过对应 init LLM codegen
 - `description()` is callable and returns a short summary
 - `init_description()` is callable and explains init kwargs; operations should be phrased in prose (bold function names + parameter descriptions), NOT as Python call literals — see `references/pitfalls.md` P2
 - Every `@tool(readonly=False)` returns a dict / Pydantic model with a STRING `status` field whose value is one of `"success" | "fail" | "in_progress" | "error"` — `bool` and `{"success": True}` are CRITICAL bugs (see `references/pitfalls.md` P1)

@@ -57,21 +57,14 @@ def test_classify_identifier() -> None:
 def test_extract_identifier_from_pdf_finds_doi(tmp_path: Path) -> None:
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(
-        b"%PDF-1.4\n"
-        b"1 0 obj<<>>endobj\n"
-        b"(doi:10.1038/nature14539) Tj\n"
-        b"trailer<<>>\n"
+        b"%PDF-1.4\n1 0 obj<<>>endobj\n(doi:10.1038/nature14539) Tj\ntrailer<<>>\n"
     )
     assert extract_identifier_from_pdf(pdf) == "10.1038/nature14539"
 
 
 def test_extract_identifier_from_pdf_finds_arxiv(tmp_path: Path) -> None:
     pdf = tmp_path / "attn.pdf"
-    pdf.write_bytes(
-        b"%PDF-1.4\n"
-        b"https://arxiv.org/abs/1706.03762v7\n"
-        b"%%EOF\n"
-    )
+    pdf.write_bytes(b"%PDF-1.4\nhttps://arxiv.org/abs/1706.03762v7\n%%EOF\n")
     assert extract_identifier_from_pdf(pdf) == "1706.03762"
 
 
@@ -116,11 +109,15 @@ def test_live_crossref_journal_doi() -> None:
 
 @pytest.mark.network
 def test_live_doi_content_negotiation_covers_journal_and_arxiv_doi() -> None:
-    journal = lookup_doi_content_negotiation("https://doi.org/10.1038/nature14539", timeout=30.0)
+    journal = lookup_doi_content_negotiation(
+        "https://doi.org/10.1038/nature14539", timeout=30.0
+    )
     assert journal.doi == "10.1038/nature14539"
     assert journal.title
 
-    arxiv_doi = lookup_doi_content_negotiation("10.48550/arXiv.1706.03762", timeout=30.0)
+    arxiv_doi = lookup_doi_content_negotiation(
+        "10.48550/arXiv.1706.03762", timeout=30.0
+    )
     assert arxiv_doi.doi == "10.48550/arXiv.1706.03762"
     assert "attention" in arxiv_doi.title.lower()
     bib = record_to_bibtex(arxiv_doi)

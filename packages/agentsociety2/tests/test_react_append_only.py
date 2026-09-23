@@ -125,8 +125,9 @@ class _ScriptedAgent(AgentBase):
         raise NotImplementedError
 
     # -- Hooks ------------------------------------------------------------
-    def build_react_messages(self, *, tick, t, observations, question=None,
-                             readonly=False, skill_hooks=None):
+    def build_react_messages(
+        self, *, tick, t, observations, question=None, readonly=False, skill_hooks=None
+    ):
         self.build_count += 1
         return [
             {"role": "system", "content": "SYSTEM"},
@@ -310,7 +311,9 @@ async def test_tool_exception_still_yields_a_tool_reply():
 async def test_multiple_tool_calls_get_one_reply_each():
     agent = _ScriptedAgent(
         [
-            _native(("c1", "read", '{"path": "a"}'), ("c2", "grep", '{"pattern": "p"}')),
+            _native(
+                ("c1", "read", '{"path": "a"}'), ("c2", "grep", '{"pattern": "p"}')
+            ),
             _native(("c3", "finish", '{"memories": [{"text": "x"}]}')),
         ]
     )
@@ -455,9 +458,9 @@ async def test_ask_mode_question_only_in_the_first_message():
     # The thread head (system + first user) is built by the hook, which the
     # scripted agent renders as "HEAD"; later turns carry only appended history.
     assert requests[0][1]["content"].startswith("HEAD")
-    assert sum(
-        1 for m in requests[1] if str(m.get("content", "")).startswith("HEAD")
-    ) == 1
+    assert (
+        sum(1 for m in requests[1] if str(m.get("content", "")).startswith("HEAD")) == 1
+    )
 
 
 async def test_ask_fallback_still_reads_stashed_free_text():

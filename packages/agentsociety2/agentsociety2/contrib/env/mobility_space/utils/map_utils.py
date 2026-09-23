@@ -1,8 +1,8 @@
+import itertools
 import math
-from typing import Literal, Union
+from typing import Literal
 
 import numpy as np
-import itertools
 
 
 def get_angle(x, y):
@@ -49,7 +49,7 @@ def point_on_line_given_distance(start_node, end_node, distance):
 def get_key_index_in_lane(
     nodes: list[dict[str, float]],
     distance: float,
-    direction: Union[Literal["front"], Literal["back"]],
+    direction: Literal["front", "back"],
 ) -> int:
     if direction == "front":
         _nodes = [n for n in nodes]
@@ -82,7 +82,7 @@ def get_key_index_in_lane(
 def get_xy_in_lane(
     nodes: list[dict[str, float]],
     distance: float,
-    direction: Union[Literal["front"], Literal["back"]],
+    direction: Literal["front", "back"],
 ) -> tuple[float, float]:
     if direction == "front":
         _nodes = [n for n in nodes]
@@ -123,7 +123,7 @@ def get_xy_in_lane(
 def get_direction_by_s(
     nodes: list[dict[str, float]],
     distance: float,
-    direction: Union[Literal["front"], Literal["back"]],
+    direction: Literal["front", "back"],
 ) -> float:
     if direction == "front":
         _nodes = [n for n in nodes]

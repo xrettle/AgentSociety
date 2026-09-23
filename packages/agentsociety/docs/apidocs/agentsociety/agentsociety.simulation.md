@@ -13,10 +13,10 @@
 :titlesonly:
 :maxdepth: 1
 
-agentsociety.simulation.agentsociety
 agentsociety.simulation.simulationengine
-agentsociety.simulation.type
 agentsociety.simulation.individualengine
+agentsociety.simulation.agentsociety
+agentsociety.simulation.type
 ```
 
 ## Package Contents

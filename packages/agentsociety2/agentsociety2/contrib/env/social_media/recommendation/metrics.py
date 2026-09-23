@@ -2,10 +2,9 @@
 推荐系统评估指标模块
 """
 
-import numpy as np
-from typing import List, Tuple
 from dataclasses import dataclass
 
+import numpy as np
 from sklearn.metrics import roc_auc_score
 
 
@@ -18,9 +17,9 @@ class RecommendationMetrics:
     mae: float = 0.0
 
     # 排序指标
-    ndcg: float = 0.0          # NDCG@K (默认K=10)
-    auc: float = 0.0           # 全局AUC
-    uauc: float = 0.0          # User-wise AUC
+    ndcg: float = 0.0  # NDCG@K (默认K=10)
+    auc: float = 0.0  # 全局AUC
+    uauc: float = 0.0  # User-wise AUC
 
     # 用户交互指标
     view_rate: float = 0.0
@@ -33,13 +32,10 @@ class MetricsCalculator:
 
     def __init__(self):
         """初始化计算器"""
-        pass
 
     def calculate_rmse_mae(
-        self,
-        predictions: List[float],
-        ground_truth: List[float]
-    ) -> Tuple[float, float]:
+        self, predictions: list[float], ground_truth: list[float]
+    ) -> tuple[float, float]:
         """
         计算RMSE和MAE
 
@@ -64,11 +60,11 @@ class MetricsCalculator:
 
     def calculate_ndcg(
         self,
-        user_ids: List[int],
-        predictions: List[float],
-        labels: List[int],
-        k: int = 10
-    ) -> Tuple[float, int]:
+        user_ids: list[int],
+        predictions: list[float],
+        labels: list[int],
+        k: int = 10,
+    ) -> tuple[float, int]:
         """
         计算User-wise NDCG@K
 
@@ -130,7 +126,7 @@ class MetricsCalculator:
             dcg = (ranked_label * flag).sum()
 
             # IDCG计算（理想情况）
-            idcg = flag[:int(pos_num)].sum()
+            idcg = flag[: int(pos_num)].sum()
 
             if idcg > 0:
                 ndcg = dcg / idcg
@@ -144,11 +140,7 @@ class MetricsCalculator:
         else:
             return 0.0, 0
 
-    def calculate_auc(
-        self,
-        predictions: List[float],
-        labels: List[int]
-    ) -> float:
+    def calculate_auc(self, predictions: list[float], labels: list[int]) -> float:
         """
         计算全局AUC
 
@@ -171,11 +163,8 @@ class MetricsCalculator:
         return float(auc)
 
     def calculate_uauc(
-        self,
-        user_ids: List[int],
-        predictions: List[float],
-        labels: List[int]
-    ) -> Tuple[float, int]:
+        self, user_ids: list[int], predictions: list[float], labels: list[int]
+    ) -> tuple[float, int]:
         """
         计算User-wise AUC
 
@@ -227,7 +216,10 @@ class MetricsCalculator:
                 computed_users += 1
             except Exception:
                 import logging
-                logging.getLogger(__name__).debug("Failed to compute AUC for user %s", k, exc_info=True)
+
+                logging.getLogger(__name__).debug(
+                    "Failed to compute AUC for user %s", k, exc_info=True
+                )
 
             total_num += counts[k]
 
@@ -238,7 +230,4 @@ class MetricsCalculator:
             return 0.0, 0
 
 
-__all__ = [
-    "MetricsCalculator",
-    "RecommendationMetrics"
-]
+__all__ = ["MetricsCalculator", "RecommendationMetrics"]

@@ -1338,7 +1338,6 @@ Use this routing model:
 
 - Start with \`agentsociety-research-pipeline\` when the current stage is unclear.
 - Use \`agentsociety-literature-search\` for academic literature collection.
-- Use \`agentsociety-web-research\` for supplementary web context.
 - Use \`agentsociety-scan-modules\` before hypothesis creation or experiment configuration.
 - Before \`experiment-config\`, \`create-agent\`, or \`create-env-module\`, resolve the simulation scale budget: target agent count or range, step budget, runtime budget, and preferred complexity tier. If the budget is missing, ask for it first and compare 2-3 approaches with trade-offs before choosing one.
 - If the work may depend on external data, search datasets first with \`agentsociety-use-dataset\`; if a local file should be shared or reused, guide the user through \`agentsociety-create-dataset\` upload instead of hand-copying data into config.

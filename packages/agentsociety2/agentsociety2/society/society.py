@@ -25,9 +25,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
-
-from agentsociety2.storage.workspace_state import atomic_write_text
+from typing import TYPE_CHECKING, Any
 
 from agentsociety2.agent.runner import (
     create_agents_batch,
@@ -35,6 +33,7 @@ from agentsociety2.agent.runner import (
     step_agent_batch,
 )
 from agentsociety2.env import RouterBase
+from agentsociety2.logger import get_logger
 from agentsociety2.society.helper import AgentSocietyHelper
 from agentsociety2.society.questionnaire import (
     AgentQuestionnaireResult,
@@ -50,8 +49,11 @@ from agentsociety2.storage.replay_metadata import (
     AGENT_PROFILE_DATASET_CAPABILITY,
     AGENT_PROFILE_DATASET_ID,
     AGENT_PROFILE_TABLE_NAME,
+    SIMULATION_TIMELINE_CAPABILITY,
+    SIMULATION_TIMELINE_DATASET_ID,
+    SIMULATION_TIMELINE_TABLE_NAME,
 )
-from agentsociety2.logger import get_logger
+from agentsociety2.storage.workspace_state import atomic_write_text
 
 if TYPE_CHECKING:
     from agentsociety2.agent.base import AgentBase
@@ -103,13 +105,13 @@ class AgentSociety:
 
     AgentSociety 是框架的核心类，负责管理仿真生命周期：
 
-    - 持有 **agent_specs**（元数据：``{"id","profile","config"}``）与 **agent_ids**，
+    - 持有 **agent_specs** （元数据含 id / profile / config）与 **agent_ids**，
       绝不在主进程常驻 agent 对象。
     - ``step`` 每 tick 切批提交 ``step_agent_batch`` Ray Task，跨 worker 并行；批内顺序执行
       （每个 agent 是 LLM-bound，顺序无妨）。
-    - ``ask``/``intervene``/``run_questionnaire`` 为低频外部查询，按需在主进程
-      ``from_workspace`` 重建目标 agent（workspace 在本地磁盘）。
-      状态落盘使用 ``to_workspace`` / ``from_workspace``（society 级 checkpoint）。
+    - ``ask`` / ``intervene`` / ``run_questionnaire`` 为低频外部查询，按需在主进程
+      ``from_workspace`` 重建目标 agent （workspace 在本地磁盘）。
+      状态落盘使用 ``to_workspace`` / ``from_workspace`` （society 级 checkpoint）。
 
     Example::
 
@@ -136,13 +138,13 @@ class AgentSociety:
         agent_class_name: str,
         env_router: RouterBase,
         start_t: datetime,
-        run_dir: Optional[Path] = None,
+        run_dir: Path | None = None,
         *,
-        service_proxy: Optional["ServiceProxy"] = None,
-        batch_size: Optional[int] = None,
+        service_proxy: ServiceProxy | None = None,
+        batch_size: int | None = None,
         enable_replay: bool = True,
-        env_module_types: Optional[list[str]] = None,
-        env_kwargs: Optional[dict[str, dict]] = None,
+        env_module_types: list[str] | None = None,
+        env_kwargs: dict[str, dict] | None = None,
     ):
         """创建 record-based 仿真编排器。
 
@@ -197,13 +199,14 @@ class AgentSociety:
         # 由 CLI 在每个顶层 step 开始前推进；resume 时据此跳过已执行的前置步。
         self._completed_step_count: int = 0
         # steps.yaml 的 hash（CLI 在 init 前设置），用于 resume 时检测 steps 漂移。
-        self._steps_hash: Optional[str] = None
+        self._steps_hash: str | None = None
 
-        self._service_proxy: Optional["ServiceProxy"] = service_proxy
+        self._service_proxy: ServiceProxy | None = service_proxy
         self._owns_service_proxy = service_proxy is not None
 
         self._replay_writer: Any = None
         self._agent_profiles_persisted = False
+        self._simulation_timeline_ready = False
         self._agents_created = False
         # SOCIETY.json（不可变全量）只在 init 写一次；resume 时由 from_workspace
         # 置 True 跳过，避免覆盖原 checkpoint。
@@ -213,7 +216,7 @@ class AgentSociety:
         self._token_stats: dict[str, dict[str, int]] = {}
 
         # Helper is built lazily on first ask/intervene (it reconstructs agents on demand).
-        self._helper: Optional[AgentSocietyHelper] = None
+        self._helper: AgentSocietyHelper | None = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -364,6 +367,70 @@ class AgentSociety:
             await self._replay_writer.write_batch(AGENT_PROFILE_TABLE_NAME, rows)
         self._agent_profiles_persisted = True
 
+    async def _ensure_simulation_timeline_dataset(self) -> None:
+        """Register the society-owned simulation timeline dataset once."""
+        if self._replay_writer is None or self._simulation_timeline_ready:
+            return
+        columns = [
+            ColumnDef(
+                "step",
+                "INTEGER",
+                nullable=False,
+                logical_type="step",
+                analysis_role="timestamp",
+                description="Simulation step index for this timeline marker.",
+            ),
+            ColumnDef(
+                "t",
+                "TIMESTAMP",
+                nullable=False,
+                logical_type="timestamp",
+                analysis_role="timestamp",
+                description="Simulation timestamp for this timeline marker.",
+            ),
+        ]
+        await self._replay_writer.register_table(
+            TableSchema(
+                name=SIMULATION_TIMELINE_TABLE_NAME,
+                columns=columns,
+                primary_key=["step"],
+                indexes=[["t"]],
+            )
+        )
+        await self._replay_writer.register_dataset(
+            ReplayDatasetSpec(
+                dataset_id=SIMULATION_TIMELINE_DATASET_ID,
+                table_name=SIMULATION_TIMELINE_TABLE_NAME,
+                module_name="AgentSociety",
+                kind="env_snapshot",
+                title="Simulation Timeline",
+                description=(
+                    "Society-owned step markers so replay has a timeline even "
+                    "while a long tick is still running."
+                ),
+                step_key="step",
+                time_key="t",
+                default_order=["step"],
+                capabilities=[
+                    SIMULATION_TIMELINE_CAPABILITY,
+                    "env_snapshot",
+                    "timeseries",
+                ],
+            ),
+            columns,
+        )
+        self._simulation_timeline_ready = True
+
+    async def _write_simulation_timeline_point(self, step: int, t: datetime) -> None:
+        """Append one timeline marker used by the replay UI."""
+        if self._replay_writer is None:
+            return
+        await self._ensure_simulation_timeline_dataset()
+        await self._replay_writer.write(
+            SIMULATION_TIMELINE_TABLE_NAME,
+            {"step": int(step), "t": t},
+        )
+
     # ------------------------------------------------------------------
     # Workspace helpers
     # ------------------------------------------------------------------
@@ -394,7 +461,7 @@ class AgentSociety:
             await asyncio.gather(*[self._await_ref(r) for r in refs])
         self._agents_created = True
 
-    async def _resolve_service_proxy(self) -> "ServiceProxy":
+    async def _resolve_service_proxy(self) -> ServiceProxy:
         """Return the bound service proxy, building one if none injected."""
         if self._service_proxy is not None:
             return self._service_proxy
@@ -439,6 +506,11 @@ class AgentSociety:
 
         await self._env_router.init(self._t)
 
+        # Step-0 timeline marker: replay UI can open immediately after init,
+        # even if the first agent tick has not finished writing env snapshots.
+        if self._replay_writer is not None:
+            await self._write_simulation_timeline_point(0, self._t)
+
         # 写一次不可变全量 checkpoint（含 agent_specs / env 配置 / steps_hash）。
         # resume 时（from_workspace 已置 _society_json_written=True）跳过，避免覆盖。
         if self._run_dir is not None and not self._society_json_written:
@@ -471,7 +543,7 @@ class AgentSociety:
     # ------------------------------------------------------------------
     # 状态持久化 / resume（无状态 checkpoint）
     # ------------------------------------------------------------------
-    async def to_workspace(self, *, tick: Optional[int] = None) -> None:
+    async def to_workspace(self, *, tick: int | None = None) -> None:
         """持久化 society + env 状态（每步调用，无状态 resume）。
 
         让 env router 落盘各模块状态，并写 ``run_dir/SOCIETY_STEP.json``（仅少量
@@ -485,7 +557,7 @@ class AgentSociety:
             return
         try:
             await self._env_router.to_workspaces()
-        except Exception as exc:  # noqa: BLE001 - 落盘失败不中断 step
+        except Exception as exc:
             logger.warning("env to_workspaces failed: %s", exc)
         self._write_society_step_json()
 
@@ -536,7 +608,10 @@ class AgentSociety:
         if self._run_dir is None:
             return None
 
-        from agentsociety2.config.llm_dispatcher import cache_hit_rate, merge_token_stats
+        from agentsociety2.config.llm_dispatcher import (
+            cache_hit_rate,
+            merge_token_stats,
+        )
 
         # Snapshot each side once: ``router_token_stats`` hits the env router.
         agent_stats = self.token_stats
@@ -634,8 +709,8 @@ class AgentSociety:
         run_dir: Path,
         *,
         env_router: RouterBase,
-        service_proxy: Optional["ServiceProxy"] = None,
-    ) -> "AgentSociety":
+        service_proxy: ServiceProxy | None = None,
+    ) -> AgentSociety:
         """从 ``run_dir`` 重建 society（resume）。
 
         读 ``SOCIETY.json``（不可变：agent specs、env 模块类型+kwargs）+
@@ -669,11 +744,14 @@ class AgentSociety:
             env_kwargs=dict(meta.get("env_kwargs", {})),
         )
         society._steps_hash = meta.get("steps_hash")
-        society._step_count = int(step_meta.get("step_count", meta.get("step_count", 0)))
+        society._step_count = int(
+            step_meta.get("step_count", meta.get("step_count", 0))
+        )
         society._completed_step_count = int(step_meta.get("completed_step_count", 0))
         # init() 时跳过 agent workspace 创建、profile 重写，以及 SOCIETY.json 覆盖。
         society._agents_created = True
         society._agent_profiles_persisted = True
+        society._simulation_timeline_ready = True
         society._society_json_written = True
         return society
 
@@ -695,6 +773,8 @@ class AgentSociety:
         if not self._agent_ids:
             # 仍推进 env + 时钟。
             self._env_router.set_current_time(self._t)
+            if self._replay_writer is not None:
+                await self._write_simulation_timeline_point(self._step_count, self._t)
             await self._env_router.step(tick, self._t)
             self._t += timedelta(seconds=tick)
             self._step_count += 1
@@ -707,6 +787,11 @@ class AgentSociety:
         # Push the clock to env BEFORE fan-out so all batches share the same
         # time context (env modules read it during agent tool calls).
         self._env_router.set_current_time(self._t)
+
+        # Publish the upcoming step marker before the long agent fan-out so
+        # replay stays usable while a tick is still running.
+        if self._replay_writer is not None:
+            await self._write_simulation_timeline_point(self._step_count, self._t)
 
         # Chunk ids and submit one Ray Task per chunk.
         refs = []
@@ -727,14 +812,24 @@ class AgentSociety:
         if refs:
             from agentsociety2.config.llm_dispatcher import merge_token_stats
 
-            batch_returns = await asyncio.gather(
-                *[self._await_ref(r) for r in refs]
-            )
+            batch_returns = await asyncio.gather(*[self._await_ref(r) for r in refs])
+            failures: list[str] = []
             for br in batch_returns:
-                if isinstance(br, dict) and br.get("token_stats"):
+                if not isinstance(br, dict):
+                    continue
+                if br.get("token_stats"):
                     self._token_stats = merge_token_stats(
                         self._token_stats, br["token_stats"]
                     )
+                for item in br.get("results") or []:
+                    if isinstance(item, dict) and not item.get("ok", True):
+                        failures.append(f"agent {item.get('id')}: {item.get('error')}")
+            if failures:
+                preview = "; ".join(failures[:5])
+                more = "" if len(failures) <= 5 else f" (+{len(failures) - 5} more)"
+                raise RuntimeError(
+                    f"Agent step failures ({len(failures)}): {preview}{more}"
+                )
 
         # Env advances AFTER agents.
         await self._env_router.step(tick, self._t)
@@ -762,7 +857,7 @@ class AgentSociety:
     # ------------------------------------------------------------------
     # Queries — low-volume, reconstruct target agents locally
     # ------------------------------------------------------------------
-    async def _reconstruct_agent(self, agent_id: int) -> "AgentBase":
+    async def _reconstruct_agent(self, agent_id: int) -> AgentBase:
         """Reconstruct a single agent in the society process via from_workspace.
 
         Used by ask/intervene/questionnaire (low-volume external queries). The
@@ -786,7 +881,7 @@ class AgentSociety:
         ws = self._workspace_for(int(agent_id))
         return await cls.from_workspace(ws, proxy)
 
-    async def _reconstruct_agents(self, agent_ids: list[int]) -> list["AgentBase"]:
+    async def _reconstruct_agents(self, agent_ids: list[int]) -> list[AgentBase]:
         """Reconstruct a subset of agents (parallel from_workspace calls)."""
         coros = [self._reconstruct_agent(int(aid)) for aid in agent_ids]
         return list(await asyncio.gather(*coros))
@@ -881,9 +976,7 @@ class AgentSociety:
 
         from agentsociety2.config.llm_dispatcher import merge_token_stats
 
-        batch_returns = await asyncio.gather(
-            *[self._await_ref(r) for r in refs]
-        )
+        batch_returns = await asyncio.gather(*[self._await_ref(r) for r in refs])
 
         # Merge per-agent results across batches; aggregate token deltas.
         results_by_id: dict[int, dict] = {}
@@ -902,9 +995,7 @@ class AgentSociety:
         for aid in ordered_ids:
             r = results_by_id.get(aid)
             if r is not None and r.get("ok") and r.get("result") is not None:
-                responses.append(
-                    AgentQuestionnaireResult.model_validate(r["result"])
-                )
+                responses.append(AgentQuestionnaireResult.model_validate(r["result"]))
 
         if failed:
             logger.warning(

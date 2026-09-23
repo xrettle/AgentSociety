@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
 
 from agentsociety2.logger import get_logger
 
 logger = get_logger()
 
 
-def read_hypothesis_info(hyp_dir: Path) -> Optional[str]:
+def read_hypothesis_info(hyp_dir: Path) -> str | None:
     """Read hypothesis information from HYPOTHESIS.md
 
     :param hyp_dir: Path to hypothesis directory
@@ -27,7 +27,7 @@ def read_hypothesis_info(hyp_dir: Path) -> Optional[str]:
     return None
 
 
-def read_experiment_info(exp_dir: Path) -> Optional[str]:
+def read_experiment_info(exp_dir: Path) -> str | None:
     """Read experiment information from EXPERIMENT.md
 
     :param exp_dir: Path to experiment directory
@@ -40,7 +40,7 @@ def read_experiment_info(exp_dir: Path) -> Optional[str]:
     return None
 
 
-def read_sim_settings(hyp_dir: Path) -> Dict[str, Any]:
+def read_sim_settings(hyp_dir: Path) -> dict[str, Any]:
     """Read SIM_SETTINGS.json
 
     :param hyp_dir: Path to hypothesis directory
@@ -56,7 +56,7 @@ def read_sim_settings(hyp_dir: Path) -> Dict[str, Any]:
     return {}
 
 
-def read_init_config(exp_dir: Path) -> Optional[Dict[str, Any]]:
+def read_init_config(exp_dir: Path) -> dict[str, Any] | None:
     """Read init_config.json from experiment init directory
 
     :param exp_dir: Path to experiment directory
@@ -76,7 +76,7 @@ def get_experiment_paths(
     workspace_path: Path,
     hypothesis_id: str,
     experiment_id: str,
-) -> Dict[str, Path]:
+) -> dict[str, Path]:
     """Get all relevant paths for an experiment
 
     :param workspace_path: Path to workspace directory
@@ -117,7 +117,7 @@ def validate_experiment_exists(
     workspace_path: Path,
     hypothesis_id: str,
     experiment_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate that an experiment directory structure exists
 
     :param workspace_path: Path to workspace directory

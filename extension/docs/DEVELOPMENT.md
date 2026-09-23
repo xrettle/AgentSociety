@@ -153,8 +153,6 @@ extension/
 │   ├── agentsociety-literature-search/ # 文献检索
 │   ├── agentsociety-run-experiment/  # 运行实验
 │   ├── agentsociety-scan-modules/    # 扫描模块
-│   ├── agentsociety-synthesize/      # 结果综合
-│   ├── agentsociety-web-research/    # 网络研究
 │   ├── paper-toolkit plugin             # 外部论文模板、证据图、检查和编译工具
 │   ├── agentsociety-analysis/        # …/v1.0.0/support/frontend-design 等分析附属包
 │   ├── docx/                         # Word 文档处理

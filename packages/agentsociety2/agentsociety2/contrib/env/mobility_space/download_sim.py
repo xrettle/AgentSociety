@@ -1,7 +1,9 @@
 import os
 import platform
 import stat
+
 import requests
+
 from agentsociety2.logger import get_logger
 
 __all__ = ["download_binary"]
@@ -29,12 +31,16 @@ def download_binary(home_dir: str) -> str:
         if machine == "x86_64":
             arch = "x86_64"
         else:
-            raise Exception("routing: Unsupported architecture on Linux. Only x86_64 is supported.")
+            raise Exception(
+                "routing: Unsupported architecture on Linux. Only x86_64 is supported."
+            )
     elif system == "Darwin" and machine.startswith("arm"):
         plat_dir = "darwin"
         arch = "arm64"
     else:
-        raise Exception("routing: Unsupported platform. Only Linux x86_64 and Darwin (macOS) arm64 are supported.")
+        raise Exception(
+            "routing: Unsupported platform. Only Linux x86_64 and Darwin (macOS) arm64 are supported."
+        )
 
     url = BIN_SOURCES[binary_name].get(f"{plat_dir}_{arch}")
     if not url:
@@ -51,6 +57,7 @@ def download_binary(home_dir: str) -> str:
     os.chmod(bin_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
     get_logger().info(msg=f"Downloaded {binary_name} to {bin_path}")
     return bin_path
+
 
 if __name__ == "__main__":
     print(download_binary("."))

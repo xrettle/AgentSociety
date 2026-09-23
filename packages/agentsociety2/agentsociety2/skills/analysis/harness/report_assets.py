@@ -4,7 +4,6 @@ import filecmp
 import re
 import shutil
 from pathlib import Path
-from typing import List, Set
 
 from agentsociety2.skills.analysis.chart_export import ensure_brand_icon
 
@@ -16,8 +15,8 @@ HTML_ASSET_REF_RE = re.compile(
 CHARTS_PATH_IN_BODY_RE = re.compile(r"""(?:\]\(|src=["'])(charts/[^"')]+)""")
 
 
-def referenced_asset_names(presentation_dir: Path) -> Set[str]:
-    names: Set[str] = set()
+def referenced_asset_names(presentation_dir: Path) -> set[str]:
+    names: set[str] = set()
     for fname in (
         "report_zh.md",
         "report_en.md",
@@ -33,8 +32,8 @@ def referenced_asset_names(presentation_dir: Path) -> Set[str]:
     return names
 
 
-def charts_path_refs_in_reports(presentation_dir: Path) -> List[str]:
-    found: List[str] = []
+def charts_path_refs_in_reports(presentation_dir: Path) -> list[str]:
+    found: list[str] = []
     for fname in (
         "report_zh.md",
         "report_en.md",
@@ -57,8 +56,8 @@ def sync_report_assets_from_reports(presentation_dir: Path) -> dict:
     assets_dir.mkdir(parents=True, exist_ok=True)
     ensure_brand_icon(assets_dir)
 
-    copied: List[str] = []
-    missing: List[str] = []
+    copied: list[str] = []
+    missing: list[str] = []
 
     for name in sorted(referenced_asset_names(presentation_dir)):
         dest = assets_dir / name

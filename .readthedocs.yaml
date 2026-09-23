@@ -12,6 +12,8 @@ build:
 python:
   install:
     - requirements: packages/agentsociety/docs/requirements.txt
+    - method: pip
+      path: packages/agentsociety
 
 sphinx:
   configuration: packages/agentsociety/docs/conf.py

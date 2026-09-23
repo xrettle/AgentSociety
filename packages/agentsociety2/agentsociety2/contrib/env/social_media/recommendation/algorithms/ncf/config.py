@@ -3,7 +3,6 @@ NCF (Neural Collaborative Filtering) 算法配置
 """
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
@@ -20,7 +19,7 @@ class NCFConfig:
     """
 
     embedding_dim: int = 32
-    mlp_layers: List[int] = None
+    mlp_layers: list[int] = None
     learning_rate: float = 0.001
     batch_size: int = 256
     n_epochs: int = 50
@@ -42,4 +41,3 @@ class NCFConfig:
             raise ValueError("mlp_layers 不能为空")
         if any(layer <= 0 for layer in self.mlp_layers):
             raise ValueError("mlp_layers 中的所有值必须 > 0")
-

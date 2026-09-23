@@ -163,7 +163,7 @@
     "errorTitle": "加载回放失败",
     "retry": "重试",
     "noData": "暂无回放数据",
-    "noDataHint": "本实验没有已记录的仿真步骤。请确保仿真已开启回放记录。",
+    "noDataHint": "还没有可播放的仿真步骤时间轴。",
     "left": {
       "agentInfo": "智能体信息",
       "selectAgent": "在地图上选择智能体以查看详情",
@@ -230,7 +230,11 @@
       "mapIntegration": "地图集成",
       "mapIntegrationHint": "如需使用 DeckGL + Mapbox 进行交互式地图展示，请安装依赖：",
       "installHint": "npm install deck.gl react-map-gl mapbox-gl"
-    }
+    },
+    "noDataRunning": "仿真仍在运行（已完成 {{completed}} 步）。回放标记会在每步开始时写入；当前若仍为空，请稍后点击刷新。",
+    "noDataCompleted": "实验已结束，但没有可回放的步骤快照。请检查环境模块是否在 step() 中写入了 agent/env state。",
+    "noDataRegistered": "已注册 {{datasets}} 个数据集，其中 {{nonempty}} 个有数据。时间轴仍为空时，通常是第一步尚未完成。",
+    "refreshTimeline": "刷新时间轴"
   },
   "configPage": {
     "title": "AI Social Scientist 配置",

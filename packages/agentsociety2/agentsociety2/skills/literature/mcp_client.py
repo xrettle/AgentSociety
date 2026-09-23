@@ -131,23 +131,23 @@ async def call_literature_mcp_tool(
     payload = arguments or {}
     timeout_seconds = float(timeout)
 
-    async with streamablehttp_client(
-        url,
-        headers=headers,
-        timeout=timeout_seconds,
-        sse_read_timeout=timeout_seconds,
-    ) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool(tool_name, arguments=payload)
-            if getattr(result, "isError", False):
-                message = (
-                    _extract_tool_json(result)
-                    if result.content
-                    else {"error": "unknown"}
-                )
-                raise RuntimeError(f"MCP tool error: {message}")
-            return _extract_tool_json(result)
+    async with (
+        streamablehttp_client(
+            url,
+            headers=headers,
+            timeout=timeout_seconds,
+            sse_read_timeout=timeout_seconds,
+        ) as (read, write, _),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        result = await session.call_tool(tool_name, arguments=payload)
+        if getattr(result, "isError", False):
+            message = (
+                _extract_tool_json(result) if result.content else {"error": "unknown"}
+            )
+            raise RuntimeError(f"MCP tool error: {message}")
+        return _extract_tool_json(result)
 
 
 async def call_literature_search_mcp(

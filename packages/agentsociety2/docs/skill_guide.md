@@ -172,6 +172,7 @@ script: scripts/calc.py
 calc.py（提供 ``entrypoint``，进程内执行；CLI 与 entrypoint 共用同一派发）：
 ```python
 """Calculator skill script."""
+
 import argparse
 import contextvars
 import json
@@ -209,6 +210,7 @@ def entrypoint(argv: list[str], ctx: Any) -> str:
     parser.add_argument("--args-json", default="{}")
     ns = parser.parse_args(list(argv))
     import json as _json
+
     ns.expression = _json.loads(ns.args_json or "{}").get("expression", "0")
     _WS_ROOT.set(Path(str(getattr(ctx, "workspace_root"))).resolve())
     dispatch(ns)
@@ -220,6 +222,7 @@ def main() -> int:
     parser.add_argument("--args-json", default="{}")
     ns = parser.parse_args()
     import json as _json
+
     ns.expression = _json.loads(ns.args_json or "{}").get("expression", "0")
     return dispatch(ns)
 

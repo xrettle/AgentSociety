@@ -9,14 +9,14 @@ coding/implementation in the main loop).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agentsociety2.logger import get_logger
 
 logger = get_logger()
 
 
-def suggest_modules_for_topic(topic: str) -> Dict[str, Any]:
+def suggest_modules_for_topic(topic: str) -> dict[str, Any]:
     """Suggest appropriate agent and environment modules for a research topic
 
     This function analyzes the research topic and suggests suitable
@@ -43,17 +43,21 @@ def suggest_modules_for_topic(topic: str) -> Dict[str, Any]:
         # Social/interaction topics
         "social": (["person_agent"], ["simple_social_space", "global_information"]),
         "interaction": (["person_agent"], ["simple_social_space"]),
-        "communication": (["person_agent"], ["simple_social_space", "global_information"]),
-        "information": (["person_agent"], ["global_information", "simple_social_space"]),
+        "communication": (
+            ["person_agent"],
+            ["simple_social_space", "global_information"],
+        ),
+        "information": (
+            ["person_agent"],
+            ["global_information", "simple_social_space"],
+        ),
         "influence": (["person_agent"], ["simple_social_space", "global_information"]),
         "network": (["person_agent"], ["simple_social_space", "global_information"]),
-
         # Economic topics
         "economic": (["llm_donor_agent"], ["economy_space"]),
         "money": (["llm_donor_agent"], ["economy_space"]),
         "donat": (["llm_donor_agent"], ["economy_space", "reputation_game"]),
         "trade": (["llm_donor_agent"], ["economy_space"]),
-
         # Game theory topics
         "prisoner": (["prisoners_dilemma_agent"], ["prisoners_dilemma"]),
         "dilemma": (["prisoners_dilemma_agent"], ["prisoners_dilemma"]),
@@ -61,12 +65,10 @@ def suggest_modules_for_topic(topic: str) -> Dict[str, Any]:
         "commons": (["commons_tragedy_agent"], ["commons_tragedy"]),
         "trust": (["trust_game_agent"], ["trust_game"]),
         "volunteer": (["volunteer_dilemma_agent"], ["volunteer_dilemma"]),
-
         # Mobility topics
         "mobility": (["person_agent"], ["mobility_space", "simple_social_space"]),
         "movement": (["person_agent"], ["mobility_space"]),
         "location": (["person_agent"], ["mobility_space"]),
-
         # Social media topics
         "social media": (["person_agent"], ["social_media"]),
         "platform": (["person_agent"], ["social_media"]),
@@ -107,10 +109,10 @@ def generate_hypothesis_config(
     topic: str,
     description: str,
     rationale: str,
-    groups: List[Dict[str, Any]],
-    agent_classes: Optional[List[str]] = None,
-    env_modules: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    groups: list[dict[str, Any]],
+    agent_classes: list[str] | None = None,
+    env_modules: list[str] | None = None,
+) -> dict[str, Any]:
     """Generate a complete hypothesis configuration
 
     This function creates a properly formatted hypothesis configuration
@@ -149,7 +151,7 @@ def validate_experiment_ready(
     workspace_path: Path,
     hypothesis_id: str,
     experiment_id: str,
-) -> Tuple[bool, List[str], Dict[str, Any]]:
+) -> tuple[bool, list[str], dict[str, Any]]:
     """Check if an experiment is ready to run
 
     This function validates that all necessary configuration is in place
@@ -220,7 +222,7 @@ def get_experiment_template(
     workspace_path: Path,
     hypothesis_id: str,
     experiment_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get a template for experiment configuration
 
     This function provides a template structure that Claude Code can
@@ -234,8 +236,8 @@ def get_experiment_template(
     """
     from agentsociety2.skills.experiment.config import (
         get_experiment_paths,
-        read_sim_settings,
         read_experiment_info,
+        read_sim_settings,
     )
 
     paths = get_experiment_paths(workspace_path, hypothesis_id, experiment_id)
@@ -271,7 +273,7 @@ def get_experiment_template(
     return template
 
 
-def format_module_suggestion_message(suggestions: Dict[str, Any]) -> str:
+def format_module_suggestion_message(suggestions: dict[str, Any]) -> str:
     """Format module suggestions into a helpful message
 
     :param suggestions: Dictionary from suggest_modules_for_topic()

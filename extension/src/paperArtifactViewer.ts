@@ -15,6 +15,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
+import { isExtensionZh } from './i18n';
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -22,12 +24,13 @@ export class PaperArtifactViewer {
   private static currentPanel: vscode.WebviewPanel | undefined;
 
   public static async show(filePath: string): Promise<void> {
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
     let data: any = null;
     let error: string | null = null;
 
     const fileName = path.basename(filePath);
     const parentDir = path.basename(path.dirname(filePath));
+    const lower = filePath.toLowerCase();
 
     try {
       const stat = fs.statSync(filePath);
@@ -36,7 +39,10 @@ export class PaperArtifactViewer {
           ? `文件过大（>${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB），请用编辑器打开`
           : `File too large (>${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB); open in editor`;
       } else {
-        data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        data = lower.endsWith('.yaml') || lower.endsWith('.yml')
+          ? yaml.load(raw)
+          : JSON.parse(raw);
       }
     } catch (e: any) {
       error = e.message;

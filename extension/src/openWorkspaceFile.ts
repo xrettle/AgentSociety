@@ -4,6 +4,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { isExtensionZh } from './i18n';
 
 const PDF_PANEL_TYPE = 'agentsocietyPdfPreview';
 
@@ -24,7 +25,7 @@ export async function openPdfPreview(filePath: string): Promise<void> {
     }
   );
   const src = panel.webview.asWebviewUri(uri);
-  const isZh = vscode.env.language.startsWith('zh');
+  const isZh = isExtensionZh();
   panel.webview.html = `<!DOCTYPE html>
 <html lang="${isZh ? 'zh-CN' : 'en'}">
 <head>

@@ -16,11 +16,11 @@ import os
 import sys
 import traceback
 import types
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Protocol
+from typing import Any, Protocol
 
-from agentsociety2.agent.person_prompt import skill_content_xml
 from agentsociety2.agent.base.skill_hook_context import (
     HookContext,
     _reset_hook_context,
@@ -28,6 +28,7 @@ from agentsociety2.agent.base.skill_hook_context import (
 )
 from agentsociety2.agent.base.skill_registry import SkillDescriptor
 from agentsociety2.agent.base.workspace_fs import CommandResult, WorkspaceFS
+from agentsociety2.agent.person_prompt import skill_content_xml
 from agentsociety2.trace import JsonlTraceWriter
 
 ALLOWED_ENV_VARS = frozenset(
@@ -200,6 +201,8 @@ class AgentSkillRuntime:
         # Imported skill-script modules, cached by (path, mtime) so the module
         # body runs once; later calls just invoke its entrypoint.
         self._script_module_cache: dict[tuple[str, float], types.ModuleType] = {}
+        self._activated_content_cache_key: tuple[str, ...] | None = None
+        self._activated_content_cache_value: str = ""
 
     # ------------------------------------------------------------------
     # Workspace lifecycle
@@ -448,9 +451,7 @@ class AgentSkillRuntime:
             return candidates[0]
         return ""
 
-    def resolve_skill_id(
-        self, token: str, *, visible_only: bool = True
-    ) -> str:
+    def resolve_skill_id(self, token: str, *, visible_only: bool = True) -> str:
         """Resolve a skill id or display name to a registry skill id.
 
         Accepts either a registry skill id (``namespace@name``) or a bare
@@ -482,9 +483,7 @@ class AgentSkillRuntime:
         if text in pool:
             return text
         matches = [
-            item
-            for item in self._registry.find_by_name(text)
-            if item.skill_id in pool
+            item for item in self._registry.find_by_name(text) if item.skill_id in pool
         ]
         if len(matches) == 1:
             return matches[0].skill_id
@@ -519,6 +518,7 @@ class AgentSkillRuntime:
         doc = self.load_skill_doc(skill_id)
         if doc:
             self._activated_skill_ids.add(skill_id)
+            self._activated_content_cache_key = None
         return bool(doc), skill_id, doc
 
     def activate_skill_by_name(self, skill_name: str) -> tuple[bool, str, str]:
@@ -544,6 +544,8 @@ class AgentSkillRuntime:
         skill_id = self.resolve_skill_id(token)
         removed = skill_id in self._activated_skill_ids
         self._activated_skill_ids.discard(skill_id)
+        if removed:
+            self._activated_content_cache_key = None
         return removed, skill_id
 
     def deactivate_skill_by_name(self, skill_name: str) -> tuple[bool, str]:
@@ -566,8 +568,15 @@ class AgentSkillRuntime:
         Returns:
             XML-like skill content blocks for active skills.
         """
+        cache_key = tuple(sorted(self._activated_skill_ids))
+        if (
+            self._activated_content_cache_key == cache_key
+            and self._activated_content_cache_value is not None
+        ):
+            return self._activated_content_cache_value
+
         blocks: list[str] = []
-        for skill_id in sorted(self._activated_skill_ids):
+        for skill_id in cache_key:
             info = self._registry.get(skill_id)
             if info is None:
                 continue
@@ -581,7 +590,10 @@ class AgentSkillRuntime:
                     resources=info.resource_files(),
                 )
             )
-        return "\n\n".join(blocks)
+        rendered = "\n\n".join(blocks)
+        self._activated_content_cache_key = cache_key
+        self._activated_content_cache_value = rendered
+        return rendered
 
     def active_hook_skills(self, hook_type: str) -> list[SkillDescriptor]:
         """List visible activated skills that declare one hook.
@@ -1190,7 +1202,7 @@ class AgentSkillRuntime:
                     "__name__": "__main__",
                     "__file__": str(script_path),
                 }
-                exec(compile(source, str(script_path), "exec"), namespace)  # noqa: S102
+                exec(compile(source, str(script_path), "exec"), namespace)
             return CommandResult(
                 ok=True,
                 exit_code=0,

@@ -31,7 +31,7 @@ import { ONBOARDING_KEYS } from './onboardingState';
 import { HelpPageViewProvider } from './helpPageViewProvider';
 import { ApiClient } from './apiClient';
 import { ProjectDragAndDropController } from './dragAndDropController';
-import { localize } from './i18n';
+import { localize, isExtensionZh } from './i18n';
 import { BackendManager } from './services/backendManager';
 import { AiCliGatewayManager } from './services/aiCliGatewayManager';
 import { ConfigHealthStatusBar } from './services/configHealthStatus';
@@ -422,7 +422,13 @@ function activateExtension(context: vscode.ExtensionContext) {
 
   const openHtmlReportCommand = vscode.commands.registerCommand(
     'aiSocialScientist.openHtmlReport',
-    async (uri: vscode.Uri) => {
+    async (uriOrItem?: vscode.Uri | { filePath?: string }) => {
+      let uri: vscode.Uri | undefined;
+      if (uriOrItem instanceof vscode.Uri) {
+        uri = uriOrItem;
+      } else if (uriOrItem && typeof uriOrItem === 'object' && uriOrItem.filePath) {
+        uri = vscode.Uri.file(uriOrItem.filePath);
+      }
       if (!uri) {
         return;
       }
@@ -798,6 +804,9 @@ function activateExtension(context: vscode.ExtensionContext) {
     ConfigPageViewProvider.reloadLanguageIfOpen();
     SkillMarketplacePanel.reloadLanguageIfOpen();
     HelpPageViewProvider.reloadLanguageIfOpen();
+    void import('./paperReviewViewer').then(({ PaperReviewViewer }) => {
+      PaperReviewViewer.reloadLanguageIfOpen();
+    });
   };
   const languageStatusBar = new LanguageStatusBar(context, () => {
     applyLanguageChange();
@@ -1018,7 +1027,7 @@ function activateExtension(context: vscode.ExtensionContext) {
           : filePathOrItem?.filePath;
       if (!filePath || !fs.existsSync(filePath)) {
         vscode.window.showErrorMessage(
-          vscode.env.language.startsWith('zh') ? '找不到 PDF 文件。' : 'PDF file not found.'
+          isExtensionZh() ? '找不到 PDF 文件。' : 'PDF file not found.'
         );
         return;
       }
@@ -1026,7 +1035,7 @@ function activateExtension(context: vscode.ExtensionContext) {
         await openPdfPreview(filePath);
       } catch (error: any) {
         vscode.window.showErrorMessage(
-          vscode.env.language.startsWith('zh')
+          isExtensionZh()
             ? `无法预览 PDF: ${error.message || error}`
             : `Could not preview PDF: ${error.message || error}`
         );
@@ -1198,6 +1207,21 @@ function activateExtension(context: vscode.ExtensionContext) {
       if (!lower.endsWith('.yaml') && !lower.endsWith('.yml')) {
         return;
       }
+      const fileName = path.basename(filePath);
+      const parentDir = path.basename(path.dirname(filePath));
+      const isPaperArtifactYaml =
+        fileName === 'paper_meta.yaml' ||
+        fileName === 'paper_state.yaml' ||
+        fileName === 'human_gates.yaml' ||
+        (fileName.startsWith('review_') && (lower.endsWith('.yaml') || lower.endsWith('.yml'))) ||
+        parentDir === 'paper' ||
+        parentDir === 'state' ||
+        parentDir === 'reviews';
+      if (isPaperArtifactYaml) {
+        const { PaperArtifactViewer } = await import('./paperArtifactViewer');
+        await PaperArtifactViewer.show(filePath);
+        return;
+      }
       await YamlViewer.show(filePath);
     }
   );
@@ -1230,6 +1254,24 @@ function activateExtension(context: vscode.ExtensionContext) {
         return;
       }
       await CsvViewer.show(filePath);
+    }
+  );
+
+  const viewPaperReviewCommand = vscode.commands.registerCommand(
+    'aiSocialScientist.viewPaperReview',
+    async (filePathOrItem: string | any) => {
+      const filePath = typeof filePathOrItem === 'string' ? filePathOrItem : filePathOrItem?.filePath;
+      if (!filePath || !fs.existsSync(filePath)) {
+        vscode.window.showErrorMessage(localize('extension.noFilePath'));
+        return;
+      }
+      const { PaperReviewViewer } = await import('./paperReviewViewer');
+      const stat = fs.statSync(filePath);
+      if (stat.isDirectory()) {
+        await PaperReviewViewer.showRound(filePath);
+      } else {
+        await PaperReviewViewer.showReviewer(filePath);
+      }
     }
   );
 
@@ -1299,6 +1341,7 @@ function activateExtension(context: vscode.ExtensionContext) {
     viewYamlFileCommand,
     viewAnalysisHarnessStatusCommand,
     viewCsvFileCommand,
+    viewPaperReviewCommand,
     openInExplorerCommand,
     copyFilePathCommand,
     copyAtReferenceCommand

@@ -3,7 +3,6 @@ DIN (Deep Interest Network) 算法配置
 """
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
@@ -22,7 +21,7 @@ class DINConfig:
     """
 
     embedding_dim: int = 192
-    hidden_units: List[int] = None
+    hidden_units: list[int] = None
     learning_rate: float = 0.001
     batch_size: int = 16
     n_epochs: int = 10
@@ -50,4 +49,3 @@ class DINConfig:
             raise ValueError("hidden_units 中的所有值必须 > 0")
         if not 0 <= self.drop <= 1:
             raise ValueError("drop 必须在 [0, 1] 范围内")
-

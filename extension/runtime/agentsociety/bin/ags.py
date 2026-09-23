@@ -29,10 +29,6 @@ TOOL_SCRIPTS = {
         "agentsociety-literature-search",
         "scripts/full_text.py",
     ),
-    "web-research": (
-        "agentsociety-web-research",
-        "scripts/research.py",
-    ),
     "scan-modules": (
         "agentsociety-scan-modules",
         "scripts/scan_modules.py",
@@ -126,6 +122,7 @@ def _extract_workspace_and_passthrough_args(
 
 
 def _load_workspace_env(workspace: Path) -> dict[str, str]:
+    """构造子进程环境：工作区 ``.env`` 覆盖已有 shell 变量。"""
     env = os.environ.copy()
     env["AGENTSOCIETY_WORKSPACE"] = str(workspace)
 
@@ -135,7 +132,7 @@ def _load_workspace_env(workspace: Path) -> dict[str, str]:
 
     for key, value in dotenv_values(env_file).items():
         if value is not None:
-            env.setdefault(key, value)
+            env[key] = value
     return env
 
 

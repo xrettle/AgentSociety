@@ -2,10 +2,11 @@
 Public Goods Game Environment
 Environment for Public Goods Game based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -32,12 +33,19 @@ class GetRoundResultResponse(BaseModel):
     total_contribution: int = Field(..., description="Total contribution")
     public_pool_gain: float = Field(..., description="Public pool gain")
     gain_per_agent: float = Field(..., description="Gain per agent")
-    contributions: Dict[str, int] = Field(..., description="Contributions by agent name")
-    payoffs: Dict[str, float] = Field(..., description="Payoffs by agent name")
+    contributions: dict[str, int] = Field(
+        ..., description="Contributions by agent name"
+    )
+    payoffs: dict[str, float] = Field(..., description="Payoffs by agent name")
 
 
 class PublicGoodsEnv(EnvBase):
     """Environment for Public Goods Game based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _env_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("round_number", "INTEGER", nullable=False),
@@ -68,10 +76,10 @@ class PublicGoodsEnv(EnvBase):
         self.public_pool_multiplier = public_pool_multiplier
 
         self.round_number = 0
-        self.round_history: List[dict] = []
+        self.round_history: list[dict] = []
 
         # Pending contributions for current round (agent_name -> contribution)
-        self._pending_contributions: Dict[str, int] = {}
+        self._pending_contributions: dict[str, int] = {}
 
         # Track which agents have submitted in current round
         self._agents_submitted_in_current_round: set = set()
@@ -142,6 +150,7 @@ class PublicGoodsEnv(EnvBase):
     def description(cls) -> str:
         """Return a short module description."""
         return "Public Goods game environment for contribution and collective payoff decisions."
+
     @tool(readonly=False)
     async def submit_contribution(
         self, agent_name: str, contribution: int
@@ -183,7 +192,7 @@ class PublicGoodsEnv(EnvBase):
             )
 
     @tool(readonly=True)
-    async def get_round_history(self, round_num: Optional[int] = None) -> List[dict]:
+    async def get_round_history(self, round_num: int | None = None) -> list[dict]:
         """
         Get round history for the Public Goods Game.
 
@@ -197,9 +206,7 @@ class PublicGoodsEnv(EnvBase):
         """
         async with self._lock:
             if round_num is not None:
-                return [
-                    r for r in self.round_history if r.get("round") == round_num
-                ]
+                return [r for r in self.round_history if r.get("round") == round_num]
             return self.round_history.copy()
 
     async def init(self, start_datetime: datetime):
@@ -276,5 +283,6 @@ class PublicGoodsEnv(EnvBase):
             public_pool_multiplier=self.public_pool_multiplier,
         )
         self._step_counter += 1
+
 
 __all__ = ["PublicGoodsEnv"]

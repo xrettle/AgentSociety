@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -44,6 +45,7 @@ __all__ = [
     "init_dispatchers",
     "is_rate_limit_like_error",
     "merge_token_stats",
+    "rate_limit_retry_seconds",
     "shutdown_dispatchers",
 ]
 
@@ -89,6 +91,18 @@ def is_rate_limit_like_error(error: Exception) -> bool:
     )
 
 
+def rate_limit_retry_seconds(error: Exception, fallback: float) -> float:
+    """Extract provider-requested wait from a rate-limit error, else ``fallback``.
+
+    DeepSeek / OpenAI-compatible gateways often say ``Try again in N seconds``.
+    Ignoring that and sleeping 1–4s burns retries into guaranteed failure.
+    """
+    match = re.search(r"[Tt]ry again in (\d+(?:\.\d+)?)\s*seconds?", str(error))
+    if match:
+        return float(match.group(1))
+    return fallback
+
+
 # ═══════════════════════════════════════════════════════════
 # Adaptive concurrency (AIMD) — per-process flow control
 # ═══════════════════════════════════════════════════════════
@@ -118,8 +132,7 @@ class _AdjustableSemaphore:
             self._cond.notify(1)
 
     async def set_capacity(self, new_capacity: int) -> int:
-        if new_capacity < 0:
-            new_capacity = 0
+        new_capacity = max(new_capacity, 0)
         async with self._cond:
             old = self._capacity
             delta = new_capacity - old
@@ -432,7 +445,7 @@ def cache_hit_rate(stats: dict[str, dict[str, int]]) -> float:
     return max(0.0, min(1.0, cached / total_input))
 
 
-def build_client_for_role(role: str) -> "LLMClient":
+def build_client_for_role(role: str) -> LLMClient:
     """Build a serializable :class:`LLMClient` carrying one role's connection params.
 
     Resolves ``(base_url, api_key, model_name)`` from :class:`Config` for the
@@ -708,6 +721,10 @@ class LLMClient:
                     ) from e
                 if overloaded:
                     delay = min(base_delay * (2**attempt), max_delay)
+                    delay = min(
+                        max(delay, rate_limit_retry_seconds(e, delay)),
+                        max_delay,
+                    )
                     logger.warning(
                         "Rate limit for '%s' via LLMClient(%s) (attempt %d/%d). "
                         "Backoff %.1fs. Error: %s",
@@ -775,7 +792,7 @@ async def init_dispatchers() -> None:
     import ray
 
     if not ray.is_initialized():
-        import ray._private.ray_constants as ray_constants
+        from ray._private import ray_constants
 
         old_uv = ray_constants.RAY_ENABLE_UV_RUN_RUNTIME_ENV
         old_env = os.environ.get("RAY_ENABLE_UV_RUN_RUNTIME_ENV")
@@ -802,4 +819,4 @@ async def init_dispatchers() -> None:
 async def shutdown_dispatchers() -> None:
     """No-op (no pool / workers to shut down). Per-process Routers are released
     when their process exits."""
-    return None
+    return

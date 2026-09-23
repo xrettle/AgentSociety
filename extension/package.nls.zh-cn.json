@@ -44,6 +44,7 @@
   "command.aiSocialScientist.viewEvidenceGraph.title": "AI Social Scientist: 查看证据图谱",
   "command.aiSocialScientist.viewPaperArtifact.title": "AI Social Scientist: 论文产物预览",
   "command.aiSocialScientist.viewCsvFile.title": "AI Social Scientist: 表格预览 (CSV/TSV)",
+  "command.aiSocialScientist.viewPaperReview.title": "AI Social Scientist: 查看审稿结果",
   "command.aiSocialScientist.viewAnalysisHarnessStatus.title": "AI Social Scientist: 分析阶段状态",
   "command.aiSocialScientist.openInExplorer.title": "AI Social Scientist: 在系统中打开",
   "command.aiSocialScientist.copyFileName.title": "AI Social Scientist: 复制文件名",

@@ -7,7 +7,9 @@ import asyncio
 import json
 from collections import defaultdict
 from datetime import datetime
-from typing import ClassVar, Dict, List, Optional, Tuple
+from typing import ClassVar
+
+from pydantic import BaseModel, Field
 
 from agentsociety2.env import (
     EnvBase,
@@ -16,7 +18,6 @@ from agentsociety2.env import (
 from agentsociety2.env.base import dump_int_map, load_int_map
 from agentsociety2.storage import ColumnDef
 from agentsociety2.storage.workspace_state import atomic_write_text
-from pydantic import BaseModel, Field
 
 # 本模块自选的 workspace 布局：<workspace_root>/state/ENV_STATE.json。
 _STATE_REL = "state/ENV_STATE.json"
@@ -29,7 +30,7 @@ class Message(BaseModel):
     content: str
     timestamp: datetime
     message_id: int  # Unique identifier for each message
-    group_id: Optional[int] = None  # Group ID if this is a group message
+    group_id: int | None = None  # Group ID if this is a group message
 
 
 class Group(BaseModel):
@@ -37,12 +38,13 @@ class Group(BaseModel):
 
     group_id: int
     name: str
-    members: List[int]  # List of agent IDs
+    members: list[int]  # List of agent IDs
 
 
 # Response models for tool functions
 class SendMessageResponse(BaseModel):
     """Response model for send_message() function"""
+
     sender_id: int = Field(..., description="The ID of the sender agent")
     receiver_id: int = Field(..., description="The ID of the receiver agent")
     content: str = Field(..., description="The content of the message")
@@ -50,12 +52,14 @@ class SendMessageResponse(BaseModel):
 
 class ReceiveMessagesResponse(BaseModel):
     """Response model for receive_messages() function"""
+
     agent_id: int = Field(..., description="The ID of the agent")
-    messages: List[dict] = Field(..., description="List of messages received")
+    messages: list[dict] = Field(..., description="List of messages received")
 
 
 class CreateGroupResponse(BaseModel):
     """Response model for create_group() function"""
+
     creator_id: int = Field(..., description="The ID of the creator agent")
     group_id: int = Field(..., description="The ID of the created group")
     name: str = Field(..., description="The name of the group")
@@ -63,18 +67,21 @@ class CreateGroupResponse(BaseModel):
 
 class JoinGroupResponse(BaseModel):
     """Response model for join_group() function"""
+
     agent_id: int = Field(..., description="The ID of the agent")
     group_id: int = Field(..., description="The ID of the group")
 
 
 class LeaveGroupResponse(BaseModel):
     """Response model for leave_group() function"""
+
     agent_id: int = Field(..., description="The ID of the agent")
     group_id: int = Field(..., description="The ID of the group")
 
 
 class SendGroupMessageResponse(BaseModel):
     """Response model for send_group_message() function"""
+
     sender_id: int = Field(..., description="The ID of the sender agent")
     group_id: int = Field(..., description="The ID of the group")
     content: str = Field(..., description="The content of the message")
@@ -82,6 +89,11 @@ class SendGroupMessageResponse(BaseModel):
 
 
 class SimpleSocialSpace(EnvBase):
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
+
     # 声明式状态持久化
     _env_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("total_messages_sent", "INTEGER"),
@@ -91,7 +103,7 @@ class SimpleSocialSpace(EnvBase):
 
     def __init__(
         self,
-        agent_id_name_pairs: List[Tuple[int, str]] | List[List[int | str]],
+        agent_id_name_pairs: list[tuple[int, str]] | list[list[int | str]],
     ):
         """
         Initialize the Social Space environment.
@@ -101,7 +113,7 @@ class SimpleSocialSpace(EnvBase):
         super().__init__()
 
         # Convert list format to tuple format if needed
-        pairs: List[Tuple[int, str]] = []
+        pairs: list[tuple[int, str]] = []
         for pair in agent_id_name_pairs:
             if isinstance(pair, (list, tuple)) and len(pair) == 2:
                 pairs.append((int(pair[0]), str(pair[1])))
@@ -111,15 +123,15 @@ class SimpleSocialSpace(EnvBase):
                 )
 
         # Individual mailboxes for agents
-        self._mailboxes: Dict[int, List[Message]] = defaultdict(list)
+        self._mailboxes: dict[int, list[Message]] = defaultdict(list)
 
         # Groups
-        self._groups: Dict[int, Group] = {}
+        self._groups: dict[int, Group] = {}
         self._next_group_id: int = 1
         self._next_message_id: int = 1
 
         # Names for agents and groups
-        self._agent_names: Dict[int, str] = {agent_id: name for agent_id, name in pairs}
+        self._agent_names: dict[int, str] = {agent_id: name for agent_id, name in pairs}
 
         # Lock for thread safety
         self._lock = asyncio.Lock()
@@ -170,14 +182,18 @@ class SimpleSocialSpace(EnvBase):
         mailboxes = load_int_map(state.get("mailboxes"))
         self._mailboxes = defaultdict(
             list,
-            {aid: [Message.model_validate(m) for m in msgs] for aid, msgs in mailboxes.items()},
+            {
+                aid: [Message.model_validate(m) for m in msgs]
+                for aid, msgs in mailboxes.items()
+            },
         )
         groups = load_int_map(state.get("groups"))
         self._groups = {gid: Group.model_validate(g) for gid, g in groups.items()}
         self._next_group_id = int(state.get("next_group_id", 1))
         self._next_message_id = int(state.get("next_message_id", 1))
         self._agent_names = {
-            aid: str(name) for aid, name in load_int_map(state.get("agent_names")).items()
+            aid: str(name)
+            for aid, name in load_int_map(state.get("agent_names")).items()
         }
         self._step_counter = int(state.get("step_counter", 0))
         self._total_messages_sent = int(state.get("total_messages_sent", 0))
@@ -303,7 +319,7 @@ class SimpleSocialSpace(EnvBase):
     # Group functions
     @tool(readonly=False)
     async def create_group(
-        self, creator_id: int, name: str, init_members: List[int]
+        self, creator_id: int, name: str, init_members: list[int]
     ) -> CreateGroupResponse:
         """
         Create a new group.
@@ -467,7 +483,8 @@ class SimpleSocialSpace(EnvBase):
 
         # 持久化环境全局状态
         await self._write_env_state(
-            step=self._step_counter, t=t,
+            step=self._step_counter,
+            t=t,
             total_messages_sent=self._total_messages_sent,
             active_groups=len(self._groups),
             total_agents=len(self._agent_names),

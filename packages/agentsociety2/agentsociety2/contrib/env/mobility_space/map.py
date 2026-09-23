@@ -4,13 +4,12 @@ import logging
 import os
 import pickle
 from copy import deepcopy
-from typing import Any, Dict, List, Literal, Optional, Tuple, TypeVar, Union
+from typing import Any, Literal, TypeVar
 
 import numpy as np
 import pyproj
 import shapely
 import stringcase
-from agentsociety2.contrib.env.mobility_space.utils import POI_CATG_DICT
 from geojson import Feature
 from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict, ParseDict
@@ -21,6 +20,8 @@ from pycityproto.city.routing.v2 import routing_pb2
 from pycityproto.city.routing.v2 import routing_service_pb2 as routing_service
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import substring, unary_union
+
+from agentsociety2.contrib.env.mobility_space.utils import POI_CATG_DICT
 
 __all__ = ["Map"]
 
@@ -103,11 +104,11 @@ class Map:
             logging.debug("Finish save cache file")
 
         self.header: dict = map_data["header"]
-        self.juncs: Dict[int, dict] = map_data["juncs"]
-        self.lanes: Dict[int, dict] = map_data["lanes"]
-        self.roads: Dict[int, dict] = map_data["roads"]
-        self.aois: Dict[int, dict] = map_data["aois"]
-        self.pois: Dict[int, dict] = map_data["pois"]
+        self.juncs: dict[int, dict] = map_data["juncs"]
+        self.lanes: dict[int, dict] = map_data["lanes"]
+        self.roads: dict[int, dict] = map_data["roads"]
+        self.aois: dict[int, dict] = map_data["aois"]
+        self.pois: dict[int, dict] = map_data["pois"]
         self.projector: pyproj.Proj = map_data["projector"]
         (
             self._aoi_tree,
@@ -122,7 +123,7 @@ class Map:
 
         self.poi_cate = POI_CATG_DICT
 
-    def _parse_map(self, m: List[Any]) -> Dict[str, Any]:
+    def _parse_map(self, m: list[Any]) -> dict[str, Any]:
         """将中间 JSON 列表解析为内部地图结构并派生几何。"""
         header = None
         juncs = {}
@@ -233,13 +234,17 @@ class Map:
         poi_list = list(self.pois.values())
         poi_tree = shapely.STRtree([poi["shapely_xy"] for poi in poi_list])
         driving_lane_list = [
-            lane for lane in self.lanes.values() if lane["type"] == 1  # driving
+            lane
+            for lane in self.lanes.values()
+            if lane["type"] == 1  # driving
         ]
         driving_lane_tree = shapely.STRtree(
             [lane["shapely_xy"] for lane in driving_lane_list]
         )
         walking_lane_list = [
-            lane for lane in self.lanes.values() if lane["type"] == 2  # walking
+            lane
+            for lane in self.lanes.values()
+            if lane["type"] == 2  # walking
         ]
         walking_lane_tree = shapely.STRtree(
             [lane["shapely_xy"] for lane in walking_lane_list]
@@ -304,7 +309,7 @@ class Map:
             geo = geo.reverse()
         return lane_id, geo
 
-    def lnglat2xy(self, lng: float, lat: float) -> Tuple[float, float]:
+    def lnglat2xy(self, lng: float, lat: float) -> tuple[float, float]:
         """WGS84 经纬度转地图投影 xy。
 
         :param lng: 经度（度）。
@@ -313,7 +318,7 @@ class Map:
         """
         return self.projector(lng, lat)
 
-    def xy2lnglat(self, x: float, y: float) -> Tuple[float, float]:
+    def xy2lnglat(self, x: float, y: float) -> tuple[float, float]:
         """地图投影 xy 转 WGS84 经纬度。
 
         :param x: 投影 x。
@@ -323,8 +328,8 @@ class Map:
         return self.projector(x, y, inverse=True)
 
     def position2xy(
-        self, position: Union[geo_pb2.Position, Dict[str, Any]]
-    ) -> Tuple[float, float]:
+        self, position: geo_pb2.Position | dict[str, Any]
+    ) -> tuple[float, float]:
         """将 ``Position`` 转为地图投影 xy。
 
         :param position: ``geo_pb2.Position`` 或可 ``ParseDict`` 的字典。
@@ -354,7 +359,7 @@ class Map:
         """:returns: 地图 ``header`` 字典。"""
         return self.header
 
-    def get_aoi(self, id: int, include_unused: bool = False) -> Optional[Any]:
+    def get_aoi(self, id: int, include_unused: bool = False) -> Any | None:
         """按 ID 查询 AOI（深拷贝）。
 
         :param id: AOI ID。
@@ -378,7 +383,7 @@ class Map:
                     del doc["external"]["walking_lane_project_point"]
         return doc
 
-    def get_poi(self, id: int, include_unused: bool = False) -> Optional[Any]:
+    def get_poi(self, id: int, include_unused: bool = False) -> Any | None:
         """按 ID 查询 POI（深拷贝）。
 
         :param id: POI ID。
@@ -393,7 +398,7 @@ class Map:
             ...
         return doc
 
-    def get_lane(self, id: int, include_unused: bool = False) -> Optional[Any]:
+    def get_lane(self, id: int, include_unused: bool = False) -> Any | None:
         """按 ID 查询车道（深拷贝）。
 
         :param id: 车道 ID。
@@ -413,7 +418,7 @@ class Map:
                 del doc["overlaps"]
         return doc
 
-    def get_road(self, id: int, include_unused: bool = False) -> Optional[Any]:
+    def get_road(self, id: int, include_unused: bool = False) -> Any | None:
         """按 ID 查询道路（深拷贝）。
 
         :param id: 道路 ID。
@@ -428,7 +433,7 @@ class Map:
             ...
         return doc
 
-    def get_junction(self, id: int, include_unused: bool = False) -> Optional[Any]:
+    def get_junction(self, id: int, include_unused: bool = False) -> Any | None:
         """按 ID 查询路口（深拷贝）。
 
         :param id: 路口（junction）ID。
@@ -449,7 +454,7 @@ class Map:
     def export_aoi_center_as_geojson(
         self,
         id: int,
-        properties: Union[Dict[str, Any], Literal["auto"]] = "auto",
+        properties: dict[str, Any] | Literal["auto"] = "auto",
     ) -> dict:
         """将 AOI 质心导出为 GeoJSON Feature 字典。
 
@@ -471,7 +476,7 @@ class Map:
         return dict(feature)
 
     def export_aoi_as_geojson(
-        self, id: int, properties: Union[Dict[str, Any], Literal["auto"]] = "auto"
+        self, id: int, properties: dict[str, Any] | Literal["auto"] = "auto"
     ) -> dict:
         """将 AOI 多边形导出为 GeoJSON Feature 字典。
 
@@ -491,7 +496,7 @@ class Map:
         return dict(feature)
 
     def export_poi_as_geojson(
-        self, id: int, properties: Union[Dict[str, Any], Literal["auto"]] = "auto"
+        self, id: int, properties: dict[str, Any] | Literal["auto"] = "auto"
     ) -> dict:
         """将 POI 点导出为 GeoJSON Feature 字典。
 
@@ -514,7 +519,7 @@ class Map:
         return dict(feature)
 
     def export_lane_as_geojson(
-        self, id: int, properties: Union[Dict[str, Any], Literal["auto"]] = "auto"
+        self, id: int, properties: dict[str, Any] | Literal["auto"] = "auto"
     ) -> dict:
         """将车道中心线导出为 GeoJSON Feature 字典。
 
@@ -537,7 +542,7 @@ class Map:
         return dict(feature)
 
     def export_road_as_geojson(
-        self, id: int, properties: Dict[str, Any] | None = None
+        self, id: int, properties: dict[str, Any] | None = None
     ) -> dict:
         """将道路几何导出为 GeoJSON Feature 字典。
 
@@ -555,8 +560,8 @@ class Map:
 
     def _route_to_xys(
         self,
-        route_req: Union[routing_service.GetRouteRequest, dict],
-        route_res: Union[routing_service.GetRouteResponse, dict],
+        route_req: routing_service.GetRouteRequest | dict,
+        route_res: routing_service.GetRouteResponse | dict,
     ) -> np.ndarray:
         """将驾车/步行导航结果转为 xy 坐标折线顶点数组（不含最后经纬度变换）。
 
@@ -627,8 +632,8 @@ class Map:
 
     def export_route_as_geojson(
         self,
-        route_req: Union[routing_service.GetRouteRequest, dict],
-        route_res: Union[routing_service.GetRouteResponse, dict],
+        route_req: routing_service.GetRouteRequest | dict,
+        route_res: routing_service.GetRouteResponse | dict,
         properties: dict | None = None,
     ) -> dict:
         """将导航请求/响应中的路径导出为 GeoJSON LineString Feature 字典（经纬度）。
@@ -654,8 +659,8 @@ class Map:
 
     def estimate_route_time(
         self,
-        route_req: Union[routing_service.GetRouteRequest, dict],
-        route_res: Union[routing_service.GetRouteResponse, dict],
+        route_req: routing_service.GetRouteRequest | dict,
+        route_res: routing_service.GetRouteResponse | dict,
     ) -> float:
         """对导航响应中的各 journey 累加 ETA（秒）。
 
@@ -676,11 +681,11 @@ class Map:
 
     def query_pois(
         self,
-        center: Union[Tuple[float, float], Point],
-        radius: Optional[float] = None,
-        category: Optional[str] = None,
-        limit: Optional[int] = None,
-    ) -> List[Tuple[Any, float]]:
+        center: tuple[float, float] | Point,
+        radius: float | None = None,
+        category: str | None = None,
+        limit: int | None = None,
+    ) -> list[tuple[Any, float]]:
         """在投影 xy 下按距离查询 POI；类别字符串需出现在 POI 的 ``category`` 列表中。
 
         :param center: ``(x, y)`` 或 :class:`shapely.geometry.Point`。
@@ -710,11 +715,11 @@ class Map:
 
     def query_aois(
         self,
-        center: Union[Tuple[float, float], Point],
+        center: tuple[float, float] | Point,
         radius: float,
-        urban_land_uses: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-    ) -> List[Tuple[Any, float]]:
+        urban_land_uses: list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[tuple[Any, float]]:
         """在投影 xy 下按距离查询 AOI，可按 ``urban_land_use`` 过滤。
 
         :param center: ``(x, y)`` 或 :class:`shapely.geometry.Point`。
@@ -747,10 +752,10 @@ class Map:
 
     def query_lane(
         self,
-        xy: Union[Tuple[float, float], Point],
+        xy: tuple[float, float] | Point,
         radius: float,
         lane_type: int = 1,
-    ) -> List[Tuple[Any, float, float]]:
+    ) -> list[tuple[Any, float, float]]:
         """在投影 xy 下查询附近车道及投影弧长 ``s``。
 
         :param xy: ``(x, y)`` 或 :class:`shapely.geometry.Point`。

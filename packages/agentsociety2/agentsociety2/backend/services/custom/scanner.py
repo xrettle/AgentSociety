@@ -12,14 +12,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agentsociety2.backend.path_security import (
+    resolve_under_root,
+    resolve_workspace_root,
+)
 from agentsociety2.backend.services.custom.compatibility import (
     build_agent_scan_diagnostic,
     build_env_scan_diagnostic,
     build_import_error_diagnostic,
-)
-from agentsociety2.backend.path_security import (
-    resolve_under_root,
-    resolve_workspace_root,
 )
 from agentsociety2.backend.services.custom.models import (
     CompatibilityIssue,

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Optional
-
+from typing import Literal
 
 ReplayDatasetKind = Literal[
     "entity_snapshot",
@@ -20,6 +19,12 @@ AGENT_PROFILE_DATASET_ID = "core.agent_profile"
 AGENT_PROFILE_TABLE_NAME = "core_agent_profile"
 AGENT_PROFILE_DATASET_CAPABILITY = "agent_profile"
 
+# Society-owned timeline markers so replay UI has steps even before env
+# modules finish writing per-tick agent/env snapshots.
+SIMULATION_TIMELINE_DATASET_ID = "core.simulation_timeline"
+SIMULATION_TIMELINE_TABLE_NAME = "core_simulation_timeline"
+SIMULATION_TIMELINE_CAPABILITY = "simulation_timeline"
+
 
 @dataclass
 class ReplayDatasetSpec:
@@ -31,9 +36,9 @@ class ReplayDatasetSpec:
     kind: ReplayDatasetKind
     title: str = ""
     description: str = ""
-    entity_key: Optional[str] = None
-    step_key: Optional[str] = None
-    time_key: Optional[str] = None
+    entity_key: str | None = None
+    step_key: str | None = None
+    time_key: str | None = None
     default_order: list[str] = field(default_factory=list)
     capabilities: list[str] = field(default_factory=list)
     version: int = 1

@@ -105,7 +105,6 @@ After adding/modifying/deleting a hypothesis, update `TOPIC.md` with the hypothe
 ## Pipeline Position
 
 **Predecessors:** literature-search
-**Optional inputs:** web-research (supplementary non-academic context)
 **Optional helpers:** scan-modules (when module names are unknown or need validation)
 **Successors:** experiment-config
 

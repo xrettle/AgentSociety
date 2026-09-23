@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from agentsociety2.logger import get_logger
 
@@ -42,7 +42,7 @@ class ExperimentConfigTool:
     def description(self) -> str:
         return "Initialize and validate experiment configuration"
 
-    def get_parameters_schema(self) -> Dict[str, Any]:
+    def get_parameters_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -62,7 +62,7 @@ class ExperimentConfigTool:
             "required": ["hypothesis_id", "experiment_id"],
         }
 
-    async def execute(self, arguments: Dict[str, Any]) -> Any:
+    async def execute(self, arguments: dict[str, Any]) -> Any:
         """Execute the experiment configuration
 
         :param arguments: Dictionary with hypothesis_id, experiment_id, and optional parameters
@@ -75,8 +75,8 @@ class ExperimentConfigTool:
 
         from agentsociety2.skills.experiment.config import (
             get_experiment_paths,
-            validate_experiment_exists,
             read_init_config,
+            validate_experiment_exists,
         )
 
         # Validate experiment exists

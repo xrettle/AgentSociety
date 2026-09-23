@@ -3,7 +3,6 @@ DeepFM 算法配置
 """
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
@@ -21,7 +20,7 @@ class DeepFMConfig:
     """
 
     embedding_dim: int = 16
-    deep_layers: List[int] = None
+    deep_layers: list[int] = None
     learning_rate: float = 0.001
     batch_size: int = 256
     n_epochs: int = 50
@@ -46,4 +45,3 @@ class DeepFMConfig:
             raise ValueError("deep_layers 中的所有值必须 > 0")
         if not 0 <= self.drop_rate <= 1:
             raise ValueError("drop_rate 必须在 [0, 1] 范围内")
-

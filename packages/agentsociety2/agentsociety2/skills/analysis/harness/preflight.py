@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Literal, Mapping, Optional, Tuple
+from collections.abc import Iterable, Mapping
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentsociety2.skills.analysis.harness.operations import AnalysisOperationSpec
-
 
 OperationAvailabilityState = Literal[
     "AVAILABLE",
@@ -25,9 +25,9 @@ class OperationAvailability(BaseModel):
 
     operation_id: str
     status: OperationAvailabilityState
-    reasons: Tuple[str, ...] = Field(default_factory=tuple)
-    missing_inputs: Tuple[str, ...] = Field(default_factory=tuple)
-    missing_gates: Tuple[str, ...] = Field(default_factory=tuple)
+    reasons: tuple[str, ...] = Field(default_factory=tuple)
+    missing_inputs: tuple[str, ...] = Field(default_factory=tuple)
+    missing_gates: tuple[str, ...] = Field(default_factory=tuple)
     checked_capabilities: dict[str, str] = Field(default_factory=dict)
 
     @property
@@ -45,7 +45,7 @@ def _is_present(value: Any) -> bool:
     return True
 
 
-def _resolved_capability(requirement: str, values: Mapping[str, Any]) -> Optional[str]:
+def _resolved_capability(requirement: str, values: Mapping[str, Any]) -> str | None:
     resolved = requirement
     for input_spec in values:
         resolved = resolved.replace(f"{{{input_spec}}}", str(values[input_spec]))
@@ -57,11 +57,11 @@ def _resolved_capability(requirement: str, values: Mapping[str, Any]) -> Optiona
 def evaluate_operation_availability(
     spec: AnalysisOperationSpec,
     *,
-    phase: Optional[str] = None,
+    phase: str | None = None,
     passed_gates: Iterable[str] = (),
     current_gate_pass: bool = False,
-    capability_states: Optional[Mapping[str, str]] = None,
-    values: Optional[Mapping[str, Any]] = None,
+    capability_states: Mapping[str, str] | None = None,
+    values: Mapping[str, Any] | None = None,
     check_inputs: bool = True,
 ) -> OperationAvailability:
     values = values or {}

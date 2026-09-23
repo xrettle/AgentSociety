@@ -3,10 +3,9 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 DIR_HYPOTHESIS_PREFIX = "hypothesis_"
 DIR_EXPERIMENT_PREFIX = "experiment_"
@@ -115,19 +114,19 @@ class ExperimentDesign(BaseModel):
     """实验设计"""
 
     hypothesis: str = Field(..., description="Primary hypothesis being tested")
-    objectives: List[str] = Field(
+    objectives: list[str] = Field(
         default_factory=list, description="Experiment objectives"
     )
-    variables: Dict[str, Any] = Field(default_factory=dict, description="Variables")
+    variables: dict[str, Any] = Field(default_factory=dict, description="Variables")
     methodology: str = Field(default="", description="Experimental methodology")
-    success_criteria: List[str] = Field(
+    success_criteria: list[str] = Field(
         default_factory=list, description="Success criteria"
     )
 
-    hypothesis_markdown: Optional[str] = Field(
+    hypothesis_markdown: str | None = Field(
         default=None, description="Raw content of HYPOTHESIS.md if available"
     )
-    experiment_markdown: Optional[str] = Field(
+    experiment_markdown: str | None = Field(
         default=None, description="Raw content of EXPERIMENT.md if available"
     )
 
@@ -141,14 +140,14 @@ class ExperimentContext(BaseModel):
     hypothesis_id: str = Field(..., description="Hypothesis identifier")
     design: ExperimentDesign = Field(..., description="Experiment design")
 
-    duration_seconds: Optional[float] = Field(None, description="Duration in seconds")
+    duration_seconds: float | None = Field(None, description="Duration in seconds")
     execution_status: ExperimentStatus = Field(
         default=ExperimentStatus.UNKNOWN, description="Execution status"
     )
     completion_percentage: float = Field(
         default=0.0, description="Completion percentage"
     )
-    error_messages: List[str] = Field(
+    error_messages: list[str] = Field(
         default_factory=list, description="Error messages"
     )
 
@@ -159,10 +158,10 @@ class AnalysisResult(BaseModel):
     experiment_id: str = Field(..., description="Experiment identifier")
     hypothesis_id: str = Field(..., description="Hypothesis identifier")
 
-    insights: List[Any] = Field(default_factory=list, description="Generated insights")
-    findings: List[Any] = Field(default_factory=list, description="Key findings")
+    insights: list[Any] = Field(default_factory=list, description="Generated insights")
+    findings: list[Any] = Field(default_factory=list, description="Key findings")
     conclusions: Any = Field(default="", description="Conclusions")
-    recommendations: List[Any] = Field(
+    recommendations: list[Any] = Field(
         default_factory=list, description="Recommendations"
     )
 
@@ -182,26 +181,26 @@ class ReportContent(BaseModel):
         default="markdown", description="Preferred format: markdown, html, or both"
     )
     # 双语字段
-    full_content_markdown_zh: Optional[str] = Field(
+    full_content_markdown_zh: str | None = Field(
         default=None, description="Chinese markdown report content"
     )
-    full_content_html_zh: Optional[str] = Field(
+    full_content_html_zh: str | None = Field(
         default=None, description="Chinese HTML report content"
     )
-    full_content_markdown_en: Optional[str] = Field(
+    full_content_markdown_en: str | None = Field(
         default=None, description="English markdown report content"
     )
-    full_content_html_en: Optional[str] = Field(
+    full_content_html_en: str | None = Field(
         default=None, description="English HTML report content"
     )
 
     @property
-    def full_content_markdown(self) -> Optional[str]:
+    def full_content_markdown(self) -> str | None:
         """中文优先，否则英文。"""
         return self.full_content_markdown_zh or self.full_content_markdown_en
 
     @property
-    def full_content_html(self) -> Optional[str]:
+    def full_content_html(self) -> str | None:
         """中文优先，否则英文。"""
         return self.full_content_html_zh or self.full_content_html_en
 
@@ -217,13 +216,13 @@ class ReportAsset(BaseModel):
     description: str = Field(default="", description="Asset description")
 
     file_path: str = Field(..., description="File path")
-    embedded_content: Optional[str] = Field(None, description="Base64 content")
+    embedded_content: str | None = Field(None, description="Base64 content")
     file_size: int = Field(default=0, description="File size in bytes")
 
     created_at: datetime = Field(
         default_factory=datetime.now, description="Creation time"
     )
-    dimensions: Optional[Dict[str, int]] = Field(None, description="Dimensions")
+    dimensions: dict[str, int] | None = Field(None, description="Dimensions")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -242,9 +241,9 @@ class HypothesisSummary(BaseModel):
         default=0.0, description="Average completion percentage"
     )
 
-    key_insights: List[str] = Field(default_factory=list, description="Key insights")
-    main_findings: List[str] = Field(default_factory=list, description="Main findings")
-    experiment_results: List[Dict[str, Any]] = Field(
+    key_insights: list[str] = Field(default_factory=list, description="Key insights")
+    main_findings: list[str] = Field(default_factory=list, description="Main findings")
+    experiment_results: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Analysis results for each experiment",
     )
@@ -261,7 +260,7 @@ class ExperimentSynthesis(BaseModel):
         default_factory=datetime.now, description="Analysis timestamp"
     )
 
-    hypothesis_summaries: List[HypothesisSummary] = Field(
+    hypothesis_summaries: list[HypothesisSummary] = Field(
         default_factory=list,
         description="Summary information for each hypothesis",
     )
@@ -272,26 +271,24 @@ class ExperimentSynthesis(BaseModel):
     cross_hypothesis_analysis: str = Field(
         default="", description="Cross-hypothesis analysis"
     )
-    comparative_insights: List[str] = Field(
+    comparative_insights: list[str] = Field(
         default_factory=list, description="Comparative insights"
     )
     unified_conclusions: str = Field(default="", description="Unified conclusions")
-    recommendations: List[str] = Field(
+    recommendations: list[str] = Field(
         default_factory=list, description="Comprehensive recommendations"
     )
 
-    best_hypothesis: Optional[str] = Field(
-        None, description="Best hypothesis identifier"
-    )
+    best_hypothesis: str | None = Field(None, description="Best hypothesis identifier")
     best_hypothesis_reason: str = Field(
         default="", description="Reason for best hypothesis"
     )
     overall_assessment: str = Field(default="", description="Overall assessment")
 
-    synthesis_report_path: Optional[str] = Field(
+    synthesis_report_path: str | None = Field(
         None, description="Synthesis report Markdown file path"
     )
-    synthesis_report_html_path: Optional[str] = Field(
+    synthesis_report_html_path: str | None = Field(
         None, description="Synthesis report HTML file path"
     )
 

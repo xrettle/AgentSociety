@@ -13,10 +13,10 @@
 :titlesonly:
 :maxdepth: 1
 
-agentsociety.storage.database
+agentsociety.storage.model
 agentsociety.storage._base
 agentsociety.storage.type
-agentsociety.storage.model
+agentsociety.storage.database
 ```
 
 ## Package Contents

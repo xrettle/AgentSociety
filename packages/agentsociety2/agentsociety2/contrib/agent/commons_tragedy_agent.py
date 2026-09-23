@@ -289,7 +289,10 @@ This agent participates in a 10-round Tragedy of the Commons game where multiple
                     return data.get("current_pool_resources", 100)
         except (json.JSONDecodeError, ValueError, KeyError):
             import logging
-            logging.getLogger(__name__).debug("Failed to parse pool resources from JSON", exc_info=True)
+
+            logging.getLogger(__name__).debug(
+                "Failed to parse pool resources from JSON", exc_info=True
+            )
 
         # Fallback: try to extract number from text
         numbers = re.findall(r"\d+", response)
@@ -332,7 +335,7 @@ This agent participates in a 10-round Tragedy of the Commons game where multiple
         agent_names.add(self.name)
 
         # Return sorted list for consistency
-        return sorted(list(agent_names))
+        return sorted(agent_names)
 
     async def _decide_extraction(
         self, round_num: int, current_pool_resources: int, all_agent_names: list

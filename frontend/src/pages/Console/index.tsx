@@ -53,7 +53,15 @@ const Page = () => {
             const res = await fetchCustom(`/api/run-experiments/${experimentId}/log`);
             if (res.ok) {
                 const log = await res.text();
-                setLogContent(log.replace(/\\n/g, '\n'));
+                // 控制台只保留尾部，避免超大日志拖垮渲染（传输仍可能是全量）
+                const maxLines = 2000;
+                const normalized = log.replace(/\\n/g, '\n');
+                const lines = normalized.split('\n');
+                setLogContent(
+                    lines.length > maxLines
+                        ? lines.slice(-maxLines).join('\n')
+                        : normalized
+                );
             } else {
                 throw new Error(await res.text());
             }

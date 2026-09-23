@@ -4,13 +4,13 @@ MF (矩阵分解) 推荐算法实现
 基于 PyTorch 的矩阵分解算法,使用 SGD 优化
 """
 
-from typing import List, Tuple, Set, Dict, Optional
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 from agentsociety2.logger import get_logger
-from ..core import RecommenderAlgorithm, RatingMatrix
+
+from ..core import RatingMatrix, RecommenderAlgorithm
 from .config import MFConfig
 
 
@@ -66,10 +66,10 @@ class MFRecommender(RecommenderAlgorithm):
         :param config: MF 算法配置
         """
         self.config = config
-        self.model: Optional[MFModel] = None
-        self._user_map: Dict[int, int] = {}
-        self._item_map: Dict[int, int] = {}
-        self._popular_items: List[Tuple[int, float]] = []
+        self.model: MFModel | None = None
+        self._user_map: dict[int, int] = {}
+        self._item_map: dict[int, int] = {}
+        self._popular_items: list[tuple[int, float]] = []
 
         get_logger().info(
             f"MFRecommender 初始化: n_factors={config.n_latent_factors}, "
@@ -97,19 +97,15 @@ class MFRecommender(RecommenderAlgorithm):
         n_items = len(self._item_map)
 
         self.model = MFModel(
-            n_users=n_users,
-            n_items=n_items,
-            n_factors=self.config.n_latent_factors
+            n_users=n_users, n_items=n_items, n_factors=self.config.n_latent_factors
         )
 
         # 准备训练数据
         user_indices = torch.tensor(
-            [self._user_map[uid] for uid in data.user_ids],
-            dtype=torch.long
+            [self._user_map[uid] for uid in data.user_ids], dtype=torch.long
         )
         item_indices = torch.tensor(
-            [self._item_map[iid] for iid in data.item_ids],
-            dtype=torch.long
+            [self._item_map[iid] for iid in data.item_ids], dtype=torch.long
         )
         ratings = torch.tensor(data.ratings, dtype=torch.float32)
 
@@ -117,7 +113,7 @@ class MFRecommender(RecommenderAlgorithm):
         optimizer = torch.optim.SGD(
             self.model.parameters(),
             lr=self.config.learning_rate,
-            weight_decay=self.config.reg_param
+            weight_decay=self.config.reg_param,
         )
 
         # 损失函数
@@ -183,11 +179,8 @@ class MFRecommender(RecommenderAlgorithm):
         return max(1.0, min(5.0, score))
 
     def recommend(
-        self,
-        user_id: int,
-        n: int,
-        exclude_ids: Set[int]
-    ) -> List[Tuple[int, float]]:
+        self, user_id: int, n: int, exclude_ids: set[int]
+    ) -> list[tuple[int, float]]:
         """
         为用户生成推荐列表
 
@@ -210,7 +203,7 @@ class MFRecommender(RecommenderAlgorithm):
 
         # 计算所有物品的预测评分
         user_idx = self._user_map[user_id]
-        all_scores: List[Tuple[int, float]] = []
+        all_scores: list[tuple[int, float]] = []
 
         with torch.no_grad():
             user_tensor = torch.tensor([user_idx], dtype=torch.long)
@@ -239,14 +232,14 @@ class MFRecommender(RecommenderAlgorithm):
             raise RuntimeError("模型尚未训练,无法保存")
 
         checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'user_map': self._user_map,
-            'item_map': self._item_map,
-            'popular_items': self._popular_items,
-            'config': self.config
+            "model_state_dict": self.model.state_dict(),
+            "user_map": self._user_map,
+            "item_map": self._item_map,
+            "popular_items": self._popular_items,
+            "config": self.config,
         }
 
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             torch.save(checkpoint, f)  # nosec: internal checkpoint save
 
         get_logger().info(f"MF 模型已保存到 {path}")
@@ -257,25 +250,23 @@ class MFRecommender(RecommenderAlgorithm):
 
         :param path: 模型文件路径
         """
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             checkpoint = torch.load(f, weights_only=False)  # nosec: internal checkpoint loading
 
-        self.config = checkpoint['config']
-        self._user_map = checkpoint['user_map']
-        self._item_map = checkpoint['item_map']
-        self._popular_items = checkpoint['popular_items']
+        self.config = checkpoint["config"]
+        self._user_map = checkpoint["user_map"]
+        self._item_map = checkpoint["item_map"]
+        self._popular_items = checkpoint["popular_items"]
 
         # 重建模型
         n_users = len(self._user_map)
         n_items = len(self._item_map)
 
         self.model = MFModel(
-            n_users=n_users,
-            n_items=n_items,
-            n_factors=self.config.n_latent_factors
+            n_users=n_users, n_items=n_items, n_factors=self.config.n_latent_factors
         )
 
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 
         get_logger().info(f"MF 模型已从 {path} 加载")
@@ -288,7 +279,7 @@ class MFRecommender(RecommenderAlgorithm):
 
         :param data: 评分矩阵
         """
-        item_ratings: Dict[int, List[float]] = {}
+        item_ratings: dict[int, list[float]] = {}
 
         for item_id, rating in zip(data.item_ids, data.ratings, strict=False):
             if item_id not in item_ratings:

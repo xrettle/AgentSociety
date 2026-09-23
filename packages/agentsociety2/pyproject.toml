@@ -115,12 +115,12 @@ dev = [
     "pre-commit>=3.8.0",
 ]
 docs = [
-    "sphinx>=7.0.0",
+    "sphinx>=8.0.0",
     "sphinx-autobuild>=2024.9.19",
     "furo>=2024.8.6",
-    "myst-parser>=4.0.0",
+    "myst-parser>=5.0.0",
     "sphinx-autodoc2>=0.5.0",
-    "sphinx-intl==2.4.0",
+    "sphinx-intl>=2.4.0",
     "linkify-it-py>=2.0.0",
 ]
 # EDA and advanced analysis (optional, for analysis skill)
@@ -170,7 +170,29 @@ known_first_party = ["agentsociety2"]
 optional_dependencies_dev_groups = ["dev", "docs"]
 
 [tool.ruff.lint]
-ignore = ["E402"]
+# Adopt ruff 0.16's expanded defaults; keep high-churn / behavior-sensitive rules off
+# until dedicated cleanups (timezone migration, aiofiles, logger refactor).
+ignore = [
+    "E402",
+    "BLE001",
+    "LOG015",
+    "DTZ001",
+    "DTZ005",
+    "DTZ006",
+    "ASYNC220",
+    "ASYNC230",
+    "G201",
+    "B008",
+    "S102",
+    "S110",
+    "S112",
+    "TRY002",
+    "TRY004",
+    "EXE001",
+    "T100",
+    "SIM102",
+    "SIM117",
+]
 
 [tool.deptry.per_rule_ignores]
 DEP002 = ["aiosqlite", "networkx", "statsmodels", "agentsociety2"]

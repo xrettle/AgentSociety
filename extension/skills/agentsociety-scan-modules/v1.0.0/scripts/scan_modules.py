@@ -39,12 +39,12 @@ def setup_workspace(workspace_path: Path) -> Path:
 
 
 def load_env_file(workspace_path: Path) -> None:
-    """加载 .env 文件"""
+    """加载工作区 ``.env``（覆盖已有 shell 值）。"""
     env_file = workspace_path / ".env"
     if env_file.exists():
         try:
             from dotenv import load_dotenv
-            load_dotenv(env_file)
+            load_dotenv(env_file, override=True)
         except ImportError:
             pass
 

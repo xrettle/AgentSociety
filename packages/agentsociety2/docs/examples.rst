@@ -65,11 +65,11 @@
 
 **自定义环境模块** (``basics/02_custom_env_module.py``)
 
-演示创建自定义环境模块：
+演示用 contrib 环境模块跑通 Ray 发现与干预：
 
-* 使用 @tool 装饰器定义自定义环境
-* 实现 step() 和工具方法，并按需提供 ``kind="observe"`` 的只读工具
-* 向 CodeGenRouter 注册模块
+* 使用内置 ``WeatherEnvironment``（``agentsociety2.contrib.env``），无需手写注册
+* 通过 ``create_env_router_proxy`` 挂载环境（与 CLI / 生产路径一致）
+* ``intervene`` 改天气后 ``ask`` 读回温度
 
 **回放系统** (``basics/03_replay_system.py``)
 
@@ -89,7 +89,7 @@
 
 * ``PrisonersDilemmaAgent`` + ``PrisonersDilemmaEnv``
 * 多轮同时决策（Cooperate / Defect）
-* 结果写入 ``run_dir``（含 env state 与 replay）
+* 结果写入 ``run_dir`` （含 env state 与 replay）
 
 **公共物品博弈** (``games/02_public_goods.py``)
 
@@ -108,11 +108,11 @@
 
 **自定义智能体** (``advanced/01_custom_agent.py``)
 
-使用自定义智能体类型扩展 AgentSociety 2：
+使用 contrib 智能体类型扩展 AgentSociety 2：
 
-* 实现 workspace 契约（``create`` / ``from_workspace`` / ``to_workspace``）
-* 通过 ``get_registry().register_agent_module(...)`` 注册后交给 ``AgentSociety``
-* 为研究需求创建专门的智能体
+* 使用内置 ``SpecialistAgent``（``agentsociety2.contrib.agent``），Ray worker 可自动发现
+* 以 ``agent_class_name="SpecialistAgent"`` 交给 ``AgentSociety``（无需手写 ``register_agent_module``）
+* 通过 ``AgentSocietyHelper`` 的 ``get_agent_profile`` / ``ask_agents`` 查询与提问
 
 **多路由器比较** (``advanced/02_multi_router.py``)
 

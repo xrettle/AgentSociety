@@ -3,20 +3,20 @@
 Academic literature search (MCP), workspace indexing, formatting, and full-text helpers.
 """
 
-from agentsociety2.skills.literature.models import LiteratureEntry, LiteratureIndex
-from agentsociety2.skills.literature.formatter import (
-    sanitize_filename,
-    format_article_as_markdown,
-)
-from agentsociety2.skills.literature.search import (
-    search_literature_and_save,
-    generate_summary,
-    format_search_results,
-    load_literature_index,
-)
 from agentsociety2.skills.literature.core import (
-    search_literature,
     is_chinese_text,
+    search_literature,
+)
+from agentsociety2.skills.literature.formatter import (
+    format_article_as_markdown,
+    sanitize_filename,
+)
+from agentsociety2.skills.literature.models import LiteratureEntry, LiteratureIndex
+from agentsociety2.skills.literature.search import (
+    format_search_results,
+    generate_summary,
+    load_literature_index,
+    search_literature_and_save,
 )
 
 __all__ = [

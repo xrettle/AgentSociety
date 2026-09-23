@@ -8,9 +8,9 @@ This optimized version uses Pydantic for better validation and type safety.
 import asyncio
 import json
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -73,7 +73,7 @@ class ReputationGameConfig(BaseModel):
         default=NormType.STERN_JUDGING,
         description="Social norm type",
     )
-    seed: Optional[int] = Field(
+    seed: int | None = Field(
         default=None,
         description="Random seed for reproducibility (None for random)",
     )
@@ -91,7 +91,19 @@ class ReputationGameConfig(BaseModel):
                 ) from None
         return v
 
-    model_config = {"json_schema_extra": {"examples": [{"Z": 5, "BENEFIT": 5, "COST": 1, "norm_type": "stern_judging", "seed": 42}]}}
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "Z": 5,
+                    "BENEFIT": 5,
+                    "COST": 1,
+                    "norm_type": "stern_judging",
+                    "seed": 42,
+                }
+            ]
+        }
+    }
 
 
 class ActionLogEntry(BaseModel):
@@ -102,7 +114,9 @@ class ActionLogEntry(BaseModel):
     action: str = Field(..., description="Action taken: 'cooperate' or 'defect'")
     donor_old_rep: str = Field(..., description="Donor's reputation before action")
     donor_new_rep: str = Field(..., description="Donor's reputation after action")
-    recipient_rep: str = Field(..., description="Recipient's reputation at time of action")
+    recipient_rep: str = Field(
+        ..., description="Recipient's reputation at time of action"
+    )
     cost: int = Field(..., description="Cost paid by donor")
     benefit: int = Field(..., description="Benefit received by recipient")
     timestamp: str = Field(..., description="ISO format timestamp of the action")
@@ -114,7 +128,9 @@ class AgentSummary(BaseModel):
     id: int = Field(..., description="Agent ID")
     reputation: str = Field(..., description="Current reputation: 'good' or 'bad'")
     payoff: float = Field(..., description="Cumulative payoff")
-    recent_actions: List[Dict] = Field(default_factory=list, description="Recent action log entries")
+    recent_actions: list[dict] = Field(
+        default_factory=list, description="Recent action log entries"
+    )
 
 
 # Response models for tool functions
@@ -140,20 +156,22 @@ class ExecuteDonationResponse(BaseModel):
     action: str = Field(..., description="Action taken: 'cooperate' or 'defect'")
     cost: int = Field(..., description="Cost paid by donor")
     benefit: int = Field(..., description="Benefit received by recipient")
-    donor_new_reputation: str = Field(..., description="Donor's new reputation: 'good' or 'bad'")
+    donor_new_reputation: str = Field(
+        ..., description="Donor's new reputation: 'good' or 'bad'"
+    )
 
 
 class GetTopAgentSummaryResponse(BaseModel):
     """Response model for get_top_agent_summary() function"""
 
-    top_agents: List[Dict] = Field(..., description="List of top agent summaries")
+    top_agents: list[dict] = Field(..., description="List of top agent summaries")
     top_k: int = Field(..., description="Number of top agents returned")
 
 
 class GetPublicActionLogResponse(BaseModel):
     """Response model for get_public_action_log() function"""
 
-    log: List[Dict] = Field(..., description="List of recent action log entries")
+    log: list[dict] = Field(..., description="List of recent action log entries")
     limit: int = Field(..., description="Number of records returned")
 
 
@@ -185,16 +203,24 @@ class GetAgentHistoryResponse(BaseModel):
     """Response model for get_agent_history() function"""
 
     agent_id: int = Field(..., description="The agent ID")
-    history: List[Dict] = Field(..., description="List of recent interaction records")
+    history: list[dict] = Field(..., description="List of recent interaction records")
 
 
 class GetStrategyConvergenceAnalysisResponse(BaseModel):
     """Response model for get_strategy_convergence_analysis() function"""
 
-    periods: List[Dict] = Field(..., description="List of period statistics")
-    trend: str = Field(..., description="Trend direction: 'increasing', 'decreasing', 'stable', 'fluctuating', or 'insufficient_data'")
-    convergence_status: str = Field(..., description="Convergence status: 'converged', 'not_converged', or 'insufficient_data'")
-    convergence_analysis: str = Field(..., description="Textual analysis of convergence")
+    periods: list[dict] = Field(..., description="List of period statistics")
+    trend: str = Field(
+        ...,
+        description="Trend direction: 'increasing', 'decreasing', 'stable', 'fluctuating', or 'insufficient_data'",
+    )
+    convergence_status: str = Field(
+        ...,
+        description="Convergence status: 'converged', 'not_converged', or 'insufficient_data'",
+    )
+    convergence_analysis: str = Field(
+        ..., description="Textual analysis of convergence"
+    )
 
 
 class ReputationGameEnv(EnvBase):
@@ -212,6 +238,11 @@ class ReputationGameEnv(EnvBase):
     - Automatic JSON schema generation
     - Better error handling
     """
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _agent_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("reputation", "TEXT", nullable=False),
@@ -234,7 +265,7 @@ class ReputationGameEnv(EnvBase):
 
     def __init__(
         self,
-        config: Optional[ReputationGameConfig | Dict] = None,
+        config: ReputationGameConfig | dict | None = None,
     ):
         super().__init__()
 
@@ -250,12 +281,14 @@ class ReputationGameEnv(EnvBase):
         elif isinstance(config, ReputationGameConfig):
             self._config = config
         else:
-            raise TypeError(f"config must be ReputationGameConfig or dict, got {type(config)}")
+            raise TypeError(
+                f"config must be ReputationGameConfig or dict, got {type(config)}"
+            )
 
         # State management
-        self._reputations: Dict[int, Reputation] = {}  # agent_id -> Reputation
-        self._payoffs: Dict[int, float] = {}  # agent_id -> cumulative payoff
-        self._action_log: List[ActionLogEntry] = []  # Public action log
+        self._reputations: dict[int, Reputation] = {}  # agent_id -> Reputation
+        self._payoffs: dict[int, float] = {}  # agent_id -> cumulative payoff
+        self._action_log: list[ActionLogEntry] = []  # Public action log
 
         # Thread safety
         self._lock = asyncio.Lock()
@@ -277,7 +310,9 @@ class ReputationGameEnv(EnvBase):
             self._workspace_root / _STATE_REL,
             json.dumps(
                 {
-                    "reputations": {k: v.value for k, v in dump_int_map(self._reputations).items()},
+                    "reputations": {
+                        k: v.value for k, v in dump_int_map(self._reputations).items()
+                    },
                     "payoffs": dump_int_map(self._payoffs),
                     "action_log": [e.model_dump(mode="json") for e in self._action_log],
                     "step_counter": self._step_counter,
@@ -296,10 +331,15 @@ class ReputationGameEnv(EnvBase):
             return False
         d = json.loads(state_path.read_text(encoding="utf-8"))
         self._reputations = {
-            aid: Reputation(int(v)) for aid, v in load_int_map(d.get("reputations")).items()
+            aid: Reputation(int(v))
+            for aid, v in load_int_map(d.get("reputations")).items()
         }
-        self._payoffs = {aid: float(v) for aid, v in load_int_map(d.get("payoffs")).items()}
-        self._action_log = [ActionLogEntry.model_validate(e) for e in d.get("action_log", [])]
+        self._payoffs = {
+            aid: float(v) for aid, v in load_int_map(d.get("payoffs")).items()
+        }
+        self._action_log = [
+            ActionLogEntry.model_validate(e) for e in d.get("action_log", [])
+        ]
         self._step_counter = int(d.get("step_counter", 0))
         return True
 
@@ -369,7 +409,9 @@ class ReputationGameEnv(EnvBase):
 
     # Social norm implementations
 
-    def _apply_norm_image_score(self, action: Action, recipient_rep: Reputation) -> Reputation:
+    def _apply_norm_image_score(
+        self, action: Action, recipient_rep: Reputation
+    ) -> Reputation:
         """
         Image Score norm:
         - Cooperate -> Good reputation
@@ -378,7 +420,9 @@ class ReputationGameEnv(EnvBase):
         """
         return Reputation.GOOD if action == Action.COOPERATE else Reputation.BAD
 
-    def _apply_norm_simple_standing(self, action: Action, recipient_rep: Reputation) -> Reputation:
+    def _apply_norm_simple_standing(
+        self, action: Action, recipient_rep: Reputation
+    ) -> Reputation:
         """
         Simple Standing norm:
         - Cooperate with good reputation -> Good reputation
@@ -390,7 +434,9 @@ class ReputationGameEnv(EnvBase):
         # cooperate
         return Reputation.GOOD if recipient_rep == Reputation.GOOD else Reputation.BAD
 
-    def _apply_norm_stern_judging(self, action: Action, recipient_rep: Reputation) -> Reputation:
+    def _apply_norm_stern_judging(
+        self, action: Action, recipient_rep: Reputation
+    ) -> Reputation:
         """
         Stern Judging norm:
         - Cooperate with good reputation -> Good reputation
@@ -529,7 +575,7 @@ class ReputationGameEnv(EnvBase):
                 recipient_rep=self._reputation_to_str(recipient_rep),
                 cost=cost,
                 benefit=benefit,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
             )
             self._action_log.append(log_entry)
             # Keep log length (last 1000 entries)
@@ -569,7 +615,9 @@ class ReputationGameEnv(EnvBase):
 
                 # Get recent actions for this agent (from log)
                 recent_actions = [
-                    log.model_dump() for log in self._action_log[-20:] if log.donor_id == agent_id
+                    log.model_dump()
+                    for log in self._action_log[-20:]
+                    if log.donor_id == agent_id
                 ]
 
                 summary = AgentSummary(
@@ -583,7 +631,9 @@ class ReputationGameEnv(EnvBase):
             return GetTopAgentSummaryResponse(top_agents=top_agents, top_k=top_k)
 
     @tool(readonly=True)
-    async def get_public_action_log(self, limit: int = 20) -> GetPublicActionLogResponse:
+    async def get_public_action_log(
+        self, limit: int = 20
+    ) -> GetPublicActionLogResponse:
         """
         Get public action log.
 
@@ -660,8 +710,12 @@ class ReputationGameEnv(EnvBase):
         :returns: Response containing: - good_count: Number of agents with good reputation - bad_count: Number of agents with bad reputation - good_ratio: Ratio of good reputation (0.0 to 1.0)
         """
         async with self._lock:
-            good_count = sum(1 for r in self._reputations.values() if r == Reputation.GOOD)
-            bad_count = sum(1 for r in self._reputations.values() if r == Reputation.BAD)
+            good_count = sum(
+                1 for r in self._reputations.values() if r == Reputation.GOOD
+            )
+            bad_count = sum(
+                1 for r in self._reputations.values() if r == Reputation.BAD
+            )
             total = len(self._reputations)
 
             good_ratio = good_count / total if total > 0 else 0.0
@@ -673,7 +727,9 @@ class ReputationGameEnv(EnvBase):
             )
 
     @tool(readonly=True)
-    async def get_agent_history(self, agent_id: int, limit: int = 50) -> GetAgentHistoryResponse:
+    async def get_agent_history(
+        self, agent_id: int, limit: int = 50
+    ) -> GetAgentHistoryResponse:
         """
         Get recent interaction history for a specific agent.
 
@@ -692,7 +748,8 @@ class ReputationGameEnv(EnvBase):
 
             # Filter logs where agent is donor or recipient
             filtered = [
-                log for log in logs
+                log
+                for log in logs
                 if log.donor_id == agent_id or log.recipient_id == agent_id
             ]
 
@@ -705,7 +762,9 @@ class ReputationGameEnv(EnvBase):
             return GetAgentHistoryResponse(agent_id=agent_id, history=history_dicts)
 
     @tool(readonly=True)
-    async def get_strategy_convergence_analysis(self, num_periods: int = 3) -> GetStrategyConvergenceAnalysisResponse:
+    async def get_strategy_convergence_analysis(
+        self, num_periods: int = 3
+    ) -> GetStrategyConvergenceAnalysisResponse:
         """
         Analyze strategy convergence by examining cooperation rate trends over time.
 
@@ -737,24 +796,30 @@ class ReputationGameEnv(EnvBase):
 
             for i in range(num_periods):
                 start_idx = i * period_size
-                end_idx = (i + 1) * period_size if i < num_periods - 1 else total_interactions
+                end_idx = (
+                    (i + 1) * period_size if i < num_periods - 1 else total_interactions
+                )
                 period_logs = logs[start_idx:end_idx]
 
                 if len(period_logs) == 0:
                     continue
 
-                coop_count = sum(1 for log in period_logs if log.action == Action.COOPERATE.value)
+                coop_count = sum(
+                    1 for log in period_logs if log.action == Action.COOPERATE.value
+                )
                 total_count = len(period_logs)
                 coop_rate = coop_count / total_count if total_count > 0 else 0.0
 
-                periods.append({
-                    "period": i + 1,
-                    "start_index": start_idx,
-                    "end_index": end_idx,
-                    "interaction_count": total_count,
-                    "cooperation_count": coop_count,
-                    "cooperation_rate": coop_rate,
-                })
+                periods.append(
+                    {
+                        "period": i + 1,
+                        "start_index": start_idx,
+                        "end_index": end_idx,
+                        "interaction_count": total_count,
+                        "cooperation_count": coop_count,
+                        "cooperation_rate": coop_rate,
+                    }
+                )
 
             # Analyze trend
             if len(periods) < 2:
@@ -764,7 +829,9 @@ class ReputationGameEnv(EnvBase):
                 # Calculate trend: compare first half vs second half
                 mid = len(rates) // 2
                 first_half_avg = sum(rates[:mid]) / len(rates[:mid]) if mid > 0 else 0
-                second_half_avg = sum(rates[mid:]) / len(rates[mid:]) if len(rates[mid:]) > 0 else 0
+                second_half_avg = (
+                    sum(rates[mid:]) / len(rates[mid:]) if len(rates[mid:]) > 0 else 0
+                )
 
                 diff = second_half_avg - first_half_avg
                 threshold = 0.05  # 5% threshold for stability
@@ -785,7 +852,11 @@ class ReputationGameEnv(EnvBase):
             else:
                 # Check if last two periods are similar (converged)
                 last_two_rates = [p["cooperation_rate"] for p in periods[-2:]]
-                rate_diff = abs(last_two_rates[1] - last_two_rates[0]) if len(last_two_rates) == 2 else 1.0
+                rate_diff = (
+                    abs(last_two_rates[1] - last_two_rates[0])
+                    if len(last_two_rates) == 2
+                    else 1.0
+                )
                 convergence_threshold = 0.1  # 10% difference threshold
 
                 if rate_diff < convergence_threshold:
@@ -837,13 +908,19 @@ class ReputationGameEnv(EnvBase):
             )
             defection_count = total_interactions - cooperation_count
             cooperation_rate = (
-                cooperation_count / total_interactions if total_interactions > 0 else 0.0
+                cooperation_count / total_interactions
+                if total_interactions > 0
+                else 0.0
             )
             good_count = sum(
-                1 for reputation in self._reputations.values() if reputation == Reputation.GOOD
+                1
+                for reputation in self._reputations.values()
+                if reputation == Reputation.GOOD
             )
             bad_count = sum(
-                1 for reputation in self._reputations.values() if reputation == Reputation.BAD
+                1
+                for reputation in self._reputations.values()
+                if reputation == Reputation.BAD
             )
             population_size = len(self._reputations)
             good_ratio = good_count / population_size if population_size > 0 else 0.0
@@ -882,4 +959,11 @@ class ReputationGameEnv(EnvBase):
         )
         self._step_counter += 1
 
-__all__ = ["Action", "NormType", "Reputation", "ReputationGameConfig", "ReputationGameEnv"]
+
+__all__ = [
+    "Action",
+    "NormType",
+    "Reputation",
+    "ReputationGameConfig",
+    "ReputationGameEnv",
+]

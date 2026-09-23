@@ -98,6 +98,9 @@ worker 在自己的事件循环中按需创建 litellm Router 和并发控制器
 actor，并把 ``EnvRouterProxy`` 放入 ``ServiceProxy``。智能体通过该 proxy 调用 ``ask``、
 ``step``、``init`` 和 ``get_world_description`` 等接口；所有智能体看到的是同一份环境状态。
 
+actor 的 ``max_concurrency`` 取决于挂载模块是否全部声明 ``is_concurrency_safe()``：全部安全时使用
+``AGENTSOCIETY_ENV_ACTOR_MAX_CONCURRENCY``（默认 8），否则为 ``1``。详见 :doc:`env_modules`。
+
 路由器（``RouterBase`` 子类）负责把智能体的自然语言请求映射到环境模块暴露的 ``@tool`` 方法：
 
 .. list-table::
@@ -107,7 +110,9 @@ actor，并把 ``EnvRouterProxy`` 放入 ``ServiceProxy``。智能体通过该 p
    * - 路由器
      - 特点
    * - ``CodeGenRouter`` (默认)
-     - 从环境模块提取工具签名，生成调用代码并在受限环境中执行；带 AST 守卫与缓存统计。
+     - 从环境模块提取工具签名，生成调用代码并在受限环境中执行；AST 守卫；
+       **仅** ``template_mode=True`` 时启用 FAISS 指令模板缓存；无 observe/statistics
+       工具时 init 不跑空桩 LLM 代码生成。
    * - ``ReActRouter``
      - ReAct 式工具选择。
    * - ``PlanExecuteRouter``

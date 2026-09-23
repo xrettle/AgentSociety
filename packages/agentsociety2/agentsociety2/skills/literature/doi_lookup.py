@@ -26,9 +26,7 @@ _ARXIV_RE = re.compile(
 _CROSSREF_UA = "AgentSociety2-DOILookup/0.1 (mailto:agentsociety@fiblab.net)"
 
 # Best-effort scan of PDF bytes for embedded DOI / arXiv ids (no PDF parser dep).
-_PDF_DOI_RE = re.compile(
-    rb"(?i)(?:doi[:\s]*)?(10\.\d{4,9}/[-._;()/:A-Z0-9]+)"
-)
+_PDF_DOI_RE = re.compile(rb"(?i)(?:doi[:\s]*)?(10\.\d{4,9}/[-._;()/:A-Z0-9]+)")
 _PDF_ARXIV_RE = re.compile(
     rb"(?i)(?:arxiv\.org/(?:abs|pdf)/|arxiv[:\s]+)(\d{4}\.\d{4,5})(?:v\d+)?"
 )
@@ -145,13 +143,17 @@ def _author_name(author: dict[str, Any]) -> str:
     return "Unknown"
 
 
-def _cite_key(authors: tuple[str, ...], year: int | None, title: str, fallback: str) -> str:
+def _cite_key(
+    authors: tuple[str, ...], year: int | None, title: str, fallback: str
+) -> str:
     last = "anon"
     if authors:
         last = authors[0].split()[-1]
     last = re.sub(r"[^A-Za-z0-9]", "", last).lower() or "anon"
     year_part = str(year) if year else "nd"
-    title_token = re.sub(r"[^A-Za-z0-9]+", "", title.split()[0] if title else "")[:12].lower()
+    title_token = re.sub(r"[^A-Za-z0-9]+", "", title.split()[0] if title else "")[
+        :12
+    ].lower()
     title_token = title_token or "item"
     return f"{last}{year_part}{title_token}"[:64] or fallback
 
@@ -183,7 +185,9 @@ def lookup_doi_crossref(doi: str, *, timeout: float = 20.0) -> BibliographicReco
     if not title:
         raise ValueError(f"Crossref entry has no title: {bare}")
 
-    authors = tuple(_author_name(a) for a in (message.get("author") or []) if isinstance(a, dict))
+    authors = tuple(
+        _author_name(a) for a in (message.get("author") or []) if isinstance(a, dict)
+    )
     year = _year_from_crossref(message)
     container = message.get("container-title") or []
     venue = container[0] if container and isinstance(container[0], str) else None
@@ -207,7 +211,9 @@ def lookup_doi_crossref(doi: str, *, timeout: float = 20.0) -> BibliographicReco
     )
 
 
-def lookup_doi_content_negotiation(doi: str, *, timeout: float = 20.0) -> BibliographicRecord:
+def lookup_doi_content_negotiation(
+    doi: str, *, timeout: float = 20.0
+) -> BibliographicRecord:
     """Fetch CSL-JSON via DOI content negotiation (``doi.org``)."""
     bare = normalize_doi(doi)
     url = f"https://doi.org/{quote(bare, safe='/')}"
@@ -218,7 +224,9 @@ def lookup_doi_content_negotiation(doi: str, *, timeout: float = 20.0) -> Biblio
             timeout=timeout,
         )
     except HTTPError as exc:
-        raise ValueError(f"DOI content negotiation failed for {bare}: HTTP {exc.code}") from exc
+        raise ValueError(
+            f"DOI content negotiation failed for {bare}: HTTP {exc.code}"
+        ) from exc
     except URLError as exc:
         raise ValueError(f"DOI content negotiation failed for {bare}: {exc}") from exc
 
@@ -257,12 +265,17 @@ def lookup_doi_content_negotiation(doi: str, *, timeout: float = 20.0) -> Biblio
         venue=venue,
         doi=bare,
         url=f"https://doi.org/{bare}",
-        abstract=(csl.get("abstract") or None) if isinstance(csl.get("abstract"), str) else None,
+        abstract=(csl.get("abstract") or None)
+        if isinstance(csl.get("abstract"), str)
+        else None,
         cite_key=_cite_key(authors, year, title, bare.replace("/", "")),
     )
 
 
-_ARXIV_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+_ARXIV_NS = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "arxiv": "http://arxiv.org/schemas/atom",
+}
 
 
 def lookup_arxiv(arxiv_id: str, *, timeout: float = 20.0) -> BibliographicRecord:
@@ -275,7 +288,9 @@ def lookup_arxiv(arxiv_id: str, *, timeout: float = 20.0) -> BibliographicRecord
     if entry is None:
         raise ValueError(f"arXiv returned no entry for {bare}")
 
-    title = (entry.findtext("atom:title", default="", namespaces=_ARXIV_NS) or "").strip()
+    title = (
+        entry.findtext("atom:title", default="", namespaces=_ARXIV_NS) or ""
+    ).strip()
     title = re.sub(r"\s+", " ", title)
     if not title:
         raise ValueError(f"arXiv entry has no title: {bare}")
@@ -287,8 +302,12 @@ def lookup_arxiv(arxiv_id: str, *, timeout: float = 20.0) -> BibliographicRecord
     authors = tuple(a for a in authors if a)
 
     published = entry.findtext("atom:published", default="", namespaces=_ARXIV_NS) or ""
-    year = int(published[:4]) if len(published) >= 4 and published[:4].isdigit() else None
-    abstract = (entry.findtext("atom:summary", default="", namespaces=_ARXIV_NS) or "").strip()
+    year = (
+        int(published[:4]) if len(published) >= 4 and published[:4].isdigit() else None
+    )
+    abstract = (
+        entry.findtext("atom:summary", default="", namespaces=_ARXIV_NS) or ""
+    ).strip()
     abstract = re.sub(r"\s+", " ", abstract) or None
 
     doi_node = entry.find("arxiv:doi", _ARXIV_NS)

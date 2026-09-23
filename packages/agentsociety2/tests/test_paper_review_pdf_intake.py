@@ -7,7 +7,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = (
     REPO_ROOT
@@ -15,7 +14,7 @@ SCRIPT_PATH = (
 )
 
 
-FAKE_POPPLER = r'''#!/usr/bin/env python3
+FAKE_POPPLER = r"""#!/usr/bin/env python3
 import os
 import struct
 import sys
@@ -58,7 +57,7 @@ elif tool == "pdfimages":
     print("page num type width height color comp bpc enc interp object ID x-ppi y-ppi size ratio")
 else:
     raise SystemExit(f"unexpected fake tool: {tool}")
-'''
+"""
 
 
 def install_fake_poppler(tmp_path: Path) -> Path:
@@ -71,7 +70,9 @@ def install_fake_poppler(tmp_path: Path) -> Path:
     return bin_dir
 
 
-def run_intake(tmp_path: Path, *, sparse: bool = False) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+def run_intake(
+    tmp_path: Path, *, sparse: bool = False
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     bin_dir = install_fake_poppler(tmp_path)
     input_path = tmp_path / "paper.pdf"
     input_path.write_bytes(b"%PDF-1.7\nfixture\n")
@@ -119,7 +120,9 @@ def test_pdf_intake_creates_page_aware_hashed_shared_artifacts(tmp_path: Path) -
     for artifact in report["artifacts"]:
         artifact_path = output_dir / artifact["path"]
         assert artifact_path.is_file()
-        assert hashlib.sha256(artifact_path.read_bytes()).hexdigest() == artifact["sha256"]
+        assert (
+            hashlib.sha256(artifact_path.read_bytes()).hexdigest() == artifact["sha256"]
+        )
 
 
 def test_pdf_intake_fails_closed_when_ocr_is_required(tmp_path: Path) -> None:

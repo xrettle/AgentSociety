@@ -6,6 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { EnvManager } from '../envManager';
+import { isExtensionZh } from '../i18n';
 import {
   resolveAgentsocietyPython,
   type ResolveAgentsocietyPythonOptions,
@@ -54,7 +55,7 @@ function resolvePython(workspacePath: string): string {
   const resolved = resolveAgentsocietyPython(options);
   if (!resolved) {
     throw new Error(
-      vscode.env.language.startsWith('zh')
+      isExtensionZh()
         ? '未找到已安装 agentsociety2 的 Python。请在配置页设置 PYTHON_PATH。'
         : 'No Python with agentsociety2 found. Set PYTHON_PATH in the config page.'
     );

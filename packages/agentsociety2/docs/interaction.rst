@@ -124,7 +124,8 @@ intervene() 方法 - 读写修改
        state = await society.ask("What's happening?")
        print(f"Step {step_num}: {state}")
 
-       # 执行一步（tick 为本步时长，秒）；当前仿真时间由编排器内部维护
+       # 执行一步（tick 为本步时长，秒）；当前仿真时间由编排器内部维护。
+       # 任一 agent 返回 ok=False 时 society.step 抛出 RuntimeError（不再静默跳过）。
        await society.step(tick=3600)
 
        # Intervene based on conditions
@@ -256,6 +257,14 @@ intervene() 方法 - 读写修改
    long_term = await society.ask("How is everyone feeling now?")
 
    # Analyze change over time
+
+外部提问（AgentSocietyHelper）
+--------------------------------
+
+``AgentSocietyHelper`` 对 ``society.ask`` / 研究侧提问使用 **XML** 计划与答案
+（``<plan>`` / ``<answer>``），不再使用 JSON 计划格式。可用工具包括
+``list_agents``、``get_agent_profile``、``ask_agents`` 等。详见 API
+:class:`~agentsociety2.society.helper.AgentSocietyHelper`。
 
 最佳实践
 --------------

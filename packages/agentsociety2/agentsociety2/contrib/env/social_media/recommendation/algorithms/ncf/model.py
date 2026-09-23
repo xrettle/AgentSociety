@@ -4,21 +4,26 @@ NCF (Neural Collaborative Filtering) 推荐算法实现
 基于 PyTorch 的神经协同过滤算法
 """
 
-from typing import List, Tuple, Set, Dict, Optional
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 
 from agentsociety2.logger import get_logger
-from ..core import RecommenderAlgorithm, RatingMatrix
+
+from ..core import RatingMatrix, RecommenderAlgorithm
 from .config import NCFConfig
 
 
 class NCFModel(nn.Module):
     """Neural Collaborative Filtering 模型"""
 
-    def __init__(self, n_users: int, n_items: int, embedding_dim: int = 32, mlp_layers: List[int] | None = None):
+    def __init__(
+        self,
+        n_users: int,
+        n_items: int,
+        embedding_dim: int = 32,
+        mlp_layers: list[int] | None = None,
+    ):
         """
         初始化NCF模型
 
@@ -27,7 +32,7 @@ class NCFModel(nn.Module):
         :param embedding_dim: 嵌入维度
         :param mlp_layers: MLP层的神经元数量列表
         """
-        super(NCFModel, self).__init__()
+        super().__init__()
 
         if mlp_layers is None:
             mlp_layers = [64, 32, 16]
@@ -47,7 +52,7 @@ class NCFModel(nn.Module):
             if i == 0:
                 mlp_layers_list.append(nn.Linear(mlp_input_dim, layer_size))
             else:
-                mlp_layers_list.append(nn.Linear(mlp_layers[i-1], layer_size))
+                mlp_layers_list.append(nn.Linear(mlp_layers[i - 1], layer_size))
             mlp_layers_list.append(nn.ReLU())
             mlp_layers_list.append(nn.Dropout(0.2))
 
@@ -110,20 +115,20 @@ class NCFRecommender(RecommenderAlgorithm):
         :param config: NCF算法配置
         """
         self.config = config
-        self.model: Optional[NCFModel] = None
+        self.model: NCFModel | None = None
 
         # 设置设备
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.user_index_map: Optional[Dict[int, int]] = None
-        self.item_index_map: Optional[Dict[int, int]] = None
-        self.index_user_map: Optional[Dict[int, int]] = None
-        self.index_item_map: Optional[Dict[int, int]] = None
+        self.user_index_map: dict[int, int] | None = None
+        self.item_index_map: dict[int, int] | None = None
+        self.index_user_map: dict[int, int] | None = None
+        self.index_item_map: dict[int, int] | None = None
         self.n_users: int = 0
         self.n_items: int = 0
 
         # 热门物品（用于冷启动）
-        self._popular_items: List[Tuple[int, float]] = []
+        self._popular_items: list[tuple[int, float]] = []
 
         get_logger().info(
             f"NCFRecommender 初始化: embedding_dim={config.embedding_dim}, "
@@ -156,12 +161,14 @@ class NCFRecommender(RecommenderAlgorithm):
             n_users=self.n_users,
             n_items=self.n_items,
             embedding_dim=self.config.embedding_dim,
-            mlp_layers=self.config.mlp_layers
+            mlp_layers=self.config.mlp_layers,
         ).to(self.device)
 
         # 准备训练数据
         train_data = []
-        for user_id, item_id, rating in zip(data.user_ids, data.item_ids, data.ratings, strict=False):
+        for user_id, item_id, rating in zip(
+            data.user_ids, data.item_ids, data.ratings, strict=False
+        ):
             user_idx = self.user_index_map[user_id]
             item_idx = self.item_index_map[item_id]
             train_data.append((user_idx, item_idx, rating))
@@ -170,7 +177,9 @@ class NCFRecommender(RecommenderAlgorithm):
         get_logger().info(f"训练样本数: {len(train_data)}")
 
         # 优化器和损失函数
-        optimizer = optim.Adam(self.model.parameters(), lr=self.config.learning_rate, weight_decay=0.001)
+        optimizer = optim.Adam(
+            self.model.parameters(), lr=self.config.learning_rate, weight_decay=0.001
+        )
         criterion = nn.MSELoss()
 
         # 训练模型
@@ -249,11 +258,8 @@ class NCFRecommender(RecommenderAlgorithm):
             return float(prediction.cpu().item())
 
     def recommend(
-        self,
-        user_id: int,
-        n: int,
-        exclude_ids: Set[int]
-    ) -> List[Tuple[int, float]]:
+        self, user_id: int, n: int, exclude_ids: set[int]
+    ) -> list[tuple[int, float]]:
         """
         为用户生成推荐列表
 
@@ -304,18 +310,18 @@ class NCFRecommender(RecommenderAlgorithm):
             raise RuntimeError("模型尚未训练,无法保存")
 
         checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'user_index_map': self.user_index_map,
-            'item_index_map': self.item_index_map,
-            'index_user_map': self.index_user_map,
-            'index_item_map': self.index_item_map,
-            'popular_items': self._popular_items,
-            'config': self.config,
-            'n_users': self.n_users,
-            'n_items': self.n_items,
+            "model_state_dict": self.model.state_dict(),
+            "user_index_map": self.user_index_map,
+            "item_index_map": self.item_index_map,
+            "index_user_map": self.index_user_map,
+            "index_item_map": self.index_item_map,
+            "popular_items": self._popular_items,
+            "config": self.config,
+            "n_users": self.n_users,
+            "n_items": self.n_items,
         }
 
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             torch.save(checkpoint, f)  # nosec: internal checkpoint save
 
         get_logger().info(f"NCF 模型已保存到 {path}")
@@ -326,27 +332,27 @@ class NCFRecommender(RecommenderAlgorithm):
 
         :param path: 模型文件路径
         """
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             checkpoint = torch.load(f, weights_only=False)  # nosec: internal checkpoint loading
 
-        self.config = checkpoint['config']
-        self.user_index_map = checkpoint['user_index_map']
-        self.item_index_map = checkpoint['item_index_map']
-        self.index_user_map = checkpoint['index_user_map']
-        self.index_item_map = checkpoint['index_item_map']
-        self._popular_items = checkpoint['popular_items']
-        self.n_users = checkpoint['n_users']
-        self.n_items = checkpoint['n_items']
+        self.config = checkpoint["config"]
+        self.user_index_map = checkpoint["user_index_map"]
+        self.item_index_map = checkpoint["item_index_map"]
+        self.index_user_map = checkpoint["index_user_map"]
+        self.index_item_map = checkpoint["index_item_map"]
+        self._popular_items = checkpoint["popular_items"]
+        self.n_users = checkpoint["n_users"]
+        self.n_items = checkpoint["n_items"]
 
         # 重建模型
         self.model = NCFModel(
             n_users=self.n_users,
             n_items=self.n_items,
             embedding_dim=self.config.embedding_dim,
-            mlp_layers=self.config.mlp_layers
+            mlp_layers=self.config.mlp_layers,
         ).to(self.device)
 
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 
         get_logger().info(f"NCF 模型已从 {path} 加载")
@@ -359,7 +365,7 @@ class NCFRecommender(RecommenderAlgorithm):
 
         :param data: 评分矩阵
         """
-        item_ratings: Dict[int, List[float]] = {}
+        item_ratings: dict[int, list[float]] = {}
 
         for item_id, rating in zip(data.item_ids, data.ratings, strict=False):
             if item_id not in item_ratings:
@@ -392,4 +398,3 @@ class NCFRecommender(RecommenderAlgorithm):
             self._popular_items = []
 
         get_logger().debug(f"计算了 {len(self._popular_items)} 个热门物品")
-

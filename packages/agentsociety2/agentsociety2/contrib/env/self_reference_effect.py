@@ -2,11 +2,12 @@
 Self-Reference Effect (SRE) Experiment Environment
 Environment for Self-Reference Effect experiment based on AgentSociety2
 """
+
 import asyncio
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +22,7 @@ _STATE_REL = "state/ENV_STATE.json"
 # Identity types
 class IdentityType(str, Enum):
     """Identity types for trait adjectives"""
+
     SELF = "self"
     FRIEND = "friend"
     OTHER = "other"
@@ -44,15 +46,21 @@ class SubmitRecognitionResponse(BaseModel):
     trait: str = Field(..., description="Trait adjective")
     judge_type: str = Field(..., description="Recognition judgment (old/new)")
     is_correct: bool = Field(..., description="Whether the recognition is correct")
-    rk_type: Optional[str] = Field(None, description="Remember/Know judgment (remember/know)")
-    status: str = Field(..., description="Status: 'submitted' or 'recognition_completed'")
+    rk_type: str | None = Field(
+        None, description="Remember/Know judgment (remember/know)"
+    )
+    status: str = Field(
+        ..., description="Status: 'submitted' or 'recognition_completed'"
+    )
 
 
 class GetEncodingStatusResponse(BaseModel):
     """Response model for get_encoding_status() function"""
 
     agent_id: int = Field(..., description="Agent ID")
-    completed_traits: List[Dict[str, Any]] = Field(..., description="List of completed encoding ratings")
+    completed_traits: list[dict[str, Any]] = Field(
+        ..., description="List of completed encoding ratings"
+    )
     remaining_count: int = Field(..., description="Number of remaining traits to rate")
 
 
@@ -60,12 +68,19 @@ class GetRecognitionStatusResponse(BaseModel):
     """Response model for get_recognition_status() function"""
 
     agent_id: int = Field(..., description="Agent ID")
-    completed_judgments: List[Dict[str, Any]] = Field(..., description="List of completed recognition judgments")
+    completed_judgments: list[dict[str, Any]] = Field(
+        ..., description="List of completed recognition judgments"
+    )
     remaining_count: int = Field(..., description="Number of remaining traits to judge")
 
 
 class SelfReferenceEffectEnv(EnvBase):
     """Environment for Self-Reference Effect (SRE) experiment based on AgentSociety2"""
+
+    @classmethod
+    def is_concurrency_safe(cls) -> bool:
+        """Tools mutate shared state under an internal ``asyncio.Lock``."""
+        return True
 
     _agent_state_columns: ClassVar[list[ColumnDef]] = [
         ColumnDef("encoding_ratings", "JSON", nullable=False),
@@ -76,9 +91,9 @@ class SelfReferenceEffectEnv(EnvBase):
 
     def __init__(
         self,
-        agent_ids: List[int],
-        encoding_traits: List[Dict[str, Any]] | None = None,
-        recognition_traits: List[str] | None = None,
+        agent_ids: list[int],
+        encoding_traits: list[dict[str, Any]] | None = None,
+        recognition_traits: list[str] | None = None,
     ):
         """
         Initialize the Self-Reference Effect environment.
@@ -102,17 +117,19 @@ class SelfReferenceEffectEnv(EnvBase):
         # Initialize recognition traits if not provided
         if recognition_traits is None:
             # Use encoding traits plus some new traits
-            self.recognition_traits = [t["trait"] for t in self.encoding_traits] + self._generate_new_traits()
+            self.recognition_traits = [
+                t["trait"] for t in self.encoding_traits
+            ] + self._generate_new_traits()
         else:
             self.recognition_traits = recognition_traits
 
         # Store encoding ratings: agent_id -> list of {trait, identity, rating}
-        self._encoding_ratings: Dict[int, List[Dict[str, Any]]] = {
+        self._encoding_ratings: dict[int, list[dict[str, Any]]] = {
             agent_id: [] for agent_id in agent_ids
         }
 
         # Store recognition judgments: agent_id -> list of {trait, judge_type, is_correct, rk_type}
-        self._recognition_judgments: Dict[int, List[Dict[str, Any]]] = {
+        self._recognition_judgments: dict[int, list[dict[str, Any]]] = {
             agent_id: [] for agent_id in agent_ids
         }
 
@@ -153,12 +170,13 @@ class SelfReferenceEffectEnv(EnvBase):
             aid: list(v) for aid, v in load_int_map(d.get("encoding_ratings")).items()
         }
         self._recognition_judgments = {
-            aid: list(v) for aid, v in load_int_map(d.get("recognition_judgments")).items()
+            aid: list(v)
+            for aid, v in load_int_map(d.get("recognition_judgments")).items()
         }
         self._step_counter = int(d.get("step_counter", 0))
         return True
 
-    def _generate_default_encoding_traits(self) -> List[Dict[str, Any]]:
+    def _generate_default_encoding_traits(self) -> list[dict[str, Any]]:
         """Generate default trait list for encoding phase"""
         # This is a simplified version - you should load from actual SRE data
         traits = [
@@ -174,7 +192,7 @@ class SelfReferenceEffectEnv(EnvBase):
         ]
         return traits
 
-    def _generate_new_traits(self) -> List[str]:
+    def _generate_new_traits(self) -> list[str]:
         """Generate new traits for recognition phase (not in encoding)"""
         return ["聪明", "勇敢", "懒惰", "自私"]
 
@@ -235,13 +253,18 @@ class SelfReferenceEffectEnv(EnvBase):
 
             # Validate rating
             if not isinstance(rating, int):
-                raise ValueError(f"Rating must be an integer, got {type(rating).__name__}")
+                raise ValueError(
+                    f"Rating must be an integer, got {type(rating).__name__}"
+                )
             rating = max(1, min(5, rating))  # Clamp to 1-5
 
             # Check if this trait-identity combination exists in encoding traits
             trait_found = False
             for encoding_trait in self.encoding_traits:
-                if encoding_trait["trait"] == trait and encoding_trait["identity"] == identity_lower:
+                if (
+                    encoding_trait["trait"] == trait
+                    and encoding_trait["identity"] == identity_lower
+                ):
                     trait_found = True
                     break
 
@@ -252,7 +275,10 @@ class SelfReferenceEffectEnv(EnvBase):
 
             # Check if already submitted
             for existing in self._encoding_ratings[agent_id]:
-                if existing["trait"] == trait and existing["identity"] == identity_lower:
+                if (
+                    existing["trait"] == trait
+                    and existing["identity"] == identity_lower
+                ):
                     raise ValueError(
                         f"Rating for trait '{trait}' with identity '{identity_lower}' has already been submitted. "
                         f"Current rating: {existing['rating']}"
@@ -274,10 +300,11 @@ class SelfReferenceEffectEnv(EnvBase):
 
             # Debug log
             import sys
+
             print(
                 f"[ENV DEBUG] Agent {agent_id} submitted encoding rating: {trait} ({identity_lower}) = {rating} "
                 f"({completed}/{len(self.encoding_traits)} completed)",
-                file=sys.stderr
+                file=sys.stderr,
             )
 
             return SubmitEncodingRatingResponse(
@@ -312,7 +339,7 @@ class SelfReferenceEffectEnv(EnvBase):
 
     @tool(readonly=False)
     async def submit_recognition(
-        self, agent_id: int, trait: str, judge_type: str, rk_type: Optional[str] = None
+        self, agent_id: int, trait: str, judge_type: str, rk_type: str | None = None
     ) -> SubmitRecognitionResponse:
         """
         Submit recognition judgment for a trait adjective.
@@ -390,11 +417,12 @@ class SelfReferenceEffectEnv(EnvBase):
 
             # Debug log
             import sys
+
             print(
                 f"[ENV DEBUG] Agent {agent_id} submitted recognition: {trait} = {judge_type_lower} "
                 f"(correct: {is_correct}, rk: {rk_type_lower}) "
                 f"({completed}/{len(self.recognition_traits)} completed)",
-                file=sys.stderr
+                file=sys.stderr,
             )
 
             return SubmitRecognitionResponse(
@@ -407,7 +435,9 @@ class SelfReferenceEffectEnv(EnvBase):
             )
 
     @tool(readonly=True)
-    async def get_recognition_status(self, agent_id: int) -> GetRecognitionStatusResponse:
+    async def get_recognition_status(
+        self, agent_id: int
+    ) -> GetRecognitionStatusResponse:
         """
         Get recognition phase status for a specific agent.
 
@@ -428,7 +458,9 @@ class SelfReferenceEffectEnv(EnvBase):
                 }
                 for j in self._recognition_judgments[agent_id]
             ]
-            remaining_count = len(self.recognition_traits) - len(self._recognition_judgments[agent_id])
+            remaining_count = len(self.recognition_traits) - len(
+                self._recognition_judgments[agent_id]
+            )
 
             return GetRecognitionStatusResponse(
                 agent_id=agent_id,
@@ -437,7 +469,7 @@ class SelfReferenceEffectEnv(EnvBase):
             )
 
     @tool(readonly=True, kind="statistics")
-    async def get_all_results(self) -> Dict[str, Any]:
+    async def get_all_results(self) -> dict[str, Any]:
         """
         Get all results for all agents (statistics function).
 
@@ -461,12 +493,8 @@ class SelfReferenceEffectEnv(EnvBase):
         """
         await super().init(start_datetime)
         async with self._lock:
-            self._encoding_ratings = {
-                agent_id: [] for agent_id in self.agent_ids
-            }
-            self._recognition_judgments = {
-                agent_id: [] for agent_id in self.agent_ids
-            }
+            self._encoding_ratings = {agent_id: [] for agent_id in self.agent_ids}
+            self._recognition_judgments = {agent_id: [] for agent_id in self.agent_ids}
             self._encoding_trait_set = {t["trait"] for t in self.encoding_traits}
             self._step_counter = 0
 
@@ -482,7 +510,9 @@ class SelfReferenceEffectEnv(EnvBase):
             records = [
                 {
                     "agent_id": agent_id,
-                    "encoding_ratings": [rating.copy() for rating in self._encoding_ratings[agent_id]],
+                    "encoding_ratings": [
+                        rating.copy() for rating in self._encoding_ratings[agent_id]
+                    ],
                     "recognition_judgments": [
                         judgment.copy()
                         for judgment in self._recognition_judgments[agent_id]
@@ -502,7 +532,7 @@ class SelfReferenceEffectEnv(EnvBase):
         )
         self._step_counter += 1
 
-    def get_results(self) -> Dict[str, Any]:
+    def get_results(self) -> dict[str, Any]:
         """
         Get all results (synchronous method for result extraction).
 
@@ -518,5 +548,6 @@ class SelfReferenceEffectEnv(EnvBase):
                 for agent_id, judgments in self._recognition_judgments.items()
             },
         }
+
 
 __all__ = ["IdentityType", "SelfReferenceEffectEnv"]

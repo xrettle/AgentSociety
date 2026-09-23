@@ -122,9 +122,9 @@ service = RecommendationService(algorithm)
 
 # 2. 创建训练器
 trainer_config = TrainerConfig(
-    retrain_threshold_ratings=100,     # 新评分数阈值
-    retrain_threshold_time=300,        # 时间阈值(秒)
-    enable_auto_retrain=True           # 启用自动重训练
+    retrain_threshold_ratings=100,  # 新评分数阈值
+    retrain_threshold_time=300,  # 时间阈值(秒)
+    enable_auto_retrain=True,  # 启用自动重训练
 )
 trainer = IncrementalTrainer(service, trainer_config)
 
@@ -338,11 +338,11 @@ await service.load_model("/data/model.pkl")
 **返回**:
 ```python
 {
-    "name": str,           # 算法名称
-    "config": dict,        # 算法配置
-    "is_trained": bool,    # 是否已训练
-    "num_users": int,      # 用户数量
-    "num_items": int       # 物品数量
+    "name": str,  # 算法名称
+    "config": dict,  # 算法配置
+    "is_trained": bool,  # 是否已训练
+    "num_users": int,  # 用户数量
+    "num_items": int,  # 物品数量
 }
 ```
 
@@ -361,9 +361,9 @@ await service.load_model("/data/model.pkl")
 **返回**:
 ```python
 {
-    "total_entries": int,   # 缓存总条目数
-    "valid_entries": int,   # 有效条目数
-    "cache_ttl": int        # 缓存过期时间(秒)
+    "total_entries": int,  # 缓存总条目数
+    "valid_entries": int,  # 有效条目数
+    "cache_ttl": int,  # 缓存过期时间(秒)
 }
 ```
 
@@ -415,15 +415,15 @@ await trainer.trigger_retrain()
 **返回**:
 ```python
 {
-    "is_training": bool,           # 是否正在训练
-    "last_train_time": str,        # 上次训练时间(ISO格式)
-    "total_ratings": int,          # 总评分数
-    "pending_ratings": int,        # 待训练评分数
+    "is_training": bool,  # 是否正在训练
+    "last_train_time": str,  # 上次训练时间(ISO格式)
+    "total_ratings": int,  # 总评分数
+    "pending_ratings": int,  # 待训练评分数
     "config": {
         "threshold_ratings": int,  # 评分阈值
-        "threshold_time": int,     # 时间阈值(秒)
-        "auto_retrain": bool       # 是否自动重训练
-    }
+        "threshold_time": int,  # 时间阈值(秒)
+        "auto_retrain": bool,  # 是否自动重训练
+    },
 }
 ```
 
@@ -435,9 +435,9 @@ await trainer.trigger_retrain()
 
 **属性**:
 ```python
-user_ids: np.ndarray      # 用户ID数组
-item_ids: np.ndarray      # 物品ID数组
-ratings: np.ndarray       # 评分数组
+user_ids: np.ndarray  # 用户ID数组
+item_ids: np.ndarray  # 物品ID数组
+ratings: np.ndarray  # 评分数组
 user_map: Dict[int, int]  # 用户ID映射
 item_map: Dict[int, int]  # 物品ID映射
 ```
@@ -454,10 +454,10 @@ item_map: Dict[int, int]  # 物品ID映射
 
 **属性**:
 ```python
-user_id: int              # 用户ID
-item_id: int              # 物品ID
-rating: float             # 评分 (1.0-5.0)
-timestamp: datetime       # 评分时间
+user_id: int  # 用户ID
+item_id: int  # 物品ID
+rating: float  # 评分 (1.0-5.0)
+timestamp: datetime  # 评分时间
 ```
 
 ### Item
@@ -466,9 +466,9 @@ timestamp: datetime       # 评分时间
 
 **属性**:
 ```python
-item_id: int              # 物品ID
-name: str                 # 物品名称
-category: str             # 分类
+item_id: int  # 物品ID
+name: str  # 物品名称
+category: str  # 分类
 metadata: Dict[str, Any]  # 元数据
 ```
 
@@ -549,13 +549,14 @@ service = RecommendationService(algorithm)
 trainer = IncrementalTrainer(
     service,
     TrainerConfig(
-        retrain_threshold_ratings=50,   # 50条新评分触发
-        retrain_threshold_time=300,     # 或5分钟触发
-    )
+        retrain_threshold_ratings=50,  # 50条新评分触发
+        retrain_threshold_time=300,  # 或5分钟触发
+    ),
 )
 
 # 初始化
 await trainer.load_initial_data(initial_ratings)
+
 
 # 实时添加新评分
 async def on_new_rating(rating: Rating):
@@ -686,6 +687,7 @@ pip install torch pandas numpy pydantic
 ```python
 from .core import RecommenderAlgorithm, RatingMatrix
 
+
 class MyRecommender(RecommenderAlgorithm):
     def fit(self, data: RatingMatrix) -> None:
         # 训练逻辑
@@ -695,7 +697,9 @@ class MyRecommender(RecommenderAlgorithm):
         # 预测逻辑
         pass
 
-    def recommend(self, user_id: int, n: int, exclude_ids: Set[int]) -> List[Tuple[int, float]]:
+    def recommend(
+        self, user_id: int, n: int, exclude_ids: Set[int]
+    ) -> List[Tuple[int, float]]:
         # 推荐逻辑
         pass
 

@@ -16,7 +16,9 @@
 :align: left
 
 * - {py:obj}`MoneyDecimal <agentsociety.storage._base.MoneyDecimal>`
-  -
+  - ```{autodoc2-docstring} agentsociety.storage._base.MoneyDecimal
+    :summary:
+    ```
 ````
 
 ### Data
@@ -51,12 +53,15 @@
 
 ````
 
-```{py:class} MoneyDecimal()
+````{py:class} MoneyDecimal
 :canonical: agentsociety.storage._base.MoneyDecimal
 
 Bases: {py:obj}`decimal.Decimal`
 
+```{autodoc2-docstring} agentsociety.storage._base.MoneyDecimal
 ```
+
+````
 
 ````{py:data} Base
 :canonical: agentsociety.storage._base.Base

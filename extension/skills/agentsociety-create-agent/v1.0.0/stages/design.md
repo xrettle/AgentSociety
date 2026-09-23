@@ -17,8 +17,8 @@ If the scale budget is wide or the runtime ceiling is tight, keep per-step reaso
 
 ### 1. Base Class
 
-- [ ] `AgentBase` — simple behavior, you own state, no built-in skill loop
-- [ ] `PersonAgent` — skills / tool loop / built-in workspace and persistence
+- [ ] `AgentBase` — 简单行为、自管状态；无 PersonAgent 那套 skill 工具循环
+- [ ] `PersonAgent` — skills / tool loop / workspace 与持久化；内置 skill 仅 `daily-guidance`
 
 Choose the lightest base class that satisfies the hypothesis and the scale budget.
 

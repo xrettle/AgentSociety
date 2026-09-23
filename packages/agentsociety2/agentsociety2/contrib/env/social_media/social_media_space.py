@@ -4,7 +4,7 @@ import random
 from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, ClassVar
 
 from agentsociety2.env import EnvBase, tool
 from agentsociety2.env.base import load_int_map
@@ -13,23 +13,22 @@ from agentsociety2.storage import ColumnDef, ReplayDatasetSpec, TableSchema
 from agentsociety2.storage.workspace_state import atomic_write_text
 
 from .models import (
-    SocialMediaPerson,
-    Post,
     Comment,
-    CreatePostResponse,
-    LikePostResponse,
-    UnlikePostResponse,
-    FollowUserResponse,
-    UnfollowUserResponse,
-    ViewPostResponse,
     CommentOnPostResponse,
-    RepostResponse,
-    RefreshFeedResponse,
-    SearchPostsResponse,
+    CreatePostResponse,
+    FollowUserResponse,
+    LikePostResponse,
     ObserveUserResponse,
+    Post,
+    RefreshFeedResponse,
+    RepostResponse,
+    SearchPostsResponse,
+    SocialMediaPerson,
+    UnfollowUserResponse,
+    UnlikePostResponse,
+    ViewPostResponse,
 )
 from .recommend import RecommendationEngine
-
 
 _SOCIAL_MEDIA_EVENT_SCHEMA = TableSchema(
     name="social_media_event",
@@ -156,14 +155,14 @@ class SocialMediaSpace(EnvBase):
 
     def __init__(
         self,
-        persons: Optional[Dict[int, Any]] = None,
-        posts: Optional[Dict[int, Any]] = None,
-        comments: Optional[Dict[int, List[Any]]] = None,
-        follows: Optional[Dict[int, List[int]]] = None,
-        likes: Optional[Dict[int, List[int]]] = None,
-        agent_id_name_pairs: Optional[
-            List[Tuple[int, str]] | List[List[Union[int, str]]]
-        ] = None,
+        persons: dict[int, Any] | None = None,
+        posts: dict[int, Any] | None = None,
+        comments: dict[int, list[Any]] | None = None,
+        follows: dict[int, list[int]] | None = None,
+        likes: dict[int, list[int]] | None = None,
+        agent_id_name_pairs: list[tuple[int, str]]
+        | list[list[int | str]]
+        | None = None,
         **kwargs: Any,
     ):
         """
@@ -194,14 +193,14 @@ class SocialMediaSpace(EnvBase):
             kwargs.get("community_detection", "follow_components")
         )
         _seed = kwargs.get("random_seed")
-        self._random_seed: Optional[int] = int(_seed) if _seed is not None else None
+        self._random_seed: int | None = int(_seed) if _seed is not None else None
 
         # 并发锁，保护状态修改操作
         self._lock = asyncio.Lock()
 
-        self._persons: Dict[int, SocialMediaPerson] = {}
-        self._posts: Dict[int, Post] = {}
-        self._comments: Dict[int, List[Comment]] = defaultdict(list)
+        self._persons: dict[int, SocialMediaPerson] = {}
+        self._posts: dict[int, Post] = {}
+        self._comments: dict[int, list[Comment]] = defaultdict(list)
 
         self._next_post_id: int = 1
         self._next_comment_id: int = 1
@@ -213,7 +212,7 @@ class SocialMediaSpace(EnvBase):
         )
 
         # 事件缓冲：tool 调用时追加，step() 末尾批量刷写到 replay DB
-        self._pending_events: List[dict] = []
+        self._pending_events: list[dict] = []
         self._event_id: int = 0
         self._recent_events = deque(maxlen=200)
 
@@ -221,10 +220,10 @@ class SocialMediaSpace(EnvBase):
         self._step_counter: int = 0
 
         # 显式 agent–用户映射：仅允许这些 id 作为 user_id
-        self._allowed_user_ids: Optional[Set[int]] = None
-        self._agent_names: Dict[int, str] = {}
+        self._allowed_user_ids: set[int] | None = None
+        self._agent_names: dict[int, str] = {}
         if agent_id_name_pairs:
-            pairs: List[Tuple[int, str]] = []
+            pairs: list[tuple[int, str]] = []
             for pair in agent_id_name_pairs:
                 if isinstance(pair, (list, tuple)) and len(pair) == 2:
                     pairs.append((int(pair[0]), str(pair[1])))
@@ -314,7 +313,7 @@ class SocialMediaSpace(EnvBase):
         self._step_counter = int(d.get("step_counter", 0))
         return True
 
-    def _get_community_labels(self) -> Dict[int, int]:
+    def _get_community_labels(self) -> dict[int, int]:
         """
         为每个用户分配社区标签 0 或 1，用于极化实验。
         """
@@ -326,7 +325,7 @@ class SocialMediaSpace(EnvBase):
             getattr(self._persons.get(uid), "camp_score", None) is not None
             for uid in user_ids
         ):
-            labels: Dict[int, int] = {}
+            labels: dict[int, int] = {}
             for uid in user_ids:
                 s = getattr(self._persons[uid], "camp_score", None)
                 labels[uid] = 0 if s is not None and s < 0.5 else 1
@@ -334,7 +333,7 @@ class SocialMediaSpace(EnvBase):
         # 回退：parity 或 follow_components
         if self._community_detection == "parity":
             return {uid: int(uid % 2) for uid in user_ids}
-        adj: Dict[int, List[int]] = defaultdict(list)
+        adj: dict[int, list[int]] = defaultdict(list)
         for uid in user_ids:
             for followee in (
                 self._persons[uid].following if uid in self._persons else []
@@ -342,12 +341,12 @@ class SocialMediaSpace(EnvBase):
                 if followee in user_ids:
                     adj[uid].append(followee)
                     adj[followee].append(uid)
-        visited: Dict[int, bool] = {}
-        components_list: List[List[int]] = []
+        visited: dict[int, bool] = {}
+        components_list: list[list[int]] = []
         for uid in user_ids:
             if visited.get(uid):
                 continue
-            comp: List[int] = []
+            comp: list[int] = []
             stack = [uid]
             while stack:
                 u = stack.pop()
@@ -368,7 +367,7 @@ class SocialMediaSpace(EnvBase):
                 labels[u] = cid
         return labels
 
-    def _get_candidate_posts(self, user_id: int) -> List[Post]:
+    def _get_candidate_posts(self, user_id: int) -> list[Post]:
         """按 feed_source 得到候选帖子列表：global=全站，following=仅关注者+自己的帖子。"""
         all_posts = list(self._posts.values())
         if self._feed_source != "following":
@@ -380,8 +379,8 @@ class SocialMediaSpace(EnvBase):
         return [p for p in all_posts if p.author_id in allow_authors]
 
     def _apply_polarization_mix(
-        self, user_id: int, candidate_posts: List[Post], limit: int
-    ) -> List[Post]:
+        self, user_id: int, candidate_posts: list[Post], limit: int
+    ) -> list[Post]:
         """
         当 polarization_mode=="follow_community" 时，按 within_community_ratio
         从同阵营与异阵营作者中混合取样，再按时间倒序；否则直接返回 candidate_posts。
@@ -390,10 +389,10 @@ class SocialMediaSpace(EnvBase):
             return candidate_posts
         labels = self._get_community_labels()
         viewer_community = labels.get(user_id, 0)
-        same: List[Post] = [
+        same: list[Post] = [
             p for p in candidate_posts if labels.get(p.author_id, 0) == viewer_community
         ]
-        other: List[Post] = [
+        other: list[Post] = [
             p for p in candidate_posts if labels.get(p.author_id, 0) != viewer_community
         ]
         rng = random.Random(self._random_seed if self._random_seed is not None else 0)
@@ -414,9 +413,9 @@ class SocialMediaSpace(EnvBase):
         self,
         action: str,
         sender_id: int,
-        content: Optional[str] = None,
-        receiver_id: Optional[int] = None,
-        target_id: Optional[int] = None,
+        content: str | None = None,
+        receiver_id: int | None = None,
+        target_id: int | None = None,
     ) -> None:
         """将事件追加到 pending 缓冲。在 step() 末尾批量刷写到 replay DB。"""
         self._event_id += 1
@@ -539,51 +538,47 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
     @classmethod
     def description(cls) -> str:
         """Return a short module description."""
-        return "Social media environment for posts, comments, likes, follows, and feeds."
+        return (
+            "Social media environment for posts, comments, likes, follows, and feeds."
+        )
 
     @staticmethod
-    def _norm_user_data(data: Any) -> Dict[str, Any]:
+    def _norm_user_data(data: Any) -> dict[str, Any]:
         """Normalize user dict for SocialMediaPerson(...); accept ISO datetime strings."""
         d = dict(data)
         if "created_at" in d and isinstance(d["created_at"], str):
-            d["created_at"] = datetime.fromisoformat(
-                d["created_at"].replace("Z", "+00:00")
-            )
+            d["created_at"] = datetime.fromisoformat(d["created_at"])
         return d
 
     @staticmethod
-    def _norm_post_data(data: Any) -> Dict[str, Any]:
+    def _norm_post_data(data: Any) -> dict[str, Any]:
         """Normalize post dict for Post(...)."""
         d = dict(data)
         if "created_at" in d and isinstance(d["created_at"], str):
-            d["created_at"] = datetime.fromisoformat(
-                d["created_at"].replace("Z", "+00:00")
-            )
+            d["created_at"] = datetime.fromisoformat(d["created_at"])
         return d
 
     @staticmethod
-    def _norm_comment_data(data: Any) -> Dict[str, Any]:
+    def _norm_comment_data(data: Any) -> dict[str, Any]:
         """Normalize comment dict for Comment(...)."""
         d = dict(data)
         if "created_at" in d and isinstance(d["created_at"], str):
-            d["created_at"] = datetime.fromisoformat(
-                d["created_at"].replace("Z", "+00:00")
-            )
+            d["created_at"] = datetime.fromisoformat(d["created_at"])
         return d
 
     @staticmethod
-    def _norm_event_data(data: Any) -> Dict[str, Any]:
+    def _norm_event_data(data: Any) -> dict[str, Any]:
         """Normalize replay event dict for observe timeline usage."""
         d = dict(data)
         if "t" in d and isinstance(d["t"], str):
-            d["t"] = datetime.fromisoformat(d["t"].replace("Z", "+00:00"))
+            d["t"] = datetime.fromisoformat(d["t"])
         for key in ("id", "step", "sender_id", "receiver_id", "target_id"):
             if key in d and d[key] is not None:
                 d[key] = int(d[key])
         return d
 
     @staticmethod
-    def _dump_event_data(data: Any) -> Dict[str, Any]:
+    def _dump_event_data(data: Any) -> dict[str, Any]:
         """Serialize replay event dict into a JSON-safe shape."""
         d = dict(data)
         if "t" in d and isinstance(d["t"], datetime):
@@ -600,7 +595,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
             self._posts[int(pid)] = Post(**self._norm_post_data(data))
         # 将 follows 数据合入 SocialMediaPerson.following
         if self._initial_follows is not None:
-            follower_counts: Dict[int, int] = defaultdict(int)
+            follower_counts: dict[int, int] = defaultdict(int)
             for uid, followee_ids in self._initial_follows.items():
                 uid = int(uid)
                 if uid in self._persons:
@@ -725,7 +720,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
             self._schedule_replay_task(self._register_event_table())
 
     @staticmethod
-    def _event_time_to_iso(event: dict) -> Optional[str]:
+    def _event_time_to_iso(event: dict) -> str | None:
         timestamp = event.get("t")
         if isinstance(timestamp, datetime):
             return timestamp.isoformat()
@@ -733,7 +728,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
             return None
         return str(timestamp)
 
-    def _iter_recent_events_desc(self) -> List[dict]:
+    def _iter_recent_events_desc(self) -> list[dict]:
         return sorted(
             self._recent_events,
             key=lambda event: (
@@ -753,7 +748,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
             "posts_count": user.posts_count,
         }
 
-    def _build_recent_interactions(self, user_id: int, limit: int = 5) -> List[dict]:
+    def _build_recent_interactions(self, user_id: int, limit: int = 5) -> list[dict]:
         items = []
         for event in self._iter_recent_events_desc():
             action = event.get("action")
@@ -782,7 +777,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
                 break
         return items
 
-    def _build_recent_activity(self, user_id: int, limit: int = 5) -> List[dict]:
+    def _build_recent_activity(self, user_id: int, limit: int = 5) -> list[dict]:
         items = []
         for event in self._iter_recent_events_desc():
             action = event.get("action")
@@ -805,7 +800,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
                 break
         return items
 
-    def _build_social_updates(self, user_id: int, limit: int = 5) -> List[dict]:
+    def _build_social_updates(self, user_id: int, limit: int = 5) -> list[dict]:
         items = []
         for event in self._iter_recent_events_desc():
             action = event.get("action")
@@ -894,7 +889,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
 
     @tool(readonly=False)
     async def create_post(
-        self, author_id: int, content: str, tags: List[str] | None = None
+        self, author_id: int, content: str, tags: list[str] | None = None
     ) -> CreatePostResponse:
         """
         Create a new original post (支持话题标签)
@@ -1353,7 +1348,7 @@ Example payloads (ISO datetimes, keys may be int or string in JSON; constructor 
     async def search_posts(
         self,
         keyword: str,
-        tags: List[str] | None = None,
+        tags: list[str] | None = None,
         limit: int = 20,
         sort_by: str = "time",  # "time", "relevance", "popularity"
     ) -> SearchPostsResponse:

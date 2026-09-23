@@ -1,17 +1,17 @@
 from .environment import (
+    VALID_EVENT_TYPES,
     CurrentEvent,
     EndEventResponse,
     EventSpace,
     GetEventResponse,
     StartEventResponse,
-    VALID_EVENT_TYPES,
 )
 
 __all__ = [
+    "VALID_EVENT_TYPES",
     "CurrentEvent",
     "EndEventResponse",
     "EventSpace",
     "GetEventResponse",
     "StartEventResponse",
-    "VALID_EVENT_TYPES",
 ]

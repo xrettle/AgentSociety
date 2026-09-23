@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = (
     REPO_ROOT
@@ -37,7 +36,9 @@ def run_progress(
         check=False,
         text=True,
     )
-    assert completed.returncode == expected_returncode, completed.stderr or completed.stdout
+    assert completed.returncode == expected_returncode, (
+        completed.stderr or completed.stdout
+    )
     return completed
 
 
@@ -93,13 +94,12 @@ def test_reroute_reopens_target_and_completed_downstream_stages(
     assert progress["transitions"][-1]["previous_stage_states"]["analysis"][
         "completed_at"
     ]
-    assert progress["transitions"][-1]["previous_stage_states"]["analysis"][
-        "attempts"
-    ] == 1
-
-    location = json.loads(
-        run_progress(tmp_path, "where-am-i", "--json").stdout
+    assert (
+        progress["transitions"][-1]["previous_stage_states"]["analysis"]["attempts"]
+        == 1
     )
+
+    location = json.loads(run_progress(tmp_path, "where-am-i", "--json").stdout)
     assert location["current_stage"] == "analysis"
     assert location["revision_round"] == 1
     assert location["next_recommended_actions"][0]["kind"] == "revise"
@@ -136,14 +136,11 @@ def test_rerouted_pipeline_advances_until_the_loop_is_resolved(tmp_path: Path) -
     assert progress["workspace"]["current_stage"] == "generate_paper"
     assert progress["workspace"]["revision_round"] == 1
     assert all(
-        progress["stages"][stage]["status"] == "completed"
-        for stage in rerun_stages
+        progress["stages"][stage]["status"] == "completed" for stage in rerun_stages
     )
     assert all(progress["stages"][stage]["attempts"] == 2 for stage in rerun_stages)
 
-    location = json.loads(
-        run_progress(tmp_path, "where-am-i", "--json").stdout
-    )
+    location = json.loads(run_progress(tmp_path, "where-am-i", "--json").stdout)
     assert location["next_recommended_actions"][0]["kind"] == "review_or_finish"
 
 
@@ -242,9 +239,7 @@ def test_legacy_progress_is_normalized_without_losing_completed_work(
     assert progress["workspace"]["revision_round"] == 0
     assert progress["workspace"]["active_reroute"] is None
     assert progress["stages"]["literature_search"]["status"] == "completed"
-    assert progress["stages"]["literature_search"]["metadata"] == {
-        "paper_count": 12
-    }
+    assert progress["stages"]["literature_search"]["metadata"] == {"paper_count": 12}
     assert progress["stages"]["literature_search"]["revision_round"] == 0
     assert progress["transitions"][-1]["kind"] == "verification_update"
 

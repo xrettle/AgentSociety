@@ -56,14 +56,14 @@ __version__ = "2.8.3"
 # Import main components for easy access
 from .agent import AgentBase, PersonAgent
 from .env import (
-    EnvBase,
-    RouterBase,
-    ReActRouter,
-    PlanExecuteRouter,
     CodeGenRouter,
-    TwoTierReActRouter,
-    TwoTierPlanExecuteRouter,
+    EnvBase,
+    PlanExecuteRouter,
+    ReActRouter,
+    RouterBase,
     SearchToolRouter,
+    TwoTierPlanExecuteRouter,
+    TwoTierReActRouter,
     tool,
 )
 from .society import AgentSocietyHelper

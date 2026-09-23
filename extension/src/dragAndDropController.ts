@@ -19,7 +19,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { getMainOutputChannel } from './shared/outputChannels';
 import { ProjectItem, ProjectStructureProvider } from './projectStructureProvider';
-import { localize } from './i18n';
+import {localize, isExtensionZh} from './i18n';
 
 /**
  * 文件处理信息
@@ -709,7 +709,7 @@ export class ProjectDragAndDropController implements vscode.TreeDragAndDropContr
     let added = 0;
     let duplicates = 0;
     const errors: string[] = [];
-    const isZh = vscode.env.language.startsWith('zh');
+    const isZh = isExtensionZh();
 
     for (const file of files) {
       const ext = path.extname(file.fileName).toLowerCase();

@@ -27,7 +27,7 @@ def _default_workspace() -> Path:
 def _load_workspace_env() -> None:
     env_file = _default_workspace() / ".env"
     if env_file.exists():
-        load_dotenv(env_file)
+        load_dotenv(env_file, override=True)
 
 
 _load_workspace_env()

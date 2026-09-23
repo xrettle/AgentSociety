@@ -6,7 +6,6 @@ import argparse
 import json
 from pathlib import Path
 
-
 ECONOMIC_KEYWORDS = (
     "currency",
     "price",

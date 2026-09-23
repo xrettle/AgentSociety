@@ -20,29 +20,30 @@ API端点：
 - @packages/agentsociety2/agentsociety2/registry/ - 模块注册表
 """
 
+import json
+import os
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from agentsociety2.backend.path_security import (
     resolve_under_root,
     resolve_workspace_root,
 )
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-import os
-import json
+from agentsociety2.backend.services.custom.generator import CustomModuleJsonGenerator
 
 # agentsociety2 是一个 Python 包，通过 import 使用
 from agentsociety2.backend.services.custom.scanner import CustomModuleScanner
-from agentsociety2.backend.services.custom.generator import CustomModuleJsonGenerator
 from agentsociety2.backend.services.custom.script_generator import SafeModuleTester
+from agentsociety2.logger import get_logger
 from agentsociety2.registry import (
-    get_registered_env_modules,
     get_registered_agent_modules,
+    get_registered_env_modules,
     get_registry,
     register_scanned_custom_modules,
     scan_and_register_custom_modules,
 )
-from agentsociety2.logger import get_logger
 
 logger = get_logger()
 
@@ -55,7 +56,7 @@ router = APIRouter(prefix="/api/v1/custom", tags=["custom"])
 class ScanRequest(BaseModel):
     """扫描请求"""
 
-    workspace_path: Optional[str] = Field(
+    workspace_path: str | None = Field(
         None, description="工作区路径，不提供则使用环境变量"
     )
 
@@ -68,10 +69,10 @@ class ScanResponse(BaseModel):
     envs_found: int
     agents_generated: int
     envs_generated: int
-    errors: List[str] = Field(default_factory=list)
-    agent_diagnostics: List[Dict[str, Any]] = Field(default_factory=list)
-    env_diagnostics: List[Dict[str, Any]] = Field(default_factory=list)
-    message: Optional[str] = None
+    errors: list[str] = Field(default_factory=list)
+    agent_diagnostics: list[dict[str, Any]] = Field(default_factory=list)
+    env_diagnostics: list[dict[str, Any]] = Field(default_factory=list)
+    message: str | None = None
 
 
 class CleanResponse(BaseModel):
@@ -85,13 +86,13 @@ class CleanResponse(BaseModel):
 class TestRequest(BaseModel):
     """测试请求"""
 
-    workspace_path: Optional[str] = Field(
+    workspace_path: str | None = Field(
         None, description="工作区路径，不提供则使用环境变量"
     )
-    module_kind: Optional[str] = Field(
+    module_kind: str | None = Field(
         None, description="模块类型: 'agent' 或 'env_module'，不提供则测试所有"
     )
-    module_class_name: Optional[str] = Field(
+    module_class_name: str | None = Field(
         None, description="要测试的类名，与 module_kind 配合使用"
     )
 
@@ -103,9 +104,9 @@ class ModuleTestResult(BaseModel):
     module_kind: str = "env_module"
     success: bool
     output: str
-    error: Optional[str] = None
-    checks: List[Dict[str, Any]] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    checks: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class TestResponse(BaseModel):
@@ -113,20 +114,20 @@ class TestResponse(BaseModel):
 
     success: bool
     test_output: str
-    error: Optional[str] = None
-    returncode: Optional[int] = None
-    results: List[ModuleTestResult] = Field(default_factory=list)
-    total_tests: Optional[int] = None
-    passed_tests: Optional[int] = None
-    failed_tests: Optional[int] = None
+    error: str | None = None
+    returncode: int | None = None
+    results: list[ModuleTestResult] = Field(default_factory=list)
+    total_tests: int | None = None
+    passed_tests: int | None = None
+    failed_tests: int | None = None
 
 
 class ListResponse(BaseModel):
     """列表响应"""
 
     success: bool
-    agents: List[Dict[str, Any]]
-    envs: List[Dict[str, Any]]
+    agents: list[dict[str, Any]]
+    envs: list[dict[str, Any]]
     total_agents: int
     total_envs: int
 
@@ -544,7 +545,7 @@ async def get_custom_modules_status():
 async def list_available_classes(
     workspace_path: str = Query(..., description="工作区路径"),
     include_custom: bool = Query(True, description="是否包含自定义模块"),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     列出所有可用的Agent类和环境模块类
 
@@ -625,13 +626,13 @@ async def list_available_classes(
                 logger.warning(f"Failed to load prefill params: {e}")
 
         # 为每个类添加是否已配置的标记
-        for module_type in env_modules:
-            env_modules[module_type]["has_prefill"] = (
-                module_type in env_prefill and bool(env_prefill[module_type])
+        for module_type, module_info in env_modules.items():
+            module_info["has_prefill"] = module_type in env_prefill and bool(
+                env_prefill[module_type]
             )
 
-        for agent_type in agents:
-            agents[agent_type]["has_prefill"] = agent_type in agent_prefill and bool(
+        for agent_type, agent_info in agents.items():
+            agent_info["has_prefill"] = agent_type in agent_prefill and bool(
                 agent_prefill[agent_type]
             )
 
@@ -654,7 +655,7 @@ async def list_available_classes(
 @router.post("/rescan")
 async def rescan_custom_modules(
     workspace_path: str = Query(..., description="工作区路径"),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     重新扫描自定义模块
 

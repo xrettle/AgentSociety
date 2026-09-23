@@ -11,7 +11,7 @@ import argparse
 import json
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -42,7 +42,7 @@ class IngestResult:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def load_or_create_index(workspace: Path) -> tuple[Path, LiteratureIndex]:
@@ -162,13 +162,10 @@ def _record_to_article(record: BibliographicRecord) -> dict[str, Any]:
 def _write_note(workspace: Path, article: dict[str, Any], query: str) -> Path:
     papers_dir = workspace / "papers"
     papers_dir.mkdir(parents=True, exist_ok=True)
-    stamp = (
-        datetime.now(timezone.utc)
-        .isoformat()
-        .replace(":", "-")
-        .replace(".", "-")[:19]
+    stamp = datetime.now(UTC).isoformat().replace(":", "-").replace(".", "-")[:19]
+    filename = (
+        f"{sanitize_filename(str(article.get('title') or 'Untitled'))}_{stamp}.md"
     )
-    filename = f"{sanitize_filename(str(article.get('title') or 'Untitled'))}_{stamp}.md"
     note_path = _unique_dest(papers_dir, filename)
     note_path.write_text(format_article_as_markdown(article, query), encoding="utf-8")
     return note_path
