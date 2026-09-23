@@ -4,25 +4,90 @@ stages:
   - build
   - release
 
+# New commits on the same branch cancel older pipelines' interruptible jobs
+# (lint / test / speculative docker build). Publish jobs stay non-interruptible.
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG
+
 variables:
   PYTHON_VERSION: "3.12"
   UV_INDEX_URL: "https://pypi.tuna.tsinghua.edu.cn/simple"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
   MEM0_TELEMETRY: "False"
   ANONYMIZED_TELEMETRY: "False"
   DOCKER_BUILDKIT: "1"
+  # Temporary image tag for speculative build → promote only after all gates pass.
+  DOCKER_PIPELINE_IMAGE: "${CI_REGISTRY_IMAGE}:pipeline-${CI_PIPELINE_ID}"
 
 # CI scope: AgentSociety2 + extension + frontend only.
 # Legacy packages (agentsociety v1, community, benchmark) are excluded.
 
+# ---------------------------------------------------------------------------
+# Change sets
+# ---------------------------------------------------------------------------
+# python_changes: quality gates (lint/test). Includes .gitlab-ci.yml so CI edits
+# are self-tested; that path alone does NOT rebuild the Docker image.
 .python_changes: &python_changes
   - packages/agentsociety2/**/*
   - pyproject.toml
   - uv.lock
   - .gitlab-ci.yml
 
+# Python bits of the image — speculative build waits for test 3.12.
+# Image inputs overall (for humans; rules below are split to avoid double builds):
+#   Dockerfile, .dockerignore, packages/agentsociety2/**, extension/**,
+#   pyproject.toml, uv.lock, README.md, LICENSE
+# frontend/ is intentionally absent — not installed into the runtime image.
+.docker_python_changes: &docker_python_changes
+  - packages/agentsociety2/**/*
+  - pyproject.toml
+  - uv.lock
+
+# ---------------------------------------------------------------------------
+# Caches (layered by churn rate)
+# ---------------------------------------------------------------------------
+# Lockfiles change rarely → high hit rate across MR pushes and main.
+# Download caches only (not .venv / node_modules) so 3.11/3.12/3.13 share one
+# UV cache safely and npm ci remains deterministic.
+.uv_download_cache: &uv_download_cache
+  key:
+    files:
+      - uv.lock
+  paths:
+    - .cache/uv
+  policy: pull-push
+
+.npm_extension_cache: &npm_extension_cache
+  key:
+    files:
+      - extension/package-lock.json
+  paths:
+    - .cache/npm
+  policy: pull-push
+
+.npm_frontend_cache: &npm_frontend_cache
+  key:
+    files:
+      - frontend/package-lock.json
+  paths:
+    - .cache/npm
+  policy: pull-push
+
+# ---------------------------------------------------------------------------
+# Lint / test
+# ---------------------------------------------------------------------------
 lint:
   stage: lint
   image: python:3.12
+  interruptible: true
+  cache:
+    <<: *uv_download_cache
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes: *python_changes
@@ -38,6 +103,9 @@ lint:
 lint-extension:
   stage: lint
   image: node:22
+  interruptible: true
+  cache:
+    <<: *npm_extension_cache
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -59,6 +127,9 @@ lint-extension:
 lint-frontend:
   stage: lint
   image: node:22
+  interruptible: true
+  cache:
+    <<: *npm_frontend_cache
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -80,7 +151,10 @@ lint-frontend:
 test:
   stage: test
   image: python:$PYTHON_VERSION
+  interruptible: true
   needs: [lint]
+  cache:
+    <<: *uv_download_cache
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes: *python_changes
@@ -110,46 +184,176 @@ test:
     AGENTSOCIETY_LLM_API_BASE: $AGENTSOCIETY_LLM_API_BASE
     AGENTSOCIETY_LLM_MODEL: glm-5
 
-build-docker-image:
+# ---------------------------------------------------------------------------
+# Docker: speculative build, promote only when every required gate is green
+# ---------------------------------------------------------------------------
+# Layer intent (matches Dockerfile comments):
+#   rarely churn  → apt / uv.lock / global CLIs  (BuildKit + registry :v2 cache)
+#   often churn   → agentsociety2 source / extension vsix
+#
+# Speculative gate: default runtime 3.12. GitLab cannot "wait for whichever
+# matrix cell finishes first"; 3.12 is the project default and a stable proxy.
+# Publish still needs the full matrix (or is skipped when pytest is absent).
+
+.docker_build_script: &docker_build_script
+  - export TIME=$(date +%s)
+  - docker pull ${CI_REGISTRY_IMAGE}:v2 || true
+  - |
+    docker build \
+      --cache-from ${CI_REGISTRY_IMAGE}:v2 \
+      -t "${DOCKER_PIPELINE_IMAGE}" \
+      -t "${CI_REGISTRY_IMAGE}:mr-${CI_MERGE_REQUEST_IID:-local}" \
+      .
+  - |
+    if [[ "$CI_COMMIT_BRANCH" == "main" ]]; then
+      echo "Pushing speculative pipeline tag (promote to :v2 only after all gates)"
+      docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+      docker push "${DOCKER_PIPELINE_IMAGE}"
+    else
+      echo "MR pipeline — build validated locally; not pushing :v2"
+    fi
+
+.docker_publish_script: &docker_publish_script
+  - export TIME=$(date +%s)
+  - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+  - docker pull "${DOCKER_PIPELINE_IMAGE}"
+  - docker tag "${DOCKER_PIPELINE_IMAGE}" "${CI_REGISTRY_IMAGE}:v2-${CI_COMMIT_SHORT_SHA}-${TIME}"
+  - docker tag "${DOCKER_PIPELINE_IMAGE}" "${CI_REGISTRY_IMAGE}:v2"
+  - docker push "${CI_REGISTRY_IMAGE}:v2-${CI_COMMIT_SHORT_SHA}-${TIME}"
+  - docker push "${CI_REGISTRY_IMAGE}:v2"
+
+# AS2 / lockfile changed → wait until test 3.12 passes, then build.
+docker-build:
   tags:
     - dind
   stage: build
+  interruptible: true
+  needs:
+    - job: test
+      parallel:
+        matrix:
+          - PYTHON_VERSION: "3.12"
+    # When this MR/push also touches extension/, wait for its lint job if present.
+    - job: lint-extension
+      optional: true
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: *docker_python_changes
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *docker_python_changes
+  script: *docker_build_script
+
+# Extension changed (and no AS2/lockfile) → wait for extension lint/build, then image.
+docker-build-extension:
+  tags:
+    - dind
+  stage: build
+  interruptible: true
+  needs:
+    - job: lint-extension
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: *docker_python_changes
+      when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *docker_python_changes
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - extension/**/*
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - extension/**/*
+  script: *docker_build_script
+
+# Dockerfile / metadata only (no pytest, no extension job).
+docker-build-dockerfile:
+  tags:
+    - dind
+  stage: build
+  interruptible: true
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: *docker_python_changes
+      when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *docker_python_changes
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - extension/**/*
+      when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - extension/**/*
+      when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         - Dockerfile
         - .dockerignore
-        - packages/agentsociety2/**/*
-        - extension/**/*
-        - pyproject.toml
-        - uv.lock
+        - README.md
+        - LICENSE
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - Dockerfile
         - .dockerignore
-        - packages/agentsociety2/**/*
+        - README.md
+        - LICENSE
+  script: *docker_build_script
+
+# Main only: retag speculative image → :v2 after the full test matrix is green.
+docker-publish:
+  tags:
+    - dind
+  stage: release
+  interruptible: false
+  needs:
+    - job: test
+    - job: docker-build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *docker_python_changes
+  script: *docker_publish_script
+
+docker-publish-extension:
+  tags:
+    - dind
+  stage: release
+  interruptible: false
+  needs:
+    - job: docker-build-extension
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *docker_python_changes
+      when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
         - extension/**/*
-        - pyproject.toml
-        - uv.lock
-  script:
-    - export TIME=$(date +%s)
-    - docker pull ${CI_REGISTRY_IMAGE}:v2 || true
-    - |
-      if [[ "$CI_PIPELINE_SOURCE" == "merge_request_event" ]]; then
-        echo "MR pipeline - build only for validation"
-        docker build \
-          --cache-from ${CI_REGISTRY_IMAGE}:v2 \
-          -t ${CI_REGISTRY_IMAGE}:mr-${CI_MERGE_REQUEST_IID} .
-      else
-        echo "Main branch - build and push"
-        docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
-        docker build \
-          --cache-from ${CI_REGISTRY_IMAGE}:v2 \
-          -t ${CI_REGISTRY_IMAGE}:v2-${CI_COMMIT_SHORT_SHA}-${TIME} \
-          -t ${CI_REGISTRY_IMAGE}:v2 .
-        docker push ${CI_REGISTRY_IMAGE}:v2-${CI_COMMIT_SHORT_SHA}-${TIME}
-        docker push ${CI_REGISTRY_IMAGE}:v2
-      fi
+  script: *docker_publish_script
+
+docker-publish-dockerfile:
+  tags:
+    - dind
+  stage: release
+  interruptible: false
+  needs:
+    - job: docker-build-dockerfile
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: *docker_python_changes
+      when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - extension/**/*
+      when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - Dockerfile
+        - .dockerignore
+        - README.md
+        - LICENSE
+  script: *docker_publish_script
 
 mirror-to-github:
   stage: release
