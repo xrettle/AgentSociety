@@ -30,6 +30,73 @@ def test_typical_stack_enables_env_actor_parallelism() -> None:
     assert all(cls.is_concurrency_safe() for cls in types)
 
 
+def test_env_actor_max_concurrency_default_is_64() -> None:
+    """默认并发上限 64：300-agent 实测在飞 env ask 的 p50 ≈ 59，旧默认 8 会
+    饿死 actor（env ask 均值 38.2s@8 vs 2.5s@64）。conftest 已清理环境变量，
+    此处断言的是代码默认值。"""
+    from agentsociety2.config import Config
+
+    assert Config.ENV_ACTOR_MAX_CONCURRENCY == 64
+
+
+@pytest.mark.asyncio
+async def test_template_lookup_runs_embeddings_outside_cache_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """embedding（含 HTTP）不得在 ``_template_cache_lock`` 内计算。
+
+    回归：``_lookup``（每次 ask 都走）曾在锁内 await embedding，把并行 ask
+    串行化到 embedding 端点延迟上（实测并行度 5.6×，配置 64×）。修复后
+    embedding 在锁外并发、锁内只剩纯 CPU 检索。断言不依赖时间阈值：锁外
+    化的直接可观测特征是 N 个 embedding 调用全部重叠。
+    """
+    import numpy as np
+    from types import SimpleNamespace
+
+    from agentsociety2.env.router_codegen import CacheCodeProvider
+
+    n = 8
+    delay = 0.05
+    inflight = 0
+    max_inflight = 0
+
+    async def fake_embedding(router, text):
+        nonlocal inflight, max_inflight
+        inflight += 1
+        max_inflight = max(max_inflight, inflight)
+        await asyncio.sleep(delay)
+        inflight -= 1
+        return np.zeros(8, dtype=np.float32)
+
+    monkeypatch.setattr(CacheCodeProvider, "_compute_embedding", fake_embedding)
+
+    router = SimpleNamespace(
+        _template_cache_enabled=True,
+        _template_cache_lock=asyncio.Lock(),
+        _cache_entries=[],
+        _cache_faiss_index=None,
+        _cache_faiss_entry_indices=[],
+        _env_class_type_key="stub_env",
+        _template_cache_similarity_threshold=0.9,
+    )
+
+    t0 = time.perf_counter()
+    results = await asyncio.gather(
+        *(
+            CacheCodeProvider._lookup(router, f"instruction {i}", {"x": i})
+            for i in range(n)
+        )
+    )
+    elapsed = time.perf_counter() - t0
+
+    # 语义不变：空缓存下全部 miss，miss 原因一致。
+    assert all(r == (None, "no_similar_entry") for r in results)
+    # 锁外化的判据：N 个 embedding 全部重叠（修复前 max_inflight 恒为 1）。
+    assert max_inflight == n
+    # 时间维度兜底：串行（锁内）需要 ≥ n*delay，并发只需 ~1*delay。
+    assert elapsed < delay * n * 0.8
+
+
 @pytest.mark.asyncio
 async def test_module_local_locks_faster_than_global_lock() -> None:
     """A/B: global serialize lock (before) vs module-local locks (after)."""

@@ -603,10 +603,14 @@ class CacheAddObserver:
     ) -> None:
         if not router._template_cache_enabled:
             return
+        # Embedding（可能是一次 embedding HTTP 调用）必须在 _template_cache_lock
+        # 之外计算：该锁同时守护 _lookup（每次 ask），锁内 await 会把并行 ask 串行
+        # 化到 embedding 端点的延迟上。_compute_embedding 自带缓存与独立锁，
+        # 并发调用安全；锁内剩余工作（DB 查询/faiss 更新）是纯 CPU，仍串行。
+        embedding = await CacheCodeProvider._compute_embedding(router, instruction)
         async with router._template_cache_lock:
             variable_keys = tuple(sorted(variables.keys()))
             variable_types = {k: type(v).__name__ for k, v in variables.items()}
-            embedding = await CacheCodeProvider._compute_embedding(router, instruction)
             existing = router._cache_db.find_by_instruction(
                 router._env_class_type_key, instruction
             )
@@ -725,10 +729,12 @@ class CacheCodeProvider:
     ) -> tuple[CacheEntry | None, str | None]:
         if not router._template_cache_enabled:
             return None, "template_cache_disabled"
+        # 与 _add_to_cache 同理：embedding（含 HTTP）在锁外计算，_compute_embedding
+        # 自带缓存与独立锁、并发安全；锁内只剩纯 CPU 的 faiss 检索，保持串行。
+        emb = await CacheCodeProvider._compute_embedding(router, instruction)
+        if emb is None:
+            return None, "embedding_unavailable"
         async with router._template_cache_lock:
-            emb = await CacheCodeProvider._compute_embedding(router, instruction)
-            if emb is None:
-                return None, "embedding_unavailable"
             current_keys = set(variables.keys())
             best_match, best_sim = None, 0.0
             saw_compatible_candidate = False
