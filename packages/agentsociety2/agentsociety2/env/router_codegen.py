@@ -102,7 +102,10 @@ class CacheEntry:
     """缓存条目"""
 
     instruction_template: str  # 模板指令
-    variable_keys: tuple[str, ...]  # 变量键的元组（用于子集检查）
+    # 创建该条目那次调用传入的变量键快照：既非模板需要哪些键，也非代码实际
+    # 读取哪些键。缓存复用判定首选 _code_variable_reads（代码必读键），
+    # 仅当代码无法静态分析时才退回以该快照做保守子集检查。
+    variable_keys: tuple[str, ...]
     variable_types: dict[str, str]  # 变量类型字典 {key: type_name}
     code: str  # 生成的代码
     embedding: np.ndarray | None = None  # 指令的embedding（用于相似度计算）
@@ -123,6 +126,127 @@ class CacheEntry:
         """成功率"""
         total = self.success_count + self.failure_count
         return self.success_count / total if total > 0 else 0.0
+
+
+# ═══════════════════════════════════════════════════════════
+# Template cache reuse criterion: what the code actually reads
+# ═══════════════════════════════════════════════════════════
+
+# _code_variable_reads 结果按代码文本缓存：dedup 路径会整段覆盖 entry.code，
+# 按内容做键天然自失效；纯 CPU、仅事件循环内同步调用，无需加锁。
+_code_reads_memo: dict[str, frozenset[str] | None] = {}
+_CODE_READS_MEMO_MAX = 8192
+
+
+def _is_variables_mapping_expr(node: ast.AST | None, aliases: set[str]) -> bool:
+    """node 是否（直接或经别名）指向 ``ctx['variables']`` 映射本身。"""
+    if isinstance(node, ast.Name):
+        return node.id in aliases
+    if isinstance(node, ast.Subscript):
+        return (
+            isinstance(node.value, ast.Name)
+            and node.value.id == "ctx"
+            and isinstance(node.slice, ast.Constant)
+            and node.slice.value == "variables"
+        )
+    if isinstance(node, ast.Call):
+        return (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "ctx"
+            and bool(node.args)
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == "variables"
+        )
+    return False
+
+
+def _compute_code_variable_reads(code: str) -> frozenset[str] | None:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return None
+
+    # 第一遍：收集指向 variables 映射的别名（含链式别名 w = v），迭代到不
+    # 动点；出现无法跟踪的绑定（元组/属性目标、别名改绑）即整体不可分析。
+    assigns = [n for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign))]
+    aliases: set[str] = set()
+    while True:
+        grew = False
+        for node in assigns:
+            value = node.value
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                alias_val = _is_variables_mapping_expr(value, aliases) or (
+                    isinstance(value, ast.Name) and value.id in aliases
+                )
+                if isinstance(target, ast.Name):
+                    if alias_val and target.id not in aliases:
+                        aliases.add(target.id)
+                        grew = True
+                    elif target.id in aliases and not alias_val:
+                        return None  # 别名被改绑到其他对象，后续读取无法判定
+                elif alias_val:
+                    return None  # 映射逃逸到属性/元组等目标，无法跟踪
+        if not grew:
+            break
+
+    # 第二遍：对映射的每种使用都必须能静态判定——常量下标计入必读键；
+    # .get 带默认值语义、缺键不抛错，不计入；其余任何形态（动态下标、
+    # .items()、传参、迭代等）一律整体判为不可分析。
+    required: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and _is_variables_mapping_expr(
+            node.value, aliases
+        ):
+            sl = node.slice
+            if isinstance(sl, ast.Constant) and isinstance(sl.value, str):
+                required.add(sl.value)
+            else:
+                return None  # 动态键
+            continue
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr == "get"
+            and _is_variables_mapping_expr(node.value, aliases)
+        ):
+            continue
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and _is_variables_mapping_expr(
+            node.value, aliases
+        ):
+            continue
+        for child in ast.iter_child_nodes(node):
+            if _is_variables_mapping_expr(child, aliases):
+                return None
+    return frozenset(required)
+
+
+def _code_variable_reads(code: str) -> frozenset[str] | None:
+    """静态提取代码必读的 ``ctx['variables']`` 键。
+
+    返回 ``None`` 表示代码以无法静态分析的形态使用了 variables（动态下标、
+    迭代、别名逃逸等），调用方需退回保守判据。
+    """
+    if code in _code_reads_memo:
+        return _code_reads_memo[code]
+    result = _compute_code_variable_reads(code)
+    if len(_code_reads_memo) >= _CODE_READS_MEMO_MAX:
+        _code_reads_memo.clear()
+    _code_reads_memo[code] = result
+    return result
+
+
+def _entry_usable_with(entry: CacheEntry, current_keys: set[str]) -> bool:
+    """缓存条目的代码能否在当前这组 variables 下复用。
+
+    首选“代码必读变量 ⊆ 当前变量”（多带的无关键不构成障碍，缺必读键才
+    否决）；代码不可静态分析时退回“variable_keys ⊆ 当前变量”的保守旧判据。
+    """
+    reads = _code_variable_reads(entry.code)
+    if reads is None:
+        return set(entry.variable_keys) <= current_keys
+    return reads <= current_keys
 
 
 # ═══════════════════════════════════════════════════════════
@@ -609,6 +733,7 @@ class CacheAddObserver:
         # 并发调用安全；锁内剩余工作（DB 查询/faiss 更新）是纯 CPU，仍串行。
         embedding = await CacheCodeProvider._compute_embedding(router, instruction)
         async with router._template_cache_lock:
+            # variable_keys 是"本次调用传了哪些键"的快照，语义见 CacheEntry 注释
             variable_keys = tuple(sorted(variables.keys()))
             variable_types = {k: type(v).__name__ for k, v in variables.items()}
             existing = router._cache_db.find_by_instruction(
@@ -729,16 +854,37 @@ class CacheCodeProvider:
     ) -> tuple[CacheEntry | None, str | None]:
         if not router._template_cache_enabled:
             return None, "template_cache_disabled"
+        current_keys = set(variables.keys())
+        # 精确匹配快速路径：指令串逐字符相同时无需 embedding/faiss，直接按
+        # “代码必读变量 ⊆ 当前变量”判定能否复用。variable_keys 只是创建该
+        # 条目时调用方传键的快照——多带无关键不该否决命中（曾把同指令
+        # 6ms 级命中打成 6s 级全量 codegen），缺必读键更不该放行（缓存代码
+        # max_retries=0，执行失败无回退）。同一指令可能有多条需求不同的条目，
+        # 首条不满足须继续扫描。整段无 await：asyncio 单线程下原子，且
+        # _cache_entries 仅追加，故无需持 _template_cache_lock。
+        best_exact: CacheEntry | None = None
+        saw_key_incompatible_candidate = False
+        for entry in router._cache_entries:
+            if entry.env_class_type != router._env_class_type_key:
+                continue
+            if entry.instruction_template != instruction:
+                continue
+            if not _entry_usable_with(entry, current_keys):
+                saw_key_incompatible_candidate = True
+                continue
+            if best_exact is None or entry.success_count > best_exact.success_count:
+                best_exact = entry
+        if best_exact is not None:
+            best_exact.last_used = datetime.now()
+            return best_exact, None
         # 与 _add_to_cache 同理：embedding（含 HTTP）在锁外计算，_compute_embedding
         # 自带缓存与独立锁、并发安全；锁内只剩纯 CPU 的 faiss 检索，保持串行。
         emb = await CacheCodeProvider._compute_embedding(router, instruction)
         if emb is None:
             return None, "embedding_unavailable"
         async with router._template_cache_lock:
-            current_keys = set(variables.keys())
             best_match, best_sim = None, 0.0
             saw_compatible_candidate = False
-            saw_key_incompatible_candidate = False
             if router._cache_faiss_index and router._cache_faiss_entry_indices:
                 query = np.asarray([emb], dtype=np.float32).copy()
                 faiss.normalize_L2(query)
@@ -751,11 +897,7 @@ class CacheCodeProvider:
                     entry = router._cache_entries[entry_idx]
                     if entry.env_class_type != router._env_class_type_key:
                         continue
-                    cached_keys = set(entry.variable_keys)
-                    if not (
-                        current_keys.issubset(cached_keys)
-                        or cached_keys.issubset(current_keys)
-                    ):
+                    if not _entry_usable_with(entry, current_keys):
                         saw_key_incompatible_candidate = True
                         continue
                     saw_compatible_candidate = True
