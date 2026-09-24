@@ -51,7 +51,7 @@ import os
 
 os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
-__version__ = "2.9.2"
+__version__ = "2.9.3"
 
 # Import main components for easy access
 from .agent import AgentBase, PersonAgent

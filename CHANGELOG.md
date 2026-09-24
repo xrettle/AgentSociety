@@ -14,6 +14,19 @@ Git 发版标签：`agentsociety2-v{major}.{minor}.{patch}`（见 `CONTRIBUTING.
 
 ## [Unreleased]
 
+## [2.9.3] - 2026-09-24
+
+- **agentsociety2** `2.9.3` · **extension** `1.7.3` · 标签 `agentsociety2-v2.9.3`
+
+### Fixed
+
+- **env**：`CodeGenRouter` 模板缓存复用判定改按「代码实际必读的变量」，不再使用
+  `variable_keys` 键集互含关系（该字段只是创建条目时调用方传键的快照）。同指令
+  多带无关键不再被否决回退全量 LLM codegen（实测同指令命中 6064ms → 1.4ms 量级）；
+  缺必读变量的缓存代码不再被放行（缓存代码 `max_retries=0`，执行失败无回退）。
+  `_lookup` 新增精确匹配快速路径（无需 embedding 计算），FAISS 相似度路径同步换用
+  该判据；必读键经 AST 静态提取，不可静态分析的代码退回保守旧判据，无行为回归。
+
 ## [2.9.2] - 2026-09-23
 
 - **agentsociety2** `2.9.2` · **extension** `1.7.2` · 标签 `agentsociety2-v2.9.2`
